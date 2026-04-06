@@ -1,9 +1,9 @@
 # ─── Data beratt ───────────────────────────────
-data/
+# HANYA kecualikan file raksasa (lebih dari 100MB batas Github)
+data/osm-building.geojson
 
-
-# Kalau file lain juga besar, tambahin di sini:
-# data/*.geojson   ← uncomment kalau mau exclude semua geojson
+# (opsional) Anda bisa hapus komentar di bawah ini jika data excel sedang tidak ingin dipush
+# data/uji-coba-peta.xlsx
 
 # ─── Python ─────────────────────────────────────────────────────────
 __pycache__/
