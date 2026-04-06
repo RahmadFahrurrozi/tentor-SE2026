@@ -48,11 +48,19 @@ GSHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRI9DTFAbw8KbLPdcB
 
 @st.cache_data(ttl=300)  # auto-refresh setiap 5 menit
 def load_usaha():
-    try:
-        df = pd.read_csv(GSHEET_URL)
-    except Exception as e:
-        st.warning(f"Gagal load dari Google Sheets, fallback ke Excel lokal. Error: {e}")
-        df = pd.read_excel("data/uji-coba-peta.xlsx")
+    parquet_path = "data/uji-coba-peta.parquet"
+    if os.path.exists(parquet_path):
+        try:
+            df = pd.read_parquet(parquet_path)
+        except Exception as e:
+            st.warning(f"Gagal memuat Parquet, kembali ke load sheet... Error: {e}")
+            df = pd.read_excel("data/uji-coba-peta.xlsx")
+    else:
+        try:
+            df = pd.read_csv(GSHEET_URL)
+        except Exception as e:
+            st.warning(f"Gagal load dari Google Sheets, fallback ke Excel lokal. Error: {e}")
+            df = pd.read_excel("data/uji-coba-peta.xlsx")
 
     # Cari kolom lat/long secara fleksibel
     lat_col  = next((c for c in df.columns if "lat"  in c.lower()), None)
@@ -67,9 +75,16 @@ def load_usaha():
     df = df.dropna(subset=["lat final", "long final"])
     df = df[df["lat final"].between(-90, 90)]
     df = df[df["long final"].between(-180, 180)]
-    df["idsls_str"] = df["idsls final"].apply(
-        lambda x: str(int(float(x))) if pd.notna(x) else None
-    )
+    def safe_idsls(x):
+        if pd.isna(x): return None
+        try:
+            val = float(x)
+            if pd.isna(val): return None
+            return str(int(val))
+        except (ValueError, TypeError):
+            return None
+            
+    df["idsls_str"] = df["idsls final"].apply(safe_idsls)
     return df
 
 @st.cache_data
@@ -150,10 +165,10 @@ desa_list = sorted(gdf_sls[desa_col].dropna().unique().tolist()) if desa_col els
 # SIDEBAR
 # ─────────────────────────────────────────────
 st.sidebar.header("Layer Control")
-show_kab      = st.sidebar.checkbox("Kabupaten Border", value=True)
-show_sls      = st.sidebar.checkbox("SLS (warna = jumlah usaha)", value=True)
-show_usaha    = st.sidebar.checkbox("Titik Usaha", value=False)
-show_build    = st.sidebar.checkbox("Bangunan OSM (sample 30k)", value=False)
+show_kab      = st.sidebar.checkbox("Batas Kabupaten", value=True)
+show_sls      = st.sidebar.checkbox("SLS", value=True)
+show_usaha    = st.sidebar.checkbox("Titik Usaha", value=True)
+# show_build    = st.sidebar.checkbox("Bangunan OSM (sample 30k)", value=False)
 show_counting = st.sidebar.checkbox("Mode Choropleth", value=True)
 
 st.sidebar.markdown("---")
@@ -162,7 +177,7 @@ sls_opacity   = st.sidebar.slider("SLS opacity", 0.0, 1.0, 0.3, 0.05)
 build_opacity = st.sidebar.slider("Bangunan opacity", 0.0, 1.0, 0.6, 0.05)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Data Google Sheets")
+st.sidebar.subheader("Data")
 if st.sidebar.button("Refresh Data Sekarang"):
     st.cache_data.clear()
     st.rerun()
@@ -228,7 +243,8 @@ if show_sls:
 
     layers.append(pdk.Layer("PolygonLayer", data=sls_rows,
         get_polygon="polygon", get_fill_color="color",
-        get_line_color=[200, 200, 255, 80], get_line_width=30,
+        get_line_color=[200, 200, 255, 80], 
+        get_line_width=5, line_width_min_pixels=1, 
         pickable=True, auto_highlight=True))
 
 # Layer Titik Usaha
@@ -249,16 +265,8 @@ if show_usaha:
     if filter_nama.strip():
         df_f = df_f[df_f["nama final"].str.contains(filter_nama.strip(), case=False, na=False)]
 
-    # Kalau filter wilayah aktif, tampilkan semua (biasanya jauh lebih sedikit)
-    # Kalau global (semua kecamatan), baru di-sample biar tidak berat
-    is_filtered = (filter_kec != "Semua" or filter_desa != "Semua" or filter_nama.strip() != "")
-    limit = 200_000 if is_filtered else 50_000
-    if len(df_f) > limit:
-        df_sample = df_f.sample(limit, random_state=42)
-        st.sidebar.info(f"Sample {limit:,} dari {len(df_f):,}")
-    else:
-        df_sample = df_f
-
+    # Kita hapus sampling karena DataFrame PyDeck lebih tangguh dari iterrows python
+    df_sample = df_f.copy()
     st.sidebar.success(f"{len(df_sample):,} titik ditampilkan")
     df_usaha_filtered = df_sample
 
@@ -267,44 +275,71 @@ if show_usaha:
     sls_lookup_cols = ["idsls_str", "jumlah_usaha"]
     if kec_col:  sls_lookup_cols.append(kec_col)
     if desa_col: sls_lookup_cols.append(desa_col)
-    sls_lookup = (
-        gdf_sls[sls_lookup_cols]
-        .drop_duplicates("idsls_str")
-        .set_index("idsls_str")
-    )
+    
+    sls_lookup = gdf_sls[sls_lookup_cols].drop_duplicates("idsls_str")
 
-    usaha_data = []
-    for _, r in df_sample.iterrows():
-        idsls = r.get("idsls_str", None)
-        sls_info = sls_lookup.loc[idsls] if idsls and idsls in sls_lookup.index else None
-        gc_val = int(r["gc final"]) if pd.notna(r["gc final"]) else 0
-        usaha_data.append({
-            "lon":          r["long final"],
-            "lat":          r["lat final"],
-            "nama":         str(r["nama final"]),
-            "alamat":       str(r["alamat final"]) if pd.notna(r["alamat final"]) else "-",
-            "gc":           gc_val,
-            "gc_label":     f"gc: {gc_val}",
-            "divider":      "<hr style='margin:6px 0;border-color:#333'/>",
-            "color":        gc_to_color(r["gc final"]),
-            "nama_sls":     idsls or "-",
-            "kecamatan":    str(sls_info[kec_col])  if sls_info is not None and kec_col  else "-",
-            "desa":         str(sls_info[desa_col]) if sls_info is not None and desa_col else "-",
-            "jumlah_usaha": int(sls_info["jumlah_usaha"]) if sls_info is not None else 0,
-        })
+    # Vektorisasi merge SLS dan Data Titik Usaha
+    df_sample = df_sample.merge(sls_lookup, on="idsls_str", how="left")
+    
+    # Isi properti yang akan dibaca oleh tooltip PyDeck 
+    if kec_col:
+        df_sample["kecamatan"] = df_sample[kec_col].fillna("-").astype(str)
+    else:
+        df_sample["kecamatan"] = "-"
+        
+    if desa_col:
+        df_sample["desa"] = df_sample[desa_col].fillna("-").astype(str)
+    else:
+        df_sample["desa"] = "-"
+        
+    # Cast float -> int -> string untuk tampilan konsisten
+    df_sample["jumlah_usaha"] = df_sample["jumlah_usaha"].fillna(0).astype(int).astype(str)
+    
+    df_sample["nama_sls"] = df_sample["idsls_str"].fillna("-").astype(str)
+    df_sample["nama"] = df_sample["nama final"].fillna("-").astype(str)
+    df_sample["alamat"] = df_sample["alamat final"].fillna("-").astype(str)
+    
+    # Mapping Coordinates
+    df_sample["lat"] = df_sample["lat final"]
+    df_sample["lon"] = df_sample["long final"]
+    
+    df_sample["gc"] = df_sample["gc final"].fillna(0).astype(int)
+    df_sample["gc_label"] = "gc: " + df_sample["gc"].astype(str)
+    df_sample["divider"] = "<hr style='margin:6px 0;border-color:#333'/>"
+    
+    # Menghubungkan gc_to_color ke pandas via apply agar vektorisasinya bersih
+    df_sample["color"] = df_sample["gc final"].apply(gc_to_color)
 
-    layers.append(pdk.Layer("ScatterplotLayer", data=usaha_data,
-        get_position="[lon, lat]", get_color="color",
-        get_radius=40, radius_min_pixels=2, radius_max_pixels=10, pickable=True))
+    # PENTING: Potong kolom-kolom ex-Excel yang tidak digunakan PyDeck
+    # Jika kita mengirim seluruh kolom ke browser, ukurannya bisa bengkak > 200MB!
+    kolom_pydeck = [
+        "lon", "lat", "color", "nama", "alamat", "gc_label", 
+        "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha"
+    ]
+    df_pydeck = df_sample[kolom_pydeck]
+
+    # Masukkan DataFrame Pydeck langsung tanpa iterrows!
+    layers.append(pdk.Layer(
+        "ScatterplotLayer", 
+        data=df_pydeck,
+        get_position=["lon", "lat"], 
+        get_color="color",
+        get_radius=15,          # <- Di sini untuk mengatur radius titik dasar (Meter)
+        radius_scale=1,       
+        radius_min_pixels=1,    # <- Batas terkecil titik ketika di zoom out (Pixels)
+        radius_max_pixels=6,    # <- Batas terbesar titik ketika di zoom in (Pixels)
+        pickable=True,
+        auto_highlight=True
+    ))
 
 # Layer Bangunan
-if show_build:
-    with st.spinner("Loading bangunan..."):
-        gdf_build = load_building()
-    build_rows = gdf_to_polygon_rows(gdf_build, [255, 200, 0, int(build_opacity * 255)])
-    layers.append(pdk.Layer("PolygonLayer", data=build_rows,
-        get_polygon="polygon", get_fill_color="color",
-        get_line_color=[255, 140, 0, 150], get_line_width=20, pickable=False))
+# if show_build:
+#     with st.spinner("Loading bangunan..."):
+#         gdf_build = load_building()
+#     build_rows = gdf_to_polygon_rows(gdf_build, [255, 200, 0, int(build_opacity * 255)])
+#     layers.append(pdk.Layer("PolygonLayer", data=build_rows,
+#         get_polygon="polygon", get_fill_color="color",
+#         get_line_color=[255, 140, 0, 150], get_line_width=20, pickable=False))
 
 # ─────────────────────────────────────────────
 # RENDER MAP

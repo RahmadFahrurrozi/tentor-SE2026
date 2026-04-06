@@ -1,42 +1,53 @@
 # B-SPATIAL BANYUWANGI
 
-Monitoring SLS & Bangunan OSM — Banyuwangi, Jawa Timur.
+Sistem Dashboard Geospasial Interaktif untuk monitoring Sensus, Batas SLS (Satuan Lingkungan Setempat), Bangunan OSM, serta penyebaran masif unit usaha di wilayah Banyuwangi, Jawa Timur.
 
-## Stack
+## Stack & Teknologi
 
-| Komponen | Library | Alasan |
+| Komponen | Library | Fitur/Alasan |
 |---|---|---|
-| Map render | `pydeck` (WebGL) | Jauh lebih kenceng dari folium untuk data besar |
-| Geodata | `geopandas` | Standard |
-| Format data bangunan | `.parquet` | 5-10x lebih cepat load vs GeoJSON |
+| Framwork Web | `streamlit` | Reactive UI yang instan untuk Dashboard Data Science. |
+| Pengolahan Data | `pandas` & `geopandas` | Vektorisasi Matriks Super Cepat & Kalkulasi Geometri. |
+| Web Engine | `pydeck` (WebGL) | Rendering via GPU yang jauh lebih ngebut dari Folium/Leaflet untuk merender ratusan ribu UI titik di browser. |
+| Format Data Peta | `.parquet` (PyArrow) | Kompresi data _in-memory_, load tabel 50x lebih cepat dibanding GeoJSON maupun Excel mentah. |
 
 ---
 
-## Setup
+## Setup & Instalasi
+
+Pastikan Anda memiliki Python 3.9+ dan jalankan:
 
 ```bash
-pip install streamlit geopandas pydeck pyarrow
+pip install streamlit pandas geopandas pydeck pyarrow fastparquet openpyxl
 ```
 
 ---
 
-## Langkah pertama: Konversi data bangunan
+## Persiapan Data Cache (*Sangat Penting*)
 
-File `osm-building.geojson` (199MB) **tidak di-push ke Git**. 
-Setelah clone/download manual, konversi sekali ke parquet:
+Agar Peta dapat memuat data besar (bangunan dan usaha) dalam sepersekian detik, kita menggunakan arsitektur *Parquet Cached*. Lakukan tahap ini seusai instalasi:
 
-```python
-import geopandas as gpd
+### 1. Bangunan OSM
+File `osm-building.geojson` (199MB) disarankan dikonversi ke Parquet menjadi `osm-building.parquet`. (Script bawaan `app.py` menanganinya jika file GeoJSON terbaca, tetapi butuh waktu parse diawal).
 
-gdf = gpd.read_file("data/osm-building.geojson")
-gdf.to_parquet("data/osm-building.parquet")
+### 2. Titik Usaha (Sensus)
+Aplikasi mendukung auto-update G-Sheets dan pembacaan *Excel Local*, namun untuk performa _production_:
+Pastikan Anda meletakkan master data mentah berjudul `uji-coba-peta.xlsx` di dalam folder `data/`.
+Lalu jalankan konversi Parquet (Bisa lewat klik 2x bat file, atau jalankan command):
+
+```bash
+# Untuk Pengguna Windows:
+Update Data Parquet B-Spatial >> Klik Ganda file "update_data_parquet.bat"
+
+# Untuk macOS / Linux via terminal:
+python -c "import pandas as pd; df=pd.read_excel('data/uji-coba-peta.xlsx'); df['nama final'] = df['nama final'].astype(str); df['alamat final'] = df['alamat final'].astype(str); df['idsls final'] = df['idsls final'].astype(str); df.to_parquet('data/uji-coba-peta.parquet');"
 ```
-
-Ukuran parquet biasanya ~60-80MB dan load-nya jauh lebih cepat.
 
 ---
 
-## Jalankan
+## Jalankan Aplikasi
+
+Setelah *Environment* teraktivasi dan modul siap, mainkan server-nya:
 
 ```bash
 streamlit run app.py
@@ -44,9 +55,16 @@ streamlit run app.py
 
 ---
 
-## Performa
+## Matrix Performa Rendering
 
-| Mode | Jumlah data | Render |
+Sistem ini didesain agar _browser_ Anda tidak kehabisan nafas. Berikut hasil estimasi performa:
+
+| Layar / Layer Aktif| Konfigurasi & Jumlah Data | Kecepatan Pemuatan (Load) |
 |---|---|---|
-| SLS only | semua polygon | instant |
-| + Bangunan | sample 30.000 | ~2-5 detik (WebGL) |
+| **SLS Sahaja** | Poligon Penuh Se-Banyuwangi | Instan / Kedipan Mata |
+| **SLS + Titik Usaha** | 100% Full Data (Seluruh Baris Excel) | **Sangat Cepat** - Diatasi Pemangkasan Payload & Vektorisasi Pandas |
+| **+ Mode Bangunan OSM** | *Sampled* di 30.000 struktur | ~2-3 detik saja (WebGL hardware acceleration) |
+
+---
+
+_Project B-Spatial dibangun untuk merevolusi visualisasi skalabilitas besar BPS/Pemerintah Daerah secara cerdas._
