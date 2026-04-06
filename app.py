@@ -31,17 +31,12 @@ def load_sls():
 
 @st.cache_data
 def load_building():
-    parquet_path = "data/osm-building.parquet"
-    geojson_path = "data/osm-building.geojson"
+    parquet_path = "data/bangunan-terklasifikasi.parquet"
     if os.path.exists(parquet_path):
         gdf = gpd.read_parquet(parquet_path)
     else:
-        st.warning("Parquet belum ada, loading dari GeoJSON (lambat).")
-        gdf = gpd.read_file(geojson_path)
-    gdf = gdf.to_crs(epsg=4326)
-    gdf["geometry"] = gdf.simplify(0.00005, preserve_topology=True)
-    if len(gdf) > 30_000:
-        gdf = gdf.sample(30_000, random_state=42)
+        st.warning("Data pre-processed bangunan belum ada! Jalankan preprocess_bangunan.py terlebih dahulu.")
+        return gpd.GeoDataFrame()
     return gdf
 
 GSHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRI9DTFAbw8KbLPdcBbqSutIiTiDcEZLrDvdhOcQ7n53ckypw_p5Pi9WFt1-nmrMbL5WI7KUut42xQn/pub?gid=1280473743&single=true&output=csv"
@@ -168,7 +163,7 @@ st.sidebar.header("Layer Control")
 show_kab      = st.sidebar.checkbox("Batas Kabupaten", value=True)
 show_sls      = st.sidebar.checkbox("SLS", value=True)
 show_usaha    = st.sidebar.checkbox("Titik Usaha", value=True)
-# show_build    = st.sidebar.checkbox("Bangunan OSM (sample 30k)", value=False)
+show_build    = st.sidebar.checkbox("Bangunan (Usaha & RT)", value=True)
 show_counting = st.sidebar.checkbox("Mode Choropleth", value=True)
 
 st.sidebar.markdown("---")
@@ -333,13 +328,62 @@ if show_usaha:
     ))
 
 # Layer Bangunan
-# if show_build:
-#     with st.spinner("Loading bangunan..."):
-#         gdf_build = load_building()
-#     build_rows = gdf_to_polygon_rows(gdf_build, [255, 200, 0, int(build_opacity * 255)])
-#     layers.append(pdk.Layer("PolygonLayer", data=build_rows,
-#         get_polygon="polygon", get_fill_color="color",
-#         get_line_color=[255, 140, 0, 150], get_line_width=20, pickable=False))
+if show_build:
+    if filter_kec == "Semua" and filter_desa == "Semua":
+        st.warning("⚠️ Pilih spesifik Kecamatan/Desa di sidebar untuk memunculkan Polygon Bangunan di Peta (demi kestabilan memory browser).")
+    else:
+        with st.spinner("Merender bangunan untuk wilayah ini..."):
+            gdf_build = load_building()
+            if not gdf_build.empty:
+                # Filter ke wilayah yang diplih juga untuk mempercepat render
+                # Kita pakai idsls_str yang sudah ada di sls_display
+                valid_idsls_b = set(gdf_sls_display["idsls_str"].dropna().unique())
+                gdf_build_f = gdf_build[gdf_build["idsls_str"].isin(valid_idsls_b)].copy()
+                
+                # Biar warna bisa dirender oleh PyDeck dengan list RGB, evaluasi string representation-nya 
+                # karena saat read dari parquet dia kadang bisa jadi string / list object yg salah 
+                # Tapi di parquet kita tadi simpan object, kita parser manual kalo butuh
+                import ast
+                def parse_color(c):
+                    if isinstance(c, str):
+                        try:
+                            # Parse string '[255, 165, 0, 200]' jadi list python
+                            lst = ast.literal_eval(c)
+                            return lst
+                        except:
+                            return [128, 128, 128, 100]
+                    return c
+                    
+                build_rows = []
+                for _, row in gdf_build_f.iterrows():
+                    geom = row.geometry
+                    if geom is None: continue
+                    color = parse_color(row.color)
+                    color[3] = int(build_opacity * 255) # Terapkan opacity sidebar
+                    
+                    props = {
+                        "fill_color": color,
+                        "nama_sls": str(row.get("idsls_str", "-")),
+                        "status": str(row.get("status_bangunan", "-")),
+                        "jml_usaha": str(row.get("jml_usaha", "0")),
+                        "kecamatan": str(row.get("kecamatan", "-")),
+                        "desa": str(row.get("desa", "-")),
+                        "nama": "Bangunan Fisik",
+                        "alamat": "Lihat info SLS di bawah",
+                        "gc_label": "Status: " + str(row.get("status_bangunan", "-")),
+                        "divider": "<hr style='margin:6px 0;border-color:#333'/>",
+                    }
+                    
+                    polys = [geom] if geom.geom_type == "Polygon" else list(geom.geoms)
+                    for poly in polys:
+                        r = props.copy()
+                        r["polygon"] = [list(c) for c in poly.exterior.coords]
+                        build_rows.append(r)
+                
+                if len(build_rows) > 0:
+                    layers.append(pdk.Layer("PolygonLayer", data=build_rows,
+                        get_polygon="polygon", get_fill_color="fill_color",
+                        get_line_color=[200, 200, 200, 80], get_line_width=1, pickable=True, auto_highlight=True))
 
 # ─────────────────────────────────────────────
 # RENDER MAP
@@ -382,7 +426,9 @@ st.pydeck_chart(deck, width="stretch", height=680)
 
 # Legenda
 if show_sls and show_counting:
-    st.markdown("**Legenda:**  `0` &nbsp;|&nbsp;  `1–9` &nbsp;|&nbsp;  `10–49` &nbsp;|&nbsp;  `50–99` &nbsp;|&nbsp;  `100+`")
+    st.markdown("**Legenda SLS:**  `0` &nbsp;|&nbsp;  `1–9` &nbsp;|&nbsp;  `10–49` &nbsp;|&nbsp;  `50–99` &nbsp;|&nbsp;  `100+`")
+if show_build:
+    st.markdown("**Legenda Bangunan:** 🟠 Bangunan Usaha &nbsp;|&nbsp; 🔵 Bangunan Rumah Tangga")
 
 # ─────────────────────────────────────────────
 # STATISTIK
