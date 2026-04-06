@@ -15,7 +15,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("B-SPATIAL BANYUWANGI")
-st.caption("Monitoring SLS & Bangunan — powered by WebGL (pydeck)")
+st.caption("Monitoring SLS & Bangunan")
 
 # ─────────────────────────────────────────────
 # LOAD DATA
