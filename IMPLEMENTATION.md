@@ -27,15 +27,15 @@
 ### FASE 1 — Persiapan Data
 > Sebelum nulis kode apapun, data harus siap dulu
 
-- [ ] **TASK 1.1** — Terima file data Rumah Tangga dari atasan
+- [x] **TASK 1.1** — Terima file data Rumah Tangga dari atasan
   - Pastikan ada kolom: `lat final`, `long final`, `idsls final`
   - Cek formatnya (Excel / CSV / JSON?)
 
-- [ ] **TASK 1.2** — Cek CRS data Rumah Tangga
+- [x] **TASK 1.2** — Cek CRS data Rumah Tangga
   - Jalankan `print(gdf.crs)` atau cek kolom lat/lon
   - Pastikan koordinatnya masuk akal (lat sekitar -8, lon sekitar 114)
 
-- [ ] **TASK 1.3** — Konversi data Rumah Tangga ke Parquet
+- [x] **TASK 1.3** — Konversi data Rumah Tangga ke Parquet
   - Data ~500k baris → wajib Parquet supaya load cepat
   - Simpan ke `data/rumah-tangga.parquet`
   - Validasi: jumlah baris sebelum dan sesudah konversi harus sama
@@ -47,7 +47,7 @@
   print(f"Tersimpan: {len(df):,} baris")
   ```
 
-- [ ] **TASK 1.4** — Cek OSM Building apakah sample 30k perlu dihapus
+- [x] **TASK 1.4** — Cek OSM Building apakah sample 30k perlu dihapus
   - Saat ini kode membatasi 30.000 bangunan secara acak
   - Karena prioritas akurasi → **hapus batas sampling**
   - Tapi perlu diuji dulu: berapa total bangunan OSM Banyuwangi?
@@ -58,18 +58,18 @@
 ### FASE 2 — Pre-processing Offline (Optimasi Performa)
 > Memindahkan komputasi spatial join 500k data keluar dari `app.py` agar server/RAM tidak jebol.
 
-- [ ] **TASK 2.1** — Buat script `preprocess_bangunan.py`
+- [x] **TASK 2.1** — Buat script `preprocess_bangunan.py`
   - Load OSM Building Parquet secara penuh (tanpa sampling).
   - Load titik Usaha dan titik Rumah Tangga (ubah ke format GeoDataFrame).
   - Lakukan Spatial Join (`sjoin`) antara Bangunan dengan Rumah Tangga dan Usaha.
   
-- [ ] **TASK 2.2** — Penyaringan & Pewarnaan di Pre-processing
+- [x] **TASK 2.2** — Penyaringan & Pewarnaan di Pre-processing
   - Tandai status bangunan (Ada Rumah Tangga, Ada Usaha, Jumlah Usaha).
   - **Data Purging**: Buang bangunan "kosong" (tidak ada RT dan Usaha) dari hasil join agar ukurannya super ringan.
   - Simpan format hasil yang sudah difilter: `data/bangunan-terklasifikasi.parquet`.
   - Beri warna final langsung (Oranye untuk Usaha `[255,165,0]`, Biru untuk RT `[0,114,188]`).
 
-- [ ] **TASK 2.3** — Hapus logic join di `app.py`
+- [x] **TASK 2.3** — Hapus logic join di `app.py`
   - Di fungsi `load_building` pada `app.py`, ganti target load dari OSM Mentah ke file jadi `bangunan-terklasifikasi.parquet`.
   - Hapus limit 30k sampling OSM.
 
@@ -77,16 +77,16 @@
 
 ### FASE 3 — Integrasi UI & Pencegahan Browser Crash
 
-- [ ] **TASK 3.1** — Tambah layer bangunan ke peta PyDeck
+- [x] **TASK 3.1** — Tambah layer bangunan ke peta PyDeck
   - Polygon bangunan ditampilkan dengan pewarnaan yang sudah pre-calculated.
   - Pickable = True supaya bisa diklik.
 
-- [ ] **TASK 3.2** — Implementasi Render Bersyarat (LOD/Level of Detail Constraint)
+- [x] **TASK 3.2** — Implementasi Render Bersyarat (LOD/Level of Detail Constraint)
   - Untuk mencegah *browser out of memory* saat merender file bangunan seluruh Kabupaten:
   - **Syarat rendering**: Polygon bangunan hanya muncul saat var filter kecamatan / desa **tidak sama dengan `"Semua"`**.
   - Tampilkan warning `st.warning("Silakan pilih spesifik Kecamatan untuk memunculkan blok bangunan demi menjaga kestabilan Map")` saat view masih di luar wilayah spesifik.
 
-- [ ] **TASK 3.3** — Tambah checkbox & legenda
+- [x] **TASK 3.3** — Tambah checkbox & legenda
   - Tambahkan checkbox Layer Bangunan.
   - Tambah Legenda / Tooltip info Bangunan.
   - Sinkronkan metrik perhitungan jumlah terdata/semua.
@@ -131,14 +131,6 @@
   - `streamlit`
   - `pydeck`
   - `pandas`
-
-- [ ] **TASK 5.3** — Push ke repository & deploy
-  - Test di Streamlit Cloud / server production
-  - Cek memory usage — spatial join 500k data bisa berat di server
-
-- [ ] **TASK 5.4** — Monitor performa setelah deploy
-  - Apakah cache bekerja dengan baik?
-  - Apakah ada timeout saat pertama kali load?
 
 ---
 

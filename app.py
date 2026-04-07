@@ -83,6 +83,28 @@ def load_usaha():
     return df
 
 @st.cache_data
+def load_rumah_tangga():
+    parquet_path = "data/rumah-tangga.parquet"
+    if os.path.exists(parquet_path):
+        return pd.read_parquet(parquet_path)
+    return pd.DataFrame()
+
+@st.cache_data
+def get_building_stats():
+    gdf_build = load_building()
+    if gdf_build.empty:
+        return pd.DataFrame()
+    stats = gdf_build.groupby(['idsls_str', 'status_bangunan']).size().unstack(fill_value=0)
+    for col in ['Bangunan Usaha', 'Rumah Tangga', 'Kosong']:
+        if col not in stats.columns:
+            stats[col] = 0
+            
+    stats['total_bangunan'] = stats['Bangunan Usaha'] + stats['Rumah Tangga'] + stats['Kosong']
+    stats['sudah_terdata'] = stats['Bangunan Usaha'] + stats['Rumah Tangga']
+    stats['belum_terdata'] = stats['Kosong']
+    return stats[['total_bangunan', 'sudah_terdata', 'belum_terdata']].reset_index()
+
+@st.cache_data
 def merge_sls_dengan_count():
     gdf_sls = load_sls()
     df_usaha = load_usaha()
@@ -107,8 +129,19 @@ def merge_sls_dengan_count():
         gdf_sls["idsls_str"] = gdf_sls[sls_id_col].apply(norm)
         gdf_sls = gdf_sls.merge(count_df, on="idsls_str", how="left")
         gdf_sls["jumlah_usaha"] = gdf_sls["jumlah_usaha"].fillna(0).astype(int)
+        
+        # Merge stats bangunan
+        stats_df = get_building_stats()
+        if not stats_df.empty:
+            gdf_sls = gdf_sls.merge(stats_df, on="idsls_str", how="left")
+            gdf_sls["total_bangunan"] = gdf_sls["total_bangunan"].fillna(0).astype(int)
+            gdf_sls["sudah_terdata"] = gdf_sls["sudah_terdata"].fillna(0).astype(int)
+            gdf_sls["belum_terdata"] = gdf_sls["belum_terdata"].fillna(0).astype(int)
+        else:
+            gdf_sls["total_bangunan"] = 0; gdf_sls["sudah_terdata"] = 0; gdf_sls["belum_terdata"] = 0
     else:
         gdf_sls["jumlah_usaha"] = 0
+        gdf_sls["total_bangunan"] = 0; gdf_sls["sudah_terdata"] = 0; gdf_sls["belum_terdata"] = 0
 
     return gdf_sls, sls_id_col
 
@@ -163,6 +196,7 @@ st.sidebar.header("Layer Control")
 show_kab      = st.sidebar.checkbox("Batas Kabupaten", value=True)
 show_sls      = st.sidebar.checkbox("SLS", value=True)
 show_usaha    = st.sidebar.checkbox("Titik Usaha", value=True)
+show_rt       = st.sidebar.checkbox("Titik Rumah Tangga", value=False)
 show_build    = st.sidebar.checkbox("Bangunan (Usaha & RT)", value=True)
 show_counting = st.sidebar.checkbox("Mode Choropleth", value=True)
 
@@ -225,6 +259,9 @@ if show_sls:
         props  = {
             "color": color,
             "jumlah_usaha": jumlah,
+            "total_bangunan": str(int(row.get("total_bangunan", 0))),
+            "sudah_terdata": str(int(row.get("sudah_terdata", 0))),
+            "belum_terdata": str(int(row.get("belum_terdata", 0))),
             "nama_sls": str(row.get("idsls_str", "-")),
             "kecamatan": str(row.get(kec_col,  "-")) if kec_col  else "-",
             "desa":      str(row.get(desa_col, "-")) if desa_col else "-",
@@ -301,6 +338,9 @@ if show_usaha:
     df_sample["gc"] = df_sample["gc final"].fillna(0).astype(int)
     df_sample["gc_label"] = "gc: " + df_sample["gc"].astype(str)
     df_sample["divider"] = "<hr style='margin:6px 0;border-color:#333'/>"
+    df_sample["total_bangunan"] = "-"
+    df_sample["sudah_terdata"] = "-"
+    df_sample["belum_terdata"] = "-"
     
     # Menghubungkan gc_to_color ke pandas via apply agar vektorisasinya bersih
     df_sample["color"] = df_sample["gc final"].apply(gc_to_color)
@@ -309,7 +349,8 @@ if show_usaha:
     # Jika kita mengirim seluruh kolom ke browser, ukurannya bisa bengkak > 200MB!
     kolom_pydeck = [
         "lon", "lat", "color", "nama", "alamat", "gc_label", 
-        "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha"
+        "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha",
+        "total_bangunan", "sudah_terdata", "belum_terdata"
     ]
     df_pydeck = df_sample[kolom_pydeck]
 
@@ -326,6 +367,72 @@ if show_usaha:
         pickable=True,
         auto_highlight=True
     ))
+
+# Layer Titik Rumah Tangga
+if show_rt:
+    if filter_kec == "Semua" and filter_desa == "Semua":
+        st.warning("⚠️ Pilih spesifik Kecamatan/Desa di sidebar untuk memunculkan Titik Rumah Tangga (demi kestabilan memory browser).")
+    else:
+        with st.spinner("Loading titik rumah tangga..."):
+            df_rt = load_rumah_tangga()
+            
+        df_rt_f = df_rt.copy()
+        if filter_kec != "Semua" or filter_desa != "Semua":
+            valid_idsls = set(gdf_sls_display["idsls_str"].dropna().unique())
+            df_rt_f = df_rt_f[df_rt_f["idsls_str"].isin(valid_idsls)]
+            
+        st.sidebar.success(f"{len(df_rt_f):,} titik RT ditampilkan")
+        
+        df_rt_sample = df_rt_f.copy()
+        
+        sls_lookup_cols = ["idsls_str", "jumlah_usaha"]
+        if kec_col: sls_lookup_cols.append(kec_col)
+        if desa_col: sls_lookup_cols.append(desa_col)
+        sls_lookup_rt = gdf_sls[sls_lookup_cols].drop_duplicates("idsls_str")
+        
+        df_rt_sample = df_rt_sample.merge(sls_lookup_rt, on="idsls_str", how="left")
+        
+        if kec_col: df_rt_sample["kecamatan"] = df_rt_sample[kec_col].fillna("-").astype(str)
+        else: df_rt_sample["kecamatan"] = "-"
+        if desa_col: df_rt_sample["desa"] = df_rt_sample[desa_col].fillna("-").astype(str)
+        else: df_rt_sample["desa"] = "-"
+        
+        df_rt_sample["jumlah_usaha"] = df_rt_sample["jumlah_usaha"].fillna(0).astype(int).astype(str)
+        df_rt_sample["nama_sls"] = df_rt_sample["idsls_str"].fillna("-").astype(str)
+        
+        # Tooltip properties
+        df_rt_sample["nama"] = "Rumah Tangga"
+        if "nama_kk" in df_rt_sample.columns:
+            df_rt_sample.loc[df_rt_sample["nama_kk"].notna(), "nama"] = "Rumah Tangga (" + df_rt_sample["nama_kk"].astype(str) + ")"
+            
+        df_rt_sample["alamat"] = "Titik Rumah Tangga"
+        df_rt_sample["gc_label"] = ""
+        df_rt_sample["divider"] = "<hr style='margin:6px 0;border-color:#333'/>"
+        df_rt_sample["lat"] = pd.to_numeric(df_rt_sample["lat final"], errors="coerce").fillna(0)
+        df_rt_sample["lon"] = pd.to_numeric(df_rt_sample["long final"], errors="coerce").fillna(0)
+        df_rt_sample["color"] = pd.Series([[0, 114, 188, 200]] * len(df_rt_sample), index=df_rt_sample.index)
+        df_rt_sample["total_bangunan"] = "-"
+        df_rt_sample["sudah_terdata"] = "-"
+        df_rt_sample["belum_terdata"] = "-"
+        
+        rt_kolom_pydeck = [
+            "lon", "lat", "color", "nama", "alamat", "gc_label", 
+            "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha",
+            "total_bangunan", "sudah_terdata", "belum_terdata"
+        ]
+        
+        layers.append(pdk.Layer(
+            "ScatterplotLayer", 
+            data=df_rt_sample[rt_kolom_pydeck],
+            get_position=["lon", "lat"], 
+            get_color="color",
+            get_radius=10,          
+            radius_scale=1,       
+            radius_min_pixels=1,    
+            radius_max_pixels=4,    
+            pickable=True,
+            auto_highlight=True
+        ))
 
 # Layer Bangunan
 if show_build:
@@ -372,6 +479,10 @@ if show_build:
                         "alamat": "Lihat info SLS di bawah",
                         "gc_label": "Status: " + str(row.get("status_bangunan", "-")),
                         "divider": "<hr style='margin:6px 0;border-color:#333'/>",
+                        "jumlah_usaha": str(row.get("jml_usaha", "0")),
+                        "total_bangunan": "-",
+                        "sudah_terdata": "-",
+                        "belum_terdata": "-",
                     }
                     
                     polys = [geom] if geom.geom_type == "Polygon" else list(geom.geoms)
@@ -412,12 +523,27 @@ tooltip = {
         <span style='color:#aaa;font-size:11px'>Kecamatan</span> <b>{kecamatan}</b><br/>
         <span style='color:#aaa;font-size:11px'>Desa</span> <b>{desa}</b><br/>
         <span style='color:#aaa;font-size:11px'>Jumlah Usaha</span> <b style='color:#7ef7a0'>{jumlah_usaha}</b>
+        
+        <div style="margin-top:8px; padding-top:8px; border-top:1px solid #444;">
+          <table style='width:100%; font-size:11px; border-collapse:collapse; text-align:center;'>
+             <tr style='background:#222; color:#ccc'>
+                 <th style='padding:4px;border:1px solid #444;font-weight:normal'>Total Bangunan</th>
+                 <th style='padding:4px;border:1px solid #444;font-weight:normal'>Sudah<br/>Didatangi</th>
+                 <th style='padding:4px;border:1px solid #444;font-weight:normal'>Belum<br/>Didatangi</th>
+             </tr>
+             <tr>
+                 <td style='padding:4px;border:1px solid #444;'>{total_bangunan}</td>
+                 <td style='padding:4px;border:1px solid #444;color:#7ef7a0'>{sudah_terdata}</td>
+                 <td style='padding:4px;border:1px solid #444;color:#f77e7e'>{belum_terdata}</td>
+             </tr>
+          </table>
+        </div>
         </div>
     """,
     "style": {
         "backgroundColor": "#1a1a2e", "color": "#e0f0ff",
         "padding": "12px 14px", "borderRadius": "8px",
-        "border": "1px solid #4444aa", "maxWidth": "280px",
+        "border": "1px solid #4444aa", "maxWidth": "320px",
     }
 }
 
@@ -441,6 +567,30 @@ c1.metric("Total SLS ditampilkan", f"{len(gdf_sls_display):,}")
 c2.metric("Total Unit Usaha", f"{len(df_usaha_stat):,}")
 c3.metric("SLS dengan usaha", f"{(gdf_sls_display['jumlah_usaha'] > 0).sum():,}")
 c4.metric("Rata-rata usaha/SLS", f"{gdf_sls_display['jumlah_usaha'].mean():.1f}")
+
+st.write("---")
+st.subheader("Statistik Bangunan Per Wilayah Terpilih")
+
+gdf_build = load_building()
+if not gdf_build.empty:
+    valid_idsls_b = set(gdf_sls_display["idsls_str"].dropna().unique())
+    gdf_build_stats = gdf_build[gdf_build["idsls_str"].isin(valid_idsls_b)]
+    
+    # Hitung metrik bangunan sesuai dengan rule yang diminta
+    # Total Bangunan = Semua OSM
+    # Sudah Didatangi = Bangunan Usaha / Rumah Tangga
+    # Belum Didatangi = Kosong
+    aktif_bangunan = gdf_build_stats
+    total_bangunan = len(aktif_bangunan)
+    sudah_terdata = len(aktif_bangunan[aktif_bangunan["status_bangunan"] != "Kosong"])
+    belum_terdata = len(aktif_bangunan[aktif_bangunan["status_bangunan"] == "Kosong"])
+    
+    cb1, cb2, cb3 = st.columns(3)
+    cb1.metric("Total Bangunan (OSM)", f"{total_bangunan:,}")
+    cb2.metric("Sudah Didatangi (Ada RT/Usaha)", f"{sudah_terdata:,}")
+    cb3.metric("Belum Didatangi (Kosong Total)", f"{belum_terdata:,}")
+else:
+    st.info("Data bangunan belum tersedia untuk dihitung.")
 
 # ─────────────────────────────────────────────
 # TABEL DETAIL USAHA PER SLS
