@@ -77,13 +77,39 @@ gdf_rt = gpd.GeoDataFrame(
     crs=4326
 )
 
-# 2. Spatial Join
+# 2. Spatial Join dengan DEVIASI (Snap to Nearest)
+# Kita pindah ke proyeksi UTM 50S (untuk Banyuwangi) biar bisa ngitung Meter dengan akurat
+print(" Melakukan Proyeksi ke UTM 50S (EPSG:32750) untuk perhitungan 2 meter...")
+utm_crs = "EPSG:32750"
+gdf_build_utm = gdf_build.to_crs(utm_crs)
+gdf_usaha_utm = gdf_usaha.to_crs(utm_crs)
+gdf_rt_utm    = gdf_rt.to_crs(utm_crs)
+
+def perform_smart_join(gdf_pts, gdf_blg, label="Data"):
+    print(f"   Proses Deviasi untuk {label}...")
+    # Tahap 1: Yang emang beneran di DALAM (Within)
+    join_inside = gpd.sjoin(gdf_pts, gdf_blg, how="inner", predicate="within")
+    
+    # Identifikasi titik yang belum dapet bangunan
+    inside_indices = set(join_inside.index)
+    gdf_homeless = gdf_pts[~gdf_pts.index.isin(inside_indices)]
+    
+    # Tahap 2: Yang di luar tapi DEKAT (Deviasi 2 Meter)
+    # sjoin_nearest butuh rtree/pygeos
+    # max_distance=2 (dalam satuan meter karena udah UTM)
+    join_nearest = gpd.sjoin_nearest(gdf_homeless, gdf_blg, how="inner", max_distance=2)
+    
+    print(f"      - {len(join_inside):,} titik tepat di dalam bangunan")
+    print(f"      - {len(join_nearest):,} titik berhasil ditempel lewat Deviasi (2m)")
+    
+    # Gabungin hasil
+    return pd.concat([join_inside, join_nearest])
+
 print("Melakukan Spatial Join: Usaha -> Bangunan...")
-# sjoin inner untuk dapat list bangunan yang 'contains' usaha
-join_usaha = gpd.sjoin(gdf_usaha, gdf_build, how="inner", predicate="within")
+join_usaha = perform_smart_join(gdf_usaha_utm, gdf_build_utm, "Usaha")
 
 print("Melakukan Spatial Join: Rumah Tangga -> Bangunan...")
-join_rt = gpd.sjoin(gdf_rt, gdf_build, how="inner", predicate="within")
+join_rt = perform_smart_join(gdf_rt_utm, gdf_build_utm, "Rumah Tangga")
 
 # Kumpulkan index bangunan
 usaha_build_idx = set(join_usaha['build_idx'].tolist())

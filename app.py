@@ -304,7 +304,7 @@ if show_sls:
 # Layer Bangunan
 if show_build:
     if filter_kec == "Semua" and filter_desa == "Semua":
-        st.warning("⚠️ Pilih spesifik Kecamatan/Desa di sidebar untuk memunculkan Polygon Bangunan di Peta (demi kestabilan memory browser).")
+        st.warning("Pilih spesifik Kecamatan/Desa di sidebar untuk memunculkan Polygon Bangunan di Peta (demi kestabilan memory browser).")
     else:
         with st.spinner("Merender bangunan untuk wilayah ini..."):
             gdf_build = load_building()
