@@ -108,13 +108,26 @@ def get_building_stats():
 def merge_sls_dengan_count():
     gdf_sls = load_sls()
     df_usaha = load_usaha()
+    df_rt = load_rumah_tangga()
 
-    count_df = (
+    # Count Usaha per SLS
+    count_usaha = (
         df_usaha.dropna(subset=["idsls_str"])
         .groupby("idsls_str")
         .size()
         .reset_index(name="jumlah_usaha")
     )
+
+    # Count Keluarga (Rumah Tangga) per SLS
+    if not df_rt.empty:
+        count_keluarga = (
+            df_rt.dropna(subset=["idsls_str"])
+            .groupby("idsls_str")
+            .size()
+            .reset_index(name="jumlah_keluarga")
+        )
+    else:
+        count_keluarga = pd.DataFrame(columns=["idsls_str", "jumlah_keluarga"])
 
     id_candidates = ["idsls", "id_sls", "IDSLS", "ID_SLS", "kode_sls", "id"]
     sls_id_col = next((c for c in id_candidates if c in gdf_sls.columns), None)
@@ -127,8 +140,14 @@ def merge_sls_dengan_count():
             s = str(v).strip()
             return s[:-2] if s.endswith(".0") else s
         gdf_sls["idsls_str"] = gdf_sls[sls_id_col].apply(norm)
-        gdf_sls = gdf_sls.merge(count_df, on="idsls_str", how="left")
+        
+        # Merge Usaha
+        gdf_sls = gdf_sls.merge(count_usaha, on="idsls_str", how="left")
         gdf_sls["jumlah_usaha"] = gdf_sls["jumlah_usaha"].fillna(0).astype(int)
+        
+        # Merge Keluarga
+        gdf_sls = gdf_sls.merge(count_keluarga, on="idsls_str", how="left")
+        gdf_sls["jumlah_keluarga"] = gdf_sls["jumlah_keluarga"].fillna(0).astype(int)
         
         # Merge stats bangunan
         stats_df = get_building_stats()
@@ -141,6 +160,7 @@ def merge_sls_dengan_count():
             gdf_sls["total_bangunan"] = 0; gdf_sls["sudah_terdata"] = 0; gdf_sls["belum_terdata"] = 0
     else:
         gdf_sls["jumlah_usaha"] = 0
+        gdf_sls["jumlah_keluarga"] = 0
         gdf_sls["total_bangunan"] = 0; gdf_sls["sudah_terdata"] = 0; gdf_sls["belum_terdata"] = 0
 
     return gdf_sls, sls_id_col
@@ -197,20 +217,8 @@ show_kab      = st.sidebar.checkbox("Batas Kabupaten", value=True)
 show_sls      = st.sidebar.checkbox("SLS", value=True)
 show_usaha    = st.sidebar.checkbox("Titik Usaha", value=True)
 show_rt       = st.sidebar.checkbox("Titik Rumah Tangga", value=False)
-show_build    = st.sidebar.checkbox("Bangunan (Usaha & RT)", value=True)
-show_counting = st.sidebar.checkbox("Mode Choropleth", value=True)
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("Opacity")
-sls_opacity   = st.sidebar.slider("SLS opacity", 0.0, 1.0, 0.3, 0.05)
-build_opacity = st.sidebar.slider("Bangunan opacity", 0.0, 1.0, 0.6, 0.05)
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("Data")
-if st.sidebar.button("Refresh Data Sekarang"):
-    st.cache_data.clear()
-    st.rerun()
-st.sidebar.caption("Auto-refresh tiap 5 menit")
+show_build    = st.sidebar.checkbox("Bangunan (Usaha & RT)", value=False)
+show_counting = st.sidebar.checkbox("Mode Choropleth", value=False)
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Filter Wilayah")
@@ -226,6 +234,18 @@ st.sidebar.subheader("Filter Titik Usaha")
 GC_LABEL = {0:"0 — Tidak diketahui", 1:"1 — Akurasi tinggi", 3:"3 — Akurasi sedang", 4:"4 — Sangat tinggi", 99:"99 — Khusus"}
 filter_gc   = st.sidebar.selectbox("Kualitas Koordinat (gc)", ["Semua"] + [GC_LABEL[g] for g in sorted(GC_LABEL)])
 filter_nama = st.sidebar.text_input("Cari nama usaha", placeholder="contoh: BAKSO")
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("Opacity")
+sls_opacity   = st.sidebar.slider("SLS opacity", 0.0, 1.0, 0.3, 0.05)
+build_opacity = st.sidebar.slider("Bangunan opacity", 0.0, 1.0, 0.6, 0.05)
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("Data")
+if st.sidebar.button("Refresh Data Sekarang"):
+    st.cache_data.clear()
+    st.rerun()
+# st.sidebar.caption("Auto-refresh tiap 5 menit")
 
 # ─────────────────────────────────────────────
 # FILTER SLS
@@ -246,7 +266,7 @@ if show_kab:
     kab_rows = gdf_to_polygon_rows(gdf_kab, [0, 100, 255, 15])
     layers.append(pdk.Layer("PolygonLayer", data=kab_rows,
         get_polygon="polygon", get_fill_color="color",
-        get_line_color=[0, 150, 255, 220], get_line_width=200, pickable=False))
+        get_line_color=[0, 150, 255, 220], get_line_width=80, pickable=False))
 
 # Layer SLS
 if show_sls:
@@ -254,18 +274,20 @@ if show_sls:
     for _, row in gdf_sls_display.iterrows():
         geom = row.geometry
         if geom is None: continue
-        jumlah = int(row.get("jumlah_usaha", 0))
-        color  = jumlah_to_color(jumlah) if show_counting else [160, 32, 240, int(sls_opacity * 255)]
+        jumlah_usaha = int(row.get("jumlah_usaha", 0))
+        jumlah_keluarga = int(row.get("jumlah_keluarga", 0))
+        color  = jumlah_to_color(jumlah_usaha) if show_counting else [160, 32, 240, int(sls_opacity * 255)]
         props  = {
             "color": color,
-            "jumlah_usaha": jumlah,
+            "jumlah_usaha": str(jumlah_usaha),
+            "jumlah_keluarga": str(jumlah_keluarga),
             "total_bangunan": str(int(row.get("total_bangunan", 0))),
             "sudah_terdata": str(int(row.get("sudah_terdata", 0))),
             "belum_terdata": str(int(row.get("belum_terdata", 0))),
             "nama_sls": str(row.get("idsls_str", "-")),
             "kecamatan": str(row.get(kec_col,  "-")) if kec_col  else "-",
             "desa":      str(row.get(desa_col, "-")) if desa_col else "-",
-            "nama": "", "alamat": "", "gc_label": "", "divider": "",
+            "nama": "Info SLS", "alamat": "Satuan Lingkungan Setempat", "gc_label": "", "divider": "",
         }
         polys = [geom] if geom.geom_type == "Polygon" else list(geom.geoms)
         for poly in polys:
@@ -275,19 +297,74 @@ if show_sls:
 
     layers.append(pdk.Layer("PolygonLayer", data=sls_rows,
         get_polygon="polygon", get_fill_color="color",
-        get_line_color=[200, 200, 255, 80], 
-        get_line_width=5, line_width_min_pixels=1, 
+        get_line_color=[200, 200, 255, 60], 
+        get_line_width=2, line_width_min_pixels=1, 
         pickable=True, auto_highlight=True))
 
-# Layer Titik Usaha
+# Layer Bangunan
+if show_build:
+    if filter_kec == "Semua" and filter_desa == "Semua":
+        st.warning("⚠️ Pilih spesifik Kecamatan/Desa di sidebar untuk memunculkan Polygon Bangunan di Peta (demi kestabilan memory browser).")
+    else:
+        with st.spinner("Merender bangunan untuk wilayah ini..."):
+            gdf_build = load_building()
+            if not gdf_build.empty:
+                valid_idsls_b = set(gdf_sls_display["idsls_str"].dropna().unique())
+                gdf_build_f = gdf_build[gdf_build["idsls_str"].isin(valid_idsls_b)].copy()
+                
+                import ast
+                def parse_color(c):
+                    if isinstance(c, str):
+                        try:
+                            lst = ast.literal_eval(c)
+                            return lst
+                        except:
+                            return [128, 128, 128, 100]
+                    return c
+                    
+                build_rows = []
+                for _, row in gdf_build_f.iterrows():
+                    geom = row.geometry
+                    if geom is None: continue
+                    color = parse_color(row.color)
+                    color[3] = int(build_opacity * 255)
+                    
+                    props = {
+                        "fill_color": color,
+                        "nama_sls": str(row.get("idsls_str", "-")),
+                        "status": str(row.get("status_bangunan", "-")),
+                        "jml_usaha": str(row.get("jml_usaha", "0")),
+                        "kecamatan": str(row.get("kecamatan", "-")),
+                        "desa": str(row.get("desa", "-")),
+                        "nama": "Bangunan Fisik",
+                        "alamat": "Lihat info SLS di bawah",
+                        "gc_label": "Status: " + str(row.get("status_bangunan", "-")),
+                        "divider": "<hr style='margin:6px 0;border-color:#333'/>",
+                        "jumlah_usaha": str(row.get("jml_usaha", "0")),
+                        "jumlah_keluarga": "-",
+                        "total_bangunan": "-",
+                        "sudah_terdata": "-",
+                        "belum_terdata": "-",
+                    }
+                    
+                    polys = [geom] if geom.geom_type == "Polygon" else list(geom.geoms)
+                    for poly in polys:
+                        r = props.copy()
+                        r["polygon"] = [list(c) for c in poly.exterior.coords]
+                        build_rows.append(r)
+                
+                if len(build_rows) > 0:
+                    layers.append(pdk.Layer("PolygonLayer", data=build_rows,
+                        get_polygon="polygon", get_fill_color="fill_color",
+                        get_line_color=[200, 200, 200, 80], get_line_width=1, pickable=True, auto_highlight=True))
+
+# Layer Titik Usaha (Dipindah ke bawah agar muncul di atas bangunan)
 df_usaha_filtered = None
 if show_usaha:
     with st.spinner("Loading titik usaha..."):
         df_usaha = load_usaha()
 
     df_f = df_usaha.copy()
-    # Filter titik usaha berdasarkan idsls_str yang ada di SLS yang sudah difilter wilayah
-    # Ini lebih andal daripada join via kode kecamatan yang formatnya bisa beda
     if filter_kec != "Semua" or filter_desa != "Semua":
         valid_idsls = set(gdf_sls_display["idsls_str"].dropna().unique())
         df_f = df_f[df_f["idsls_str"].isin(valid_idsls)]
@@ -297,41 +374,27 @@ if show_usaha:
     if filter_nama.strip():
         df_f = df_f[df_f["nama final"].str.contains(filter_nama.strip(), case=False, na=False)]
 
-    # Kita hapus sampling karena DataFrame PyDeck lebih tangguh dari iterrows python
     df_sample = df_f.copy()
     st.sidebar.success(f"{len(df_sample):,} titik ditampilkan")
     df_usaha_filtered = df_sample
 
-    # Lookup pakai semua SLS (bukan hanya display) supaya titik yang idsls-nya ada
-    # di luar filter wilayah tetap bisa dapat info nama kec/desa/jumlah usaha
     sls_lookup_cols = ["idsls_str", "jumlah_usaha"]
     if kec_col:  sls_lookup_cols.append(kec_col)
     if desa_col: sls_lookup_cols.append(desa_col)
-    
     sls_lookup = gdf_sls[sls_lookup_cols].drop_duplicates("idsls_str")
 
-    # Vektorisasi merge SLS dan Data Titik Usaha
     df_sample = df_sample.merge(sls_lookup, on="idsls_str", how="left")
     
-    # Isi properti yang akan dibaca oleh tooltip PyDeck 
-    if kec_col:
-        df_sample["kecamatan"] = df_sample[kec_col].fillna("-").astype(str)
-    else:
-        df_sample["kecamatan"] = "-"
+    if kec_col: df_sample["kecamatan"] = df_sample[kec_col].fillna("-").astype(str)
+    else: df_sample["kecamatan"] = "-"
+    if desa_col: df_sample["desa"] = df_sample[desa_col].fillna("-").astype(str)
+    else: df_sample["desa"] = "-"
         
-    if desa_col:
-        df_sample["desa"] = df_sample[desa_col].fillna("-").astype(str)
-    else:
-        df_sample["desa"] = "-"
-        
-    # Cast float -> int -> string untuk tampilan konsisten
-    df_sample["jumlah_usaha"] = df_sample["jumlah_usaha"].fillna(0).astype(int).astype(str)
-    
+    df_sample["jumlah_usaha"] = "1"
+    df_sample["jumlah_keluarga"] = "0"
     df_sample["nama_sls"] = df_sample["idsls_str"].fillna("-").astype(str)
     df_sample["nama"] = df_sample["nama final"].fillna("-").astype(str)
     df_sample["alamat"] = df_sample["alamat final"].fillna("-").astype(str)
-    
-    # Mapping Coordinates
     df_sample["lat"] = df_sample["lat final"]
     df_sample["lon"] = df_sample["long final"]
     
@@ -341,37 +404,32 @@ if show_usaha:
     df_sample["total_bangunan"] = "-"
     df_sample["sudah_terdata"] = "-"
     df_sample["belum_terdata"] = "-"
-    
-    # Menghubungkan gc_to_color ke pandas via apply agar vektorisasinya bersih
     df_sample["color"] = df_sample["gc final"].apply(gc_to_color)
 
-    # PENTING: Potong kolom-kolom ex-Excel yang tidak digunakan PyDeck
-    # Jika kita mengirim seluruh kolom ke browser, ukurannya bisa bengkak > 200MB!
     kolom_pydeck = [
         "lon", "lat", "color", "nama", "alamat", "gc_label", 
-        "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha",
+        "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha", "jumlah_keluarga",
         "total_bangunan", "sudah_terdata", "belum_terdata"
     ]
-    df_pydeck = df_sample[kolom_pydeck]
-
-    # Masukkan DataFrame Pydeck langsung tanpa iterrows!
+    
     layers.append(pdk.Layer(
         "ScatterplotLayer", 
-        data=df_pydeck,
+        data=df_sample[kolom_pydeck],
         get_position=["lon", "lat"], 
         get_color="color",
-        get_radius=15,          # <- Di sini untuk mengatur radius titik dasar (Meter)
+        get_radius=15, 
         radius_scale=1,       
-        radius_min_pixels=1,    # <- Batas terkecil titik ketika di zoom out (Pixels)
-        radius_max_pixels=6,    # <- Batas terbesar titik ketika di zoom in (Pixels)
+        radius_min_pixels=1,
+        radius_max_pixels=6,
         pickable=True,
         auto_highlight=True
     ))
 
-# Layer Titik Rumah Tangga
+
+# Layer Titik Rumah Tangga (Dipindah ke bawah bangunan agar di layer atas)
 if show_rt:
     if filter_kec == "Semua" and filter_desa == "Semua":
-        st.warning("⚠️ Pilih spesifik Kecamatan/Desa di sidebar untuk memunculkan Titik Rumah Tangga (demi kestabilan memory browser).")
+        st.warning("Pilih spesifik Kecamatan/Desa di sidebar untuk memunculkan Titik Rumah Tangga (demi kestabilan memory browser).")
     else:
         with st.spinner("Loading titik rumah tangga..."):
             df_rt = load_rumah_tangga()
@@ -382,7 +440,6 @@ if show_rt:
             df_rt_f = df_rt_f[df_rt_f["idsls_str"].isin(valid_idsls)]
             
         st.sidebar.success(f"{len(df_rt_f):,} titik RT ditampilkan")
-        
         df_rt_sample = df_rt_f.copy()
         
         sls_lookup_cols = ["idsls_str", "jumlah_usaha"]
@@ -397,7 +454,8 @@ if show_rt:
         if desa_col: df_rt_sample["desa"] = df_rt_sample[desa_col].fillna("-").astype(str)
         else: df_rt_sample["desa"] = "-"
         
-        df_rt_sample["jumlah_usaha"] = df_rt_sample["jumlah_usaha"].fillna(0).astype(int).astype(str)
+        df_rt_sample["jumlah_usaha"] = "0"
+        df_rt_sample["jumlah_keluarga"] = "1"
         df_rt_sample["nama_sls"] = df_rt_sample["idsls_str"].fillna("-").astype(str)
         
         # Tooltip properties
@@ -417,7 +475,7 @@ if show_rt:
         
         rt_kolom_pydeck = [
             "lon", "lat", "color", "nama", "alamat", "gc_label", 
-            "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha",
+            "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha", "jumlah_keluarga",
             "total_bangunan", "sudah_terdata", "belum_terdata"
         ]
         
@@ -433,68 +491,6 @@ if show_rt:
             pickable=True,
             auto_highlight=True
         ))
-
-# Layer Bangunan
-if show_build:
-    if filter_kec == "Semua" and filter_desa == "Semua":
-        st.warning("⚠️ Pilih spesifik Kecamatan/Desa di sidebar untuk memunculkan Polygon Bangunan di Peta (demi kestabilan memory browser).")
-    else:
-        with st.spinner("Merender bangunan untuk wilayah ini..."):
-            gdf_build = load_building()
-            if not gdf_build.empty:
-                # Filter ke wilayah yang diplih juga untuk mempercepat render
-                # Kita pakai idsls_str yang sudah ada di sls_display
-                valid_idsls_b = set(gdf_sls_display["idsls_str"].dropna().unique())
-                gdf_build_f = gdf_build[gdf_build["idsls_str"].isin(valid_idsls_b)].copy()
-                
-                # Biar warna bisa dirender oleh PyDeck dengan list RGB, evaluasi string representation-nya 
-                # karena saat read dari parquet dia kadang bisa jadi string / list object yg salah 
-                # Tapi di parquet kita tadi simpan object, kita parser manual kalo butuh
-                import ast
-                def parse_color(c):
-                    if isinstance(c, str):
-                        try:
-                            # Parse string '[255, 165, 0, 200]' jadi list python
-                            lst = ast.literal_eval(c)
-                            return lst
-                        except:
-                            return [128, 128, 128, 100]
-                    return c
-                    
-                build_rows = []
-                for _, row in gdf_build_f.iterrows():
-                    geom = row.geometry
-                    if geom is None: continue
-                    color = parse_color(row.color)
-                    color[3] = int(build_opacity * 255) # Terapkan opacity sidebar
-                    
-                    props = {
-                        "fill_color": color,
-                        "nama_sls": str(row.get("idsls_str", "-")),
-                        "status": str(row.get("status_bangunan", "-")),
-                        "jml_usaha": str(row.get("jml_usaha", "0")),
-                        "kecamatan": str(row.get("kecamatan", "-")),
-                        "desa": str(row.get("desa", "-")),
-                        "nama": "Bangunan Fisik",
-                        "alamat": "Lihat info SLS di bawah",
-                        "gc_label": "Status: " + str(row.get("status_bangunan", "-")),
-                        "divider": "<hr style='margin:6px 0;border-color:#333'/>",
-                        "jumlah_usaha": str(row.get("jml_usaha", "0")),
-                        "total_bangunan": "-",
-                        "sudah_terdata": "-",
-                        "belum_terdata": "-",
-                    }
-                    
-                    polys = [geom] if geom.geom_type == "Polygon" else list(geom.geoms)
-                    for poly in polys:
-                        r = props.copy()
-                        r["polygon"] = [list(c) for c in poly.exterior.coords]
-                        build_rows.append(r)
-                
-                if len(build_rows) > 0:
-                    layers.append(pdk.Layer("PolygonLayer", data=build_rows,
-                        get_polygon="polygon", get_fill_color="fill_color",
-                        get_line_color=[200, 200, 200, 80], get_line_width=1, pickable=True, auto_highlight=True))
 
 # ─────────────────────────────────────────────
 # RENDER MAP
@@ -514,30 +510,45 @@ view_state = pdk.ViewState(latitude=center_lat, longitude=center_lon, zoom=zoom,
 # Pydeck pakai satu tooltip tapi field kosong otomatis disembunyikan
 tooltip = {
     "html": """
-        <div style='font-size:13px;line-height:1.8;min-width:180px'>
-        <b style='font-size:14px;color:#ffe082'>{nama}</b>
-        <div style='color:#ccc'>{alamat}</div>
-        <div style='color:#aaa;font-size:11px'>{gc_label}</div>
-        {divider}
-        <span style='color:#aaa;font-size:11px'>SLS</span> <b>{nama_sls}</b><br/>
-        <span style='color:#aaa;font-size:11px'>Kecamatan</span> <b>{kecamatan}</b><br/>
-        <span style='color:#aaa;font-size:11px'>Desa</span> <b>{desa}</b><br/>
-        <span style='color:#aaa;font-size:11px'>Jumlah Usaha</span> <b style='color:#7ef7a0'>{jumlah_usaha}</b>
-        
-        <div style="margin-top:8px; padding-top:8px; border-top:1px solid #444;">
-          <table style='width:100%; font-size:11px; border-collapse:collapse; text-align:center;'>
-             <tr style='background:#222; color:#ccc'>
-                 <th style='padding:4px;border:1px solid #444;font-weight:normal'>Total Bangunan</th>
-                 <th style='padding:4px;border:1px solid #444;font-weight:normal'>Sudah<br/>Didatangi</th>
-                 <th style='padding:4px;border:1px solid #444;font-weight:normal'>Belum<br/>Didatangi</th>
-             </tr>
-             <tr>
-                 <td style='padding:4px;border:1px solid #444;'>{total_bangunan}</td>
-                 <td style='padding:4px;border:1px solid #444;color:#7ef7a0'>{sudah_terdata}</td>
-                 <td style='padding:4px;border:1px solid #444;color:#f77e7e'>{belum_terdata}</td>
-             </tr>
-          </table>
-        </div>
+        <div style="display:flex; align-items:flex-start; gap:24px;">
+          <!-- SISI KIRI: INFO TEKS -->
+          <div style="flex:1; min-width:140px;">
+            <b style='font-size:15px;color:#ffe082'>{nama}</b>
+            <div style='color:#ccc; font-size:12px; margin-bottom:4px'>{alamat}</div>
+            <div style='color:#aaa; font-size:11px; margin-bottom:8px'>{gc_label}</div>
+            {divider}
+            <div style="margin-top:8px">
+              <span style='color:#aaa;font-size:11px'>ID SLS</span><br/><b>{nama_sls}</b><br/>
+              <span style='color:#aaa;font-size:11px; margin-top:4px; display:inline-block'>Kecamatan</span><br/><b>{kecamatan}</b><br/>
+              <span style='color:#aaa;font-size:11px; margin-top:4px; display:inline-block'>Desa</span><br/><b>{desa}</b>
+            </div>
+          </div>
+
+          <!-- SISI KANAN: DATA ANGKA -->
+          <div style="flex:1; border-left:1px solid #444; padding-left:20px; min-width:120px;">
+            <table style='width:100%; font-size:12px; border-collapse:collapse; color:#eee;'>
+               <tr style='border-bottom:1px solid #333'>
+                   <td style='padding:5px 0; color:#aaa'>Total Bangunan</td>
+                   <td style='padding:5px 0; text-align:right; font-weight:bold;'>{total_bangunan}</td>
+               </tr>
+               <tr style='border-bottom:1px solid #333'>
+                   <td style='padding:5px 0; color:#aaa'>Sudah Datang</td>
+                   <td style='padding:5px 0; text-align:right; font-weight:bold; color:#f7d07e'>{sudah_terdata}</td>
+               </tr>
+               <tr style='border-bottom:1px solid #333'>
+                   <td style='padding:5px 0; color:#aaa'>Belum Datang</td>
+                   <td style='padding:5px 0; text-align:right; font-weight:bold; color:#f77e7e'>{belum_terdata}</td>
+               </tr>
+               <tr style='border-bottom:1px solid #333'>
+                   <td style='padding:5px 0; color:#aaa'>Jumlah Usaha</td>
+                   <td style='padding:5px 0; text-align:right; font-weight:bold; color:#7ef7a0'>{jumlah_usaha}</td>
+               </tr>
+               <tr>
+                   <td style='padding:5px 0; color:#aaa'>Jumlah Keluarga</td>
+                   <td style='padding:5px 0; text-align:right; font-weight:bold; color:#a0d7f7'>{jumlah_keluarga}</td>
+               </tr>
+            </table>
+          </div>
         </div>
     """,
     "style": {
@@ -551,10 +562,10 @@ deck = pdk.Deck(layers=layers, initial_view_state=view_state, map_style="dark", 
 st.pydeck_chart(deck, width="stretch", height=680)
 
 # Legenda
-if show_sls and show_counting:
-    st.markdown("**Legenda SLS:**  `0` &nbsp;|&nbsp;  `1–9` &nbsp;|&nbsp;  `10–49` &nbsp;|&nbsp;  `50–99` &nbsp;|&nbsp;  `100+`")
-if show_build:
-    st.markdown("**Legenda Bangunan:** 🟠 Bangunan Usaha &nbsp;|&nbsp; 🔵 Bangunan Rumah Tangga")
+# if show_sls and show_counting:
+#     st.markdown("**Legenda SLS:**  `0` &nbsp;|&nbsp;  `1–9` &nbsp;|&nbsp;  `10–49` &nbsp;|&nbsp;  `50–99` &nbsp;|&nbsp;  `100+`")
+# if show_build:
+#     st.markdown("**Legenda Bangunan:** 🟠 Bangunan Usaha &nbsp;|&nbsp; 🔵 Bangunan Rumah Tangga")
 
 # ─────────────────────────────────────────────
 # STATISTIK
