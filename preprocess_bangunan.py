@@ -52,8 +52,8 @@ if gdf_build.crs is None:
     gdf_build = gdf_build.set_crs(epsg=4326)
 
 # Pastikan polygon simplify buat performa yang bagus
-print("Menyederhanakan geometri (simplify) untuk performa...")
-gdf_build["geometry"] = gdf_build.simplify(0.00005, preserve_topology=True)
+# print("Menyederhanakan geometri (simplify) untuk performa...")
+# gdf_build["geometry"] = gdf_build.simplify(0.00005, preserve_topology=True)
 
 # index awal reset biar gampang dijoin balik
 gdf_build = gdf_build.reset_index(drop=True)
@@ -97,7 +97,7 @@ def perform_smart_join(gdf_pts, gdf_blg, label="Data"):
     # Tahap 2: Yang di luar tapi DEKAT (Deviasi 2 Meter)
     # sjoin_nearest butuh rtree/pygeos
     # max_distance=2 (dalam satuan meter karena udah UTM)
-    join_nearest = gpd.sjoin_nearest(gdf_homeless, gdf_blg, how="inner", max_distance=2)
+    join_nearest = gpd.sjoin_nearest(gdf_homeless, gdf_blg, how="inner", max_distance=10)
     
     print(f"      - {len(join_inside):,} titik tepat di dalam bangunan")
     print(f"      - {len(join_nearest):,} titik berhasil ditempel lewat Deviasi (2m)")
