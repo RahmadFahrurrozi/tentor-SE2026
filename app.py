@@ -4,7 +4,7 @@ import pydeck as pdk
 import pandas as pd
 import os
 
-st.set_page_config(page_title="B-SPATIAL BANYUWANGI", layout="wide")
+st.set_page_config(page_title="SIMOLA", page_icon="logo.svg", layout="wide")
 
 st.markdown("""
 <style>
@@ -14,8 +14,10 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("B-SPATIAL BANYUWANGI")
-st.caption("Monitoring SLS & Bangunan")
+
+st.title("SIMOLA — Sistem Monitoring Lapangan Banyuwangi")
+st.caption("Monitoring SLS & Bangunan usaha Kabputen Banyuwangi")
+st.sidebar.image("logo.svg", width=60)
 
 # ─────────────────────────────────────────────
 # LOAD DATA
@@ -218,6 +220,7 @@ show_sls      = st.sidebar.checkbox("SLS", value=True)
 show_usaha    = st.sidebar.checkbox("Titik Usaha", value=True)
 show_rt       = st.sidebar.checkbox("Titik Rumah Tangga", value=False)
 show_build    = st.sidebar.checkbox("Bangunan (Usaha & RT)", value=False)
+enable_3d = st.sidebar.checkbox("Mode 3D Bangunan", value=False)
 show_counting = st.sidebar.checkbox("Mode Choropleth", value=False)
 
 st.sidebar.markdown("---")
@@ -304,7 +307,7 @@ if show_sls:
 # Layer Bangunan
 if show_build:
     if filter_kec == "Semua" and filter_desa == "Semua":
-        st.warning("⚠️ Pilih spesifik Kecamatan/Desa di sidebar untuk memunculkan Polygon Bangunan di Peta (demi kestabilan memory browser).")
+        st.warning("Pilih spesifik Kecamatan/Desa di sidebar untuk memunculkan Polygon Bangunan di Peta (demi kestabilan memory browser).")
     else:
         with st.spinner("Merender bangunan untuk wilayah ini..."):
             gdf_build = load_building()
@@ -354,9 +357,27 @@ if show_build:
                         build_rows.append(r)
                 
                 if len(build_rows) > 0:
-                    layers.append(pdk.Layer("PolygonLayer", data=build_rows,
-                        get_polygon="polygon", get_fill_color="fill_color",
-                        get_line_color=[200, 200, 200, 80], get_line_width=1, pickable=True, auto_highlight=True))
+                    layers.append(
+                        pdk.Layer(
+                            "PolygonLayer",
+                            data=build_rows,
+                            get_polygon="polygon",
+                            get_fill_color="fill_color",
+
+                            # 3D settings
+                            extruded=enable_3d,
+                            wireframe=True,
+                            get_elevation=50, #volume bangunan
+                            elevation_scale=1,
+
+                            # style
+                            get_line_color=[200, 200, 200, 80],
+
+                            # interaction
+                            pickable=True,
+                            auto_highlight=True,
+                        )
+                    )
 
 # Layer Titik Usaha (Dipindah ke bawah agar muncul di atas bangunan)
 df_usaha_filtered = None
@@ -504,7 +525,13 @@ elif filter_desa != "Semua" and not gdf_sls_display.empty:
 else:
     center_lat, center_lon, zoom = -8.2192, 114.3691, 9
 
-view_state = pdk.ViewState(latitude=center_lat, longitude=center_lon, zoom=zoom, pitch=0)
+view_state = pdk.ViewState(
+    latitude=center_lat,
+    longitude=center_lon,
+    zoom=zoom,
+    pitch=45,  
+    bearing=0
+)
 
 # Tooltip berbeda untuk SLS vs Titik Usaha
 # Pydeck pakai satu tooltip tapi field kosong otomatis disembunyikan
