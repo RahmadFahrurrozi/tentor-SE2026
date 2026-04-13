@@ -19,7 +19,7 @@
 *   Teks pop-up muncul di layar menampilkan poin-poin fitur: Tampilan Peta Interaktif, Filter Wilayah Terstruktur, Kontrol Layer Fleksibel, Hover Informasi (Tooltip), dan Statistik Real-time.
 
 **[VO]**
-"Dalam Sistem ini, terdapa beberapa fitur, di antaranya manajemen layer yang fleksibel, pemfilteran wilayah hingga tingkat Desa, kemampuan visualisasi bangunan dalam bentuk 3D, serta panel statistik data yang disajikan secara real-time langsung di bawah peta."
+"Dalam Sistem ini, terdapa beberapa fitur, di antaranya manajemen layer yang fleksibel, pemfilteran wilayah hingga tingkat Desa, kemampuan visualisasi bangunan dalam bentuk 2D dan 3D, serta panel statistik data yang disajikan secara real-time langsung di bawah peta."
 
 ---
 
