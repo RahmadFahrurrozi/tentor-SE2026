@@ -217,7 +217,7 @@ desa_list = sorted(gdf_sls[desa_col].dropna().unique().tolist()) if desa_col els
 st.sidebar.header("Layer Control")
 show_kab      = st.sidebar.checkbox("Batas Kabupaten", value=True)
 show_sls      = st.sidebar.checkbox("SLS", value=True)
-show_usaha    = st.sidebar.checkbox("Titik Usaha", value=True)
+show_usaha    = st.sidebar.checkbox("Titik Usaha", value=False)
 show_rt       = st.sidebar.checkbox("Titik Rumah Tangga", value=False)
 show_build    = st.sidebar.checkbox("Bangunan (Usaha & RT)", value=False)
 enable_3d = st.sidebar.checkbox("Mode 3D Bangunan", value=False)
