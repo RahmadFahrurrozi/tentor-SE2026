@@ -4,7 +4,7 @@ import pydeck as pdk
 import pandas as pd
 import os
 
-st.set_page_config(page_title="SIMOLA", page_icon="logo.svg", layout="wide")
+st.set_page_config(page_title="TENTORING SE2026", page_icon="logo.svg", layout="wide")
 
 st.markdown("""
 <style>
@@ -15,8 +15,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-st.title("SIMOLA — Sistem Monitoring Lapangan Banyuwangi")
-st.caption("Monitoring SLS & Bangunan usaha Kabputen Banyuwangi")
+st.title("TENTORING SE2026")
+st.caption(" Sistem Monitoring Bangunan Usaha Kabupaten Banyuwangi")
 st.sidebar.image("logo.svg", width=60)
 
 # ─────────────────────────────────────────────
@@ -559,11 +559,11 @@ tooltip = {
                    <td style='padding:5px 0; text-align:right; font-weight:bold;'>{total_bangunan}</td>
                </tr>
                <tr style='border-bottom:1px solid #333'>
-                   <td style='padding:5px 0; color:#aaa'>Sudah Datang</td>
+                   <td style='padding:5px 0; color:#aaa'>Sudah Didatangi</td>
                    <td style='padding:5px 0; text-align:right; font-weight:bold; color:#f7d07e'>{sudah_terdata}</td>
                </tr>
                <tr style='border-bottom:1px solid #333'>
-                   <td style='padding:5px 0; color:#aaa'>Belum Datang</td>
+                   <td style='padding:5px 0; color:#aaa'>Belum Didatangi</td>
                    <td style='padding:5px 0; text-align:right; font-weight:bold; color:#f77e7e'>{belum_terdata}</td>
                </tr>
                <tr style='border-bottom:1px solid #333'>
