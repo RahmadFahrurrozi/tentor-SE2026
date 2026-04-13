@@ -42,7 +42,7 @@ def normalize_columns(df):
         
     return df
 
-print("🚀 Memulai Pre-processing Bangunan...")
+print("START: Memulai Pre-processing Bangunan...")
 start_time = time.time()
 
 # 1. Load Data
@@ -92,24 +92,75 @@ def perform_smart_join(gdf_pts, gdf_blg, label="Data"):
     
     # Identifikasi titik yang belum dapet bangunan
     inside_indices = set(join_inside.index)
-    gdf_homeless = gdf_pts[~gdf_pts.index.isin(inside_indices)]
+    gdf_still_homeless = gdf_pts[~gdf_pts.index.isin(inside_indices)]
     
-    # Tahap 2: Yang di luar tapi DEKAT (Deviasi 2 Meter)
+    # Tahap 2: Yang di luar tapi DEKAT (Jarak 15 Meter)
     # sjoin_nearest butuh rtree/pygeos
-    # max_distance=2 (dalam satuan meter karena udah UTM)
-    join_nearest = gpd.sjoin_nearest(gdf_homeless, gdf_blg, how="inner", max_distance=10)
+    # max_distance=15 (dalam satuan meter karena udah UTM)
+    join_nearest = gpd.sjoin_nearest(gdf_still_homeless, gdf_blg, how="inner", max_distance=15)
+    
+    # Tahap 3: Identifikasi titik yang BENAR-BENAR belum dapet bangunan (Auto-Generate)
+    nearest_indices = set(join_nearest.index)
+    gdf_final_homeless = gdf_still_homeless[~gdf_still_homeless.index.isin(nearest_indices)]
     
     print(f"      - {len(join_inside):,} titik tepat di dalam bangunan")
-    print(f"      - {len(join_nearest):,} titik berhasil ditempel lewat Deviasi (2m)")
+    print(f"      - {len(join_nearest):,} titik berhasil ditempel lewat Deviasi (15m)")
+    print(f"      - {len(gdf_final_homeless):,} titik tidak menemukan bangunan (akan digenerate kotak 8x8m)")
     
     # Gabungin hasil
-    return pd.concat([join_inside, join_nearest])
+    return pd.concat([join_inside, join_nearest]), gdf_final_homeless
 
 print("Melakukan Spatial Join: Usaha -> Bangunan...")
-join_usaha = perform_smart_join(gdf_usaha_utm, gdf_build_utm, "Usaha")
+join_usaha, homeless_usaha = perform_smart_join(gdf_usaha_utm, gdf_build_utm, "Usaha")
 
 print("Melakukan Spatial Join: Rumah Tangga -> Bangunan...")
-join_rt = perform_smart_join(gdf_rt_utm, gdf_build_utm, "Rumah Tangga")
+join_rt, homeless_rt = perform_smart_join(gdf_rt_utm, gdf_build_utm, "Rumah Tangga")
+
+# --- GENERATE KOTAK BUATAN (8x8m) ---
+print("GEOMETRY: Menghasilkan kotak bangunan otomatis (8x8m) untuk titik tanpa bangunan...")
+def generate_boxes(gdf_homeless, label_status):
+    if gdf_homeless.empty:
+        return gpd.GeoDataFrame()
+    
+    # Create 8x8m box (radius 4m with cap_style=3 for square)
+    new_geoms = gdf_homeless.geometry.buffer(4, cap_style=3)
+    new_builds = gpd.GeoDataFrame(geometry=new_geoms, crs=gdf_homeless.crs)
+    
+    # Tandai status supaya gampang diidentifikasi
+    new_builds['status_fix'] = label_status
+    return new_builds
+
+new_builds_usaha = generate_boxes(homeless_usaha, "Bangunan Usaha")
+new_builds_rt    = generate_boxes(homeless_rt, "Rumah Tangga")
+
+# Gabungkan semua bangunan baru
+gdf_synthetic = pd.concat([new_builds_usaha, new_builds_rt])
+
+if not gdf_synthetic.empty:
+    # Beri ID index yang melanjutkan gdf_build
+    start_idx = gdf_build['build_idx'].max() + 1
+    gdf_synthetic = gdf_synthetic.reset_index(drop=True)
+    gdf_synthetic['build_idx'] = gdf_synthetic.index + start_idx
+    
+    # Gabungkan ke gdf_build_utm untuk proses selanjutnya
+    # Kita butuh gdf_build (yang masih 4326) juga untuk hasil akhir
+    gdf_synthetic_4326 = gdf_synthetic.to_crs(epsg=4326)
+    
+    # Simpan info status ke dict untuk coloring nanti
+    synthetic_status_map = dict(zip(gdf_synthetic['build_idx'], gdf_synthetic['status_fix']))
+    
+    # Update set index bangunan aktif
+    synthetic_usaha_idx = set(gdf_synthetic[gdf_synthetic['status_fix'] == "Bangunan Usaha"]['build_idx'])
+    synthetic_rt_idx    = set(gdf_synthetic[gdf_synthetic['status_fix'] == "Rumah Tangga"]['build_idx'])
+    
+    # Gabung Geometri
+    gdf_build = pd.concat([gdf_build, gdf_synthetic_4326]).reset_index(drop=True)
+    
+    print(f"   - Berhasil generate {len(gdf_synthetic)} kotak baru.")
+else:
+    synthetic_status_map = {}
+    synthetic_usaha_idx = set()
+    synthetic_rt_idx = set()
 
 # Kumpulkan index bangunan
 usaha_build_idx = set(join_usaha['build_idx'].tolist())
@@ -125,6 +176,14 @@ print(f"Tetap mempertahankan {len(gdf_build) - len(valid_build_idx):,} bangunan 
 
 # 3. Hitung Status dan Warna
 def get_color_and_status(b_idx):
+    # Cek dulu apakah ini bangunan synthetic
+    if b_idx in synthetic_status_map:
+        status = synthetic_status_map[b_idx]
+        if status == "Bangunan Usaha":
+            return [255, 165, 0, 200], status
+        else:
+            return [0, 114, 188, 200], status
+
     is_usaha = b_idx in usaha_build_idx
     is_rt = b_idx in rt_build_idx
     
@@ -133,8 +192,7 @@ def get_color_and_status(b_idx):
     elif is_rt:
         return [0, 114, 188, 200], "Rumah Tangga"      # Biru RT
     else:
-        # Keamanan cadangan (tapi harusnya ga muncul karena difilter di atas)
-        return [128, 128, 128, 100], "Kosong"
+        return [128, 128, 128, 100], "Belum Terdata"
 
 print("Menandai status dan warna pada bangunan...")
 status_list = []
@@ -198,6 +256,6 @@ for col in gdf_build.select_dtypes(include=['object']).columns:
 gdf_build.to_parquet("data/bangunan-terklasifikasi.parquet", index=False)
 
 end_time = time.time()
-print(f"✅ Selesai dalam {end_time - start_time:.1f} detik.")
+print(f"DONE: Selesai dalam {end_time - start_time:.1f} detik.")
 print(f"File tersimpan di: data/bangunan-terklasifikasi.parquet")
 print(f"Sample data:\n{gdf_build[['status_bangunan', 'jml_usaha']].value_counts().head()}")

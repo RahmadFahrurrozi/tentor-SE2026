@@ -97,13 +97,13 @@ def get_building_stats():
     if gdf_build.empty:
         return pd.DataFrame()
     stats = gdf_build.groupby(['idsls_str', 'status_bangunan']).size().unstack(fill_value=0)
-    for col in ['Bangunan Usaha', 'Rumah Tangga', 'Kosong']:
+    for col in ['Bangunan Usaha', 'Rumah Tangga', 'Belum Terdata']:
         if col not in stats.columns:
             stats[col] = 0
             
-    stats['total_bangunan'] = stats['Bangunan Usaha'] + stats['Rumah Tangga'] + stats['Kosong']
+    stats['total_bangunan'] = stats['Bangunan Usaha'] + stats['Rumah Tangga'] + stats['Belum Terdata']
     stats['sudah_terdata'] = stats['Bangunan Usaha'] + stats['Rumah Tangga']
-    stats['belum_terdata'] = stats['Kosong']
+    stats['belum_terdata'] = stats['Belum Terdata']
     return stats[['total_bangunan', 'sudah_terdata', 'belum_terdata']].reset_index()
 
 @st.cache_data
@@ -620,8 +620,8 @@ if not gdf_build.empty:
     # Belum Didatangi = Kosong
     aktif_bangunan = gdf_build_stats
     total_bangunan = len(aktif_bangunan)
-    sudah_terdata = len(aktif_bangunan[aktif_bangunan["status_bangunan"] != "Kosong"])
-    belum_terdata = len(aktif_bangunan[aktif_bangunan["status_bangunan"] == "Kosong"])
+    sudah_terdata = len(aktif_bangunan[aktif_bangunan["status_bangunan"] != "Belum Terdata"])
+    belum_terdata = len(aktif_bangunan[aktif_bangunan["status_bangunan"] == "Belum Terdata"])
     
     cb1, cb2, cb3 = st.columns(3)
     cb1.metric("Total Bangunan (OSM)", f"{total_bangunan:,}")
@@ -675,9 +675,26 @@ with col_right:
 # DISTRIBUSI
 # ─────────────────────────────────────────────
 st.write("---")
-st.subheader("Distribusi Usaha per SLS")
-bins   = [0, 1, 10, 50, 100, float("inf")]
-labels = ["0 usaha", "1–9", "10–49", "50–99", "100+"]
-tmp = gdf_sls_display.copy()
-tmp["kategori"] = pd.cut(tmp["jumlah_usaha"], bins=bins, labels=labels, right=False)
-st.bar_chart(tmp["kategori"].value_counts().sort_index())
+col_chart1, col_chart2 = st.columns(2)
+
+with col_chart1:
+    st.subheader("Total Usaha per Kecamatan")
+    if kec_col in gdf_sls_display.columns:
+        # Grouping data usaha per kecamatan
+        kec_stats = gdf_sls_display.groupby(kec_col)["jumlah_usaha"].sum().sort_values(ascending=False).head(15)
+        st.bar_chart(kec_stats, color="#7ef7a0")
+    else:
+        st.info("Data kecamatan tidak tersedia untuk ditampilkan.")
+
+with col_chart2:
+    st.subheader("Status Pendataan Bangunan")
+    if not gdf_build.empty:
+        # Menghitung total kategori bangunan untuk wilayah yang dipilih
+        status_counts = gdf_build_stats["status_bangunan"].value_counts()
+        # Filter hanya yang relevan untuk pendataan
+        if "Belum Terdata" in status_counts:
+            st.bar_chart(status_counts, color="#f77e7e")
+        else:
+            st.bar_chart(status_counts)
+    else:
+        st.info("Data statistik bangunan tidak tersedia.")
