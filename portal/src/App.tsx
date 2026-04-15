@@ -1,12 +1,15 @@
-import { Button } from "./components/ui/button";
+import { Routes, Route, Navigate } from "react-router-dom";
+import LoginPage from "./pages/Login-page";
+import UsersPage from "./pages/User";
+import { NotFoundPage } from "./pages/404-page-not-found";
 
 export default function App() {
   return (
-    <section className="flex justify-center items-center min-h-screen">
-      <div className="flex gap-2">
-        <Button variant="destructive">Click Me</Button>
-        <Button>Create Realese</Button>
-      </div>
-    </section>
+    <Routes>
+      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/users" element={<UsersPage />} />
+      <Route path="*" element={<NotFoundPage />} />
+    </Routes>
   );
 }
