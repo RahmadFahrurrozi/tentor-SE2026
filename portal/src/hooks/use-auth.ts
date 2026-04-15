@@ -53,7 +53,7 @@ export const useAuth = () => {
 
       // Redirect berdasarkan role
       if (profile.role === "admin") {
-        navigate("/admin"); // Sesuaikan route admin
+        navigate("/admin");
       } else {
         navigate("/users"); // Default ke users dulu atau /petugas nanti
       }
