@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/store/auth-store";
 import { supabase } from "@/lib/supabase";
+import { profileService } from "@/services/profile.service";
 
 export function AuthGuard({ allowedRoles }: { allowedRoles?: string[] }) {
   const { session, profile, setAuth, isLoading, setLoading } = useAuthStore();
@@ -21,11 +22,9 @@ export function AuthGuard({ allowedRoles }: { allowedRoles?: string[] }) {
         if (currentSession?.user) {
           // If we have a session but no profile yet, fetch it
           if (!profile) {
-            const { data: userProfile } = await supabase
-              .from("profiles")
-              .select("*")
-              .eq("id", currentSession.user.id)
-              .single();
+            const userProfile = await profileService.getById(
+              currentSession.user.id,
+            );
 
             if (mounted) {
               setAuth(currentSession, userProfile);
