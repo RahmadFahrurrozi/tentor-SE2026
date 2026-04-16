@@ -3,6 +3,10 @@ import geopandas as gpd
 import pydeck as pdk
 import pandas as pd
 import os
+from supabase import create_client, Client
+from dotenv import load_dotenv
+
+load_dotenv()
 
 st.set_page_config(page_title="TENTORING SE2026", page_icon="logo.svg", layout="wide")
 
@@ -18,6 +22,75 @@ st.markdown("""
 st.title("TENTORING SE2026")
 st.caption(" Sistem Monitoring Bangunan Usaha Kabupaten Banyuwangi")
 st.sidebar.image("logo.svg", width=60)
+
+# ─────────────────────────────────────────────
+# DATABASE & AUTHENTICATION (SUPABASE)
+# ─────────────────────────────────────────────
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    st.error("⚠️ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env")
+    st.stop()
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# 1. Cek parameter URL untuk One-Time Code (OTC) "code"
+query_params = st.query_params
+if "code" in query_params:
+    otc_code = query_params["code"]
+    try:
+        # Validasi OTC token
+        res_otc = supabase.table("otc_tokens").select("user_id").eq("token", otc_code).execute()
+        if res_otc.data:
+            user_id = res_otc.data[0]["user_id"]
+            
+            # Ambil profile lengkap
+            res_prof = supabase.table("profiles").select("*").eq("id", user_id).execute()
+            if res_prof.data:
+                st.session_state["user"] = res_prof.data[0]
+            
+            # Ambil wilayah penugasan (asumsikan nama kolom iddesa & idkec)
+            res_assign = supabase.table("assignments").select("iddesa, idkec").eq("user_id", user_id).execute()
+            assignments = res_assign.data if res_assign.data else []
+            
+            # Simpan ID desa dan kecamatan ke list
+            st.session_state["assigned_iddesa"] = [str(a.get("iddesa", "")).strip() for a in assignments if a.get("iddesa")]
+            st.session_state["assigned_idkec"] = [str(a.get("idkec", "")).strip() for a in assignments if a.get("idkec")]
+            
+            # Hapus OTC agar token aman dan expired
+            supabase.table("otc_tokens").delete().eq("token", otc_code).execute()
+            
+            # Membersihkan URL parameter 
+            st.query_params.clear()
+            st.rerun()
+            
+        else:
+            st.error("Token sesi tidak valid atau sudah kadaluarsa (sekali pakai).")
+            st.stop()
+            
+    except Exception as e:
+        st.error(f"Gagal melakukan validasi sesi: {e}")
+        st.stop()
+
+# 2. Cek session state apakah sudah ter-autentikasi
+if "user" not in st.session_state:
+    st.warning("⚠️ Anda belum login atau sesi telah berakhir.")
+    st.markdown("Silakan masuk melalui **[Portal Login B-Spatial](http://localhost:5173/login)** terlebih dahulu.")
+    st.stop()
+
+# Info user aktif
+curr_user = st.session_state["user"]
+role = str(curr_user.get("role", "petugas")).lower()
+petugas_name = curr_user.get("full_name") or curr_user.get("email") or "Petugas"
+assigned_iddesa = st.session_state.get("assigned_iddesa", [])
+assigned_idkec = st.session_state.get("assigned_idkec", [])
+
+st.sidebar.markdown(f"**👤 {petugas_name}**")
+st.sidebar.caption(f"Status: **{role.upper()}**")
+if role != "admin":
+    st.sidebar.caption(f"Tugas: {len(assigned_iddesa)} Desa, {len(assigned_idkec)} Kec")
+
 
 # ─────────────────────────────────────────────
 # LOAD DATA
@@ -208,6 +281,31 @@ with st.spinner("Menghitung usaha per SLS..."):
 
 kec_col  = next((c for c in ["nmkec", "kec", "kecamatan"] if c in gdf_sls.columns), None)
 desa_col = next((c for c in ["nmdesa", "desa", "kelurahan"] if c in gdf_sls.columns), None)
+
+# --- FILTER DATA OTOMATIS BERDASAR ROLE PPL/PML ---
+if role != "admin":
+    # Pastikan data yang diambil sesuai ID wilayah yang ditugaskan kepada petugas
+    if not gdf_sls.empty:
+        # Di data GeoJSON, kita asumsikan kolomnya iddesa atau idkec
+        match_kec = pd.Series(False, index=gdf_sls.index)
+        match_desa = pd.Series(False, index=gdf_sls.index)
+        
+        if "idkec" in gdf_sls.columns and assigned_idkec:
+            # Membersihkan koma atau .0 (apabila float terkonversi string)
+            s_idkec = gdf_sls["idkec"].astype(str).str.replace(".0", "", regex=False)
+            match_kec = s_idkec.isin(assigned_idkec)
+            
+        if "iddesa" in gdf_sls.columns and assigned_iddesa:
+            s_iddesa = gdf_sls["iddesa"].astype(str).str.replace(".0", "", regex=False)
+            match_desa = s_iddesa.isin(assigned_iddesa)
+            
+        # Potong dataset khusus untuk area penugasan ini saja, filter gabungan ATAU (|)
+        gdf_sls = gdf_sls[match_kec | match_desa]
+        
+    if gdf_sls.empty:
+        st.warning("Anda tidak memiliki data untuk wilayah penugasan terkait.")
+        st.stop()
+
 kec_list  = sorted(gdf_sls[kec_col].dropna().unique().tolist())  if kec_col  else []
 desa_list = sorted(gdf_sls[desa_col].dropna().unique().tolist()) if desa_col else []
 

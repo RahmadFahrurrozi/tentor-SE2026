@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Eye, EyeOff, Mail, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
+import { authService } from "@/services/auth.service";
 
 interface PupilProps {
   size?: number;
@@ -182,6 +184,7 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [mouseX, setMouseX] = useState<number>(0);
   const [mouseY, setMouseY] = useState<number>(0);
   const [isPurpleBlinking, setIsPurpleBlinking] = useState(false);
@@ -310,27 +313,38 @@ function LoginPage() {
     setError("");
     setIsLoading(true);
 
-    // Simulate API delay (quick)
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    try {
+      // 1. Autentikasi dengan Supabase menggunakan service
+      const authData = await authService.login(email, password);
 
-    // Mock authentication - validate against dummy credentials
-    if (email === "erik@gmail.com" && password === "1234") {
-      console.log("✅ Login successful!");
-      alert("Login successful! Welcome, Erik!");
-      // In a real app, you would:
-      // - Store auth token
-      // - Redirect to dashboard
-      // - Set user session
-    } else {
-      setError("Invalid email or password. Please try again.");
-      console.log("❌ Login failed");
+      if (!authData.user) throw new Error("Terjadi kesalahan saat login.");
+
+      // 2. Munculkan overlay loading karena proses otentikasi berhasil
+      setIsRedirecting(true);
+
+      // 3. Generate One-Time-Code via service
+      const otcData = await authService.generateOtc(authData.user.id);
+
+      // 4. Redirect ke Streamlit dengan param token aman
+      window.location.href = `http://localhost:8501/?code=${otcData.token}`;
+      
+    } catch (err: any) {
+      console.error("Login failed:", err);
+      // Terjemahan simpel untuk pesan error umum
+      const msg = err.message || err.toString();
+      const displayMsg = msg.includes("Invalid login credentials") 
+                  ? "Email atau password salah." 
+                  : msg;
+      setError(displayMsg || "Gagal melakukan proses login.");
+      setIsRedirecting(false);
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2">
+    <>
+      <LoadingOverlay isVisible={isRedirecting} />
+      <div className="min-h-screen grid lg:grid-cols-2">
       {/* Left Content Section */}
       <div className="relative hidden lg:flex flex-col justify-between bg-gradient-to-br from-primary/90 via-primary to-primary/80 p-12 text-primary-foreground">
         <div className="relative z-20">
@@ -809,7 +823,7 @@ function LoginPage() {
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

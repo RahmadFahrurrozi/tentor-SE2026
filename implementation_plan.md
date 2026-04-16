@@ -1,33 +1,77 @@
-# Strategi Optimasi Rendering Data Usaha Berskala Besar
+# Implementasi Authentication & OTC Architecture (Supabase Table)
 
-Berdasarkan pengecekan pada direktori `data` dan kode `app.py`, saat ini terdapat beberapa penyebab mengapa titik usaha tidak di-load semua dan membuat proses loading menjadi lambat:
-1. **Sampling Data:** Di dalam `app.py`, ada batasan yang disengaja. Jika tanpa filter, data dibatasi (di-sample) hanya *50,000 titik*, dan bila di-filter dibatasi maksimal *200,000 titik*.
-2. **Iterasi Lambat pada Python (Bottleneck Server):** Aplikasi saat ini menggunakan `for _, r in df_sample.iterrows():` untuk menyusun list dictionary baru. Proses ini *sangat* lambat di ekosistem Python/Pandas saat berhadapan dengan jutaan baris data, dan mengakibatkan "loading" lama sebelum peta bahkan terkirim ke browser.
-3. **Visual Clutter di Browser:** Merender > 200.000 titik dengan `ScatterplotLayer` dan tooltip individu untuk setiap elemen dalam satu waktu bisa memakan banyak memori GPU/CPU pada browser pengguna, menyebabkan "lag".
+Berdasarkan diskusi kita, kita akan menggunakan **Opsi Tabel Supabase (`otc_tokens`)** untuk mengimplementasikan One-Time Code. Metode ini sangat aman dan jauh lebih mudah dikelola dibandingkan Edge Functions.
 
-## Proposed Changes
+Menjawab pertanyaan Anda:
+1. **Mulai dari mana dulu?** Kita akan mulai dari **Database Supabase** (Membuat tabel OTC, memastikan user test ada), lalu ke React (Portal), dan terakhir ke Python (Streamlit).
+2. **Apakah halaman transit itu perlu?** Secara teknis tidak wajib. Sebagai gantinya, kita akan membuat **Loading Overlay / State di Halaman Login**. Saat tombol "Masuk" ditekan dan berhasil, layar akan meredup/muncul loading "Menyiapkan Dashboard...", dan di belakang layar sistem menukar token lalu otomatis berpindah (*redirect*) ke Streamlit. Ini akan terasa lebih mulus dan premium tanpa harus ada halaman kosong "Gate".
 
-Untuk menyelesaikan masalah performa dan menampilkan *semua data* dengan lancar, berikut adalah strategi teknis yang akan diimplementasikan:
+## User Review Required
 
-### 1. Vectorized Pandas (Hapus Iterrows)
-Kita akan menghapus iterasi per-baris (`iterrows()`) dan menggantinya dengan operasi vektorisasi langsung pada DataFrame Pandas. PyDeck dapat menerima data berupa `pandas.DataFrame` secara langsung, yang diproses di balik layar dengan standar Apache Arrow. Proses mapping data dari server ke browser akan jauh lebih cepat.
+> [!IMPORTANT]
+> **Pengecekan Kesiapan Database**
+> Sebelum kita mulai ngoding di React, tolong pastikan **Tabel Supabase untuk OTC** sudah dibuat.
+> Silakan *copy-paste* dan *RUN* SQL script di bawah ini pada menu **SQL Editor** di dashboard Supabase Anda:
+> 
+> ```sql
+> -- 1. Buat tabel otc_tokens
+> create table public.otc_tokens (
+>   token uuid default gen_random_uuid() primary key,
+>   user_id uuid references auth.users(id) on delete cascade not null,
+>   created_at timestamp with time zone default now() not null
+> );
+> 
+> -- 2. Pastikan RLS nyala untuk keamanan
+> alter table public.otc_tokens enable row level security;
+> 
+> -- 3. Policy: User yang login hanya boleh INSERTS token untuk mereka sendiri
+> create policy "Users can insert their own otc"
+> on public.otc_tokens for insert
+> to authenticated
+> with check (auth.uid() = user_id);
+> 
+> -- 4. Policy: Service Role (Streamlit) bebas Read/Delete
+> create policy "Service role has full access"
+> on public.otc_tokens
+> to service_role
+> using (true)
+> with check (true);
+> ```
+> *Apakah SQL ini berhasil dijalankan? Jika sudah, kita akan lanjut ke Langkah 2 (React Frontend).*
 
-#### [MODIFY] [app.py](file:///c:/Users/Acer/Desktop/b-spatial/app.py)
-- Refactor pada blok *Layer Titik Usaha* untuk memproses kolom warna (dari `gc_to_color`), `tooltip`, dll secara _vectorized_ atau dengan pemetaan pandas massal.
-- Hapus limit/sampling `50_000` dan `200_000` sehingga seluruh data titik dapat disiapkan tanpa hambatan.
+## Proposed Changes (Step by Step)
 
-### 2. Implementasi Visualisasi Berjenjang (Level of Detail)
-Memaksakan semua titik individu dan tooltip-nya tampil saat zoom masih di level pandangan kabupaten akan memberatkan browser (DOM / WebGL limits).
-- Kita akan menggunakan **Pydeck optimization** seperti properti radius yang dinamis (titik mengecil saat zoom out), dan yang lebih efisien membuang/menyembunyikan render tooltip jika data tidak di-pick.
-- Alternatifnya: Kita membiarkan Layer berbasis Scatterplot dengan fitur **Pydeck auto-batching DataFrame**. Seluruh titik bisa dikembalikan ke browser, tetapi kita matikan iterasi render berat dengan langsung bypass properties Pydeck (e.g. `get_fill_color= [r,g,b]`, dll).
+### Tahap 1: Setup Database (Action Needed dari Anda)
+- Jalankan Query SQL (yang ada pada blok Important di atas) untuk membuat tabel penampung OTC.
+- Pastikan di menu tabel `profiles` dan auth users, sudah ada user dummy (misal `erik@gmail.com` dengan role `PPL` dan wilayah tugasnya pada tabel `assignments`).
 
-### 3. Penggunaan File Cache Cepat (Backend)
-Saat tidak terhubung ke excel, memuat data 17MB+ setiap refresh cukup memberatkan Pandas/Streamlit walaupun di-cache. Saran: jika tidak menggunakan G-Sheet interaktif sepenuhnya di production, dump-lah file ke `.parquet`. Tapi untuk case logic ini, cache `load_usaha()` sudah cukup (`@st.cache_data`) selama logika pandas disederhanakan.
+### Tahap 2: Frontend Aplikasi Portal (React)
+- **Komponen Halaman Transit (Ditiadakan)**: Kita ganti dengan Loading Overlay halus pada halaman Login.
+- **[MODIFY] `portal/src/pages/Login-page.tsx`**:
+  - Ganti hardcode user dummy dengan `supabase.auth.signInWithPassword`.
+  - Setelah sukses, insert `user_id` ke tabel `otc_tokens`. Supabase akan mengembalikan `token` (UUID).
+  - Tampilkan animasi loading, lalu jalankan perintah `window.location.href = 'http://localhost:8501/?code=' + token;`.
+- **[MODIFY] `portal/src/lib/supabase.ts` & `useAuth.ts`**:
+  - Memastikan *hook* dan *auth instance* bekerja dengan benar tidak memicu error yang sudah ada.
+
+### Tahap 3: Backend Dashboard (Streamlit / `app.py`)
+- **[MODIFY] `app.py`**:
+  - Saat aplikasi diload, cek `code` dari URL parameters (`st.query_params`).
+  - Bila ada, gunakan *Supabase Service Role Key* untuk mencari UUID tersebut di `otc_tokens`.
+  - Jika token valid, hapus UUID agar tidak bisa dipakai 2 kali (One Time).
+  - Simpan profil user (`st.session_state.user`) dan tampilkan namanya (serta Rollenya, misal "Halo, Erik - PPL") di sidebar.
+  - Implementasikan filter dinamis (`df = df[df['kd_desa'].isin(assignments_desa)]`) bila user bukan Admin.
 
 ## Open Questions
 
-> [!IMPORTANT]
-> Terdapat beberapa pertanyaan untuk dikonfirmasi sebelum kita mulai merubah kode:
-> 1. Apakah Anda setuju untuk menghapus _loop iterrows_ dan menggunakan metode vektorisasi pada pandas agar titik loading tidak lama?
-> 2. Ketika semua data nanti ter-render, apakah Anda ingin mengatur batas otomatis render titik agar pada saat peta di "zoom out" penuh browser tidak melambat? (Misalnya menggunakan visual radius yang mengecil sesuai zoom).
-> 3. Apakah ini masih sebatas pengetesan menggunakan excel (`uji-coba-peta.xlsx`) atau format excel ini perlu diubah saja sementara menjadi Parquet agar file menjadi ringkas dan bisa diload kurang dari 1 detik?
+> [!TIP]
+> **Konfirmasi Desain Halaman**
+> Apakah Anda setuju dengan mengubah status **Halaman Transit** menjadi Loading Overlay/Spinner saja di tombol/halaman Login agar desainnya lebih rapi? 
+
+## Verification Plan
+
+### Manual Verification
+1.  Buka Portal React (`localhost:5173`).
+2.  Login dengan user test menggunakan email & password.
+3.  Pastikan ada jeda sebentar (loading "Menyiapkan Dashboard"), kemudian browser pindah ke tab Streamlit `localhost:8501/?code=...`.
+4.  Di Streamlit, URL parameter code langsung diclean dan akan muncul profil di Sidebar (Halo Erik - PPL). Akses filter wilayah langsung ter-lock.
