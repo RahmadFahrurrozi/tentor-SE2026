@@ -50,13 +50,20 @@ if "code" in query_params:
             if res_prof.data:
                 st.session_state["user"] = res_prof.data[0]
             
-            # Ambil wilayah penugasan (asumsikan nama kolom iddesa & idkec)
-            res_assign = supabase.table("assignments").select("iddesa, idkec").eq("user_id", user_id).execute()
+            # Ambil wilayah penugasan (Ambil semua kolom untuk mencegah error jika idkec tidak ada)
+            res_assign = supabase.table("assignments").select("*").eq("user_id", user_id).execute()
             assignments = res_assign.data if res_assign.data else []
             
-            # Simpan ID desa dan kecamatan ke list
-            st.session_state["assigned_iddesa"] = [str(a.get("iddesa", "")).strip() for a in assignments if a.get("iddesa")]
-            st.session_state["assigned_idkec"] = [str(a.get("idkec", "")).strip() for a in assignments if a.get("idkec")]
+            # Simpan ID desa/kecamatan (support nama kolom iddesa / kd_desa, idkec / kd_kec)
+            st.session_state["assigned_iddesa"] = [
+                str(a.get("iddesa", a.get("kd_desa", ""))).strip() 
+                for a in assignments if a.get("iddesa") or a.get("kd_desa")
+            ]
+            
+            st.session_state["assigned_idkec"] = [
+                str(a.get("idkec", a.get("kd_kec", ""))).strip() 
+                for a in assignments if a.get("idkec") or a.get("kd_kec")
+            ]
             
             # Hapus OTC agar token aman dan expired
             supabase.table("otc_tokens").delete().eq("token", otc_code).execute()
