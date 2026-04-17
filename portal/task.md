@@ -13,6 +13,7 @@
 
 _Tambahan (Suggested)_:
 
+- [] replace dumy user management service with real supabase service for user management
 - [ ] Create 404 (Not Found) & 500 (Global Error Boundary) pages
 - [ ] Build User Management DataTable (dengan TanStack Table untuk pagination & sorting) untuk Admin (Edit data, Hapus akun, Reset password satuan)
 - [ ] Tambahkan Button navigasi di Dashboard Streamlit khusus Admin untuk kembali ke halaman User Management di React Portal
@@ -20,7 +21,7 @@ _Tambahan (Suggested)_:
 **Backend & Security**
 
 - [ ] Support multiple location assignments per PPL/PML `vo`
-- [ ] Split coordinate field into two separate variables: `usaha` and `keluarga` `vo`
+- [ ] Split coordinate field into two separate variables: `usaha` di klasifikasikan warna kuning dan `keluarga` di kategorikan warna biru `vo`
 - [ ] Benchmark database performance under bulk user insert load
 - [ ] Define explicit types for user roles to improve type safety and DX
 - [ ] Auto-delete OTC token after successful login (currently persists after use)
