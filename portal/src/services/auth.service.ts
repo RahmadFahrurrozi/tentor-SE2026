@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase";
-import { AuthError } from "@supabase/supabase-js";
 
 export const authService = {
   login: async (email: string, password: string) => {
@@ -24,12 +23,12 @@ export const authService = {
 
   generateOtc: async (userId: string) => {
     const { data, error } = await supabase
-      .from('otc_tokens')
+      .from("otc_tokens")
       .insert({ user_id: userId })
       .select()
       .single();
-    
+
     if (error) throw new Error(`Failed to generate OTC: ${error.message}`);
     return data;
-  }
+  },
 };

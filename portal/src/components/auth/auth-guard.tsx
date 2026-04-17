@@ -20,14 +20,23 @@ export function AuthGuard({ allowedRoles }: { allowedRoles?: string[] }) {
         } = await supabase.auth.getSession();
 
         if (currentSession?.user) {
+          // Set session first to prevent infinite loop to /login
+          if (mounted && !session) {
+             setAuth(currentSession, null);
+          }
+
           // If we have a session but no profile yet, fetch it
           if (!profile) {
-            const userProfile = await profileService.getById(
-              currentSession.user.id,
-            );
-
-            if (mounted) {
-              setAuth(currentSession, userProfile);
+            try {
+              const userProfile = await profileService.getById(
+                currentSession.user.id,
+              );
+              if (mounted) {
+                setAuth(currentSession, userProfile);
+              }
+            } catch (profileError) {
+              console.error("Gagal mengambil profile:", profileError);
+              // Tetap lanjutkan, biarkan AuthGuard mencegat lewat allowedRoles check
             }
           }
         } else if (mounted) {
@@ -84,9 +93,10 @@ export function AuthGuard({ allowedRoles }: { allowedRoles?: string[] }) {
   }
 
   // Role check if roles are specified
-  if (allowedRoles && allowedRoles.length > 0 && profile) {
-    if (!allowedRoles.includes(profile.role ?? "")) {
-      // User doesn't have required role
+  if (allowedRoles && allowedRoles.length > 0) {
+    if (!profile || !allowedRoles.includes(profile.role ?? "")) {
+      // User doesn't have required role or profile is null
+      console.warn("Akses ditolak: role tidak sesuai atau profile tidak ada.");
       return <Navigate to="/unauthorized" replace />;
     }
   }
