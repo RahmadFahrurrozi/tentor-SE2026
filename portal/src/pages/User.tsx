@@ -117,6 +117,9 @@ export default function UsersPage() {
                         {...form.register("role")}
                         className="w-full h-11 px-3 text-sm rounded-md border border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 appearance-none"
                       >
+                        <option value="" disabled>
+                          Pilih Hak Akses
+                        </option>
                         <option value="ppl">
                           Petugas Pendataan Lapangan (PPL)
                         </option>

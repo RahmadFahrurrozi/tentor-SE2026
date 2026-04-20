@@ -51,7 +51,7 @@ export const useUsers = () => {
   });
 
   return {
-    users: usersQuery.data ?? [],
+    users: usersQuery.data?.data ?? [],
     isLoading: usersQuery.isLoading,
     isError: usersQuery.isError,
     deleteUser: deleteMutation.mutate,

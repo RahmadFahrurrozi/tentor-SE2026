@@ -5,7 +5,9 @@ import * as z from "zod";
 export const userSchema = z.object({
   full_name: z.string().min(3, "Nama pengguna minimal 3 karakter."),
   email: z.string().email("Format email tidak valid (contoh: user@bps.go.id)."),
-  role: z.enum(["admin", "ppl", "pml"]),
+  role: z.enum(["admin", "ppl", "pml"], {
+    message: "Role harus dipilih",
+  }),
 });
 
 export type UserFormValues = z.infer<typeof userSchema>;
@@ -18,7 +20,7 @@ export const useUserForm = (
     defaultValues: {
       full_name: "",
       email: "",
-      role: "ppl",
+      role: "" as unknown as UserFormValues["role"],
     },
   });
 
