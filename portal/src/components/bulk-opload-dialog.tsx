@@ -1,17 +1,3 @@
-/**
- * BulkUploadDialog.tsx
- *
- * Support upload massal via:
- * - CSV  (.csv)
- * - Excel (.xlsx / .xls)
- *
- * Parsing Excel pakai SheetJS (xlsx) — sudah bundled di kebanyakan Next.js project.
- * Kalau belum ada: npm install xlsx
- *
- * Format kolom yang diterima (header case-insensitive):
- *   full_name / nama  |  email  |  role (ppl / pml / admin)
- */
-
 "use client";
 
 import { useRef, useState, useCallback } from "react";
@@ -23,33 +9,24 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
-  Download,
+  X,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import type {
   CreateUserPayload,
   BulkUploadResult,
-} from "../services/user.service";
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+} from "@/services/user.service";
 
 const VALID_ROLES = ["ppl", "pml", "admin"] as const;
 const MAX_USERS = 200;
 const ACCEPTED_EXTENSIONS = ".csv,.xlsx,.xls";
-
-// ---------------------------------------------------------------------------
-// Normalizer — map berbagai nama header ke field yang kita butuhkan
-// ---------------------------------------------------------------------------
 
 const HEADER_MAP: Record<string, keyof CreateUserPayload> = {
   full_name: "full_name",
@@ -61,63 +38,46 @@ const HEADER_MAP: Record<string, keyof CreateUserPayload> = {
   role: "role",
   "hak akses": "role",
   jabatan: "role",
+  assignments: "assignments",
+  penugasan: "assignments",
+  wilayah: "assignments",
 };
 
 function normalizeHeader(raw: string): keyof CreateUserPayload | null {
   return HEADER_MAP[raw.toLowerCase().trim()] ?? null;
 }
 
-// ---------------------------------------------------------------------------
-// Parse result types
-// ---------------------------------------------------------------------------
-
 interface ParseResult {
   valid: CreateUserPayload[];
-  errors: Array<{ row: number; reason: string; raw: string }>;
+  errors: Array<{ row: number; reason: string }>;
   fileName: string;
-  fileType: "csv" | "excel";
 }
-
-// ---------------------------------------------------------------------------
-// Core parser — works on array of plain objects (row data)
-// SheetJS dan CSV keduanya dikonversi ke format ini dulu sebelum divalidasi
-// ---------------------------------------------------------------------------
 
 function validateRows(
   rows: Record<string, unknown>[],
-  fileType: "csv" | "excel",
   fileName: string,
 ): ParseResult {
   const valid: CreateUserPayload[] = [];
   const errors: ParseResult["errors"] = [];
 
   rows.forEach((rawRow, idx) => {
-    const rowNum = idx + 2; // +2 karena row 1 = header
-
-    // Normalize keys
+    const rowNum = idx + 2;
     const row: Partial<Record<keyof CreateUserPayload, string>> = {};
+
     for (const [key, val] of Object.entries(rawRow)) {
       const mapped = normalizeHeader(key);
       if (mapped) row[mapped] = String(val ?? "").trim();
     }
 
-    const { full_name, email, role } = row;
+    const { full_name, email, role, assignments } = row;
 
     if (!full_name || full_name.length < 2) {
-      errors.push({
-        row: rowNum,
-        reason: "Nama tidak valid atau kosong",
-        raw: JSON.stringify(rawRow),
-      });
+      errors.push({ row: rowNum, reason: "Nama tidak valid atau kosong" });
       return;
     }
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.push({
-        row: rowNum,
-        reason: `Email tidak valid: "${email}"`,
-        raw: JSON.stringify(rawRow),
-      });
+      errors.push({ row: rowNum, reason: `Email tidak valid: "${email}"` });
       return;
     }
 
@@ -126,7 +86,6 @@ function validateRows(
       errors.push({
         row: rowNum,
         reason: `Role tidak valid: "${role}". Gunakan: ppl / pml / admin`,
-        raw: JSON.stringify(rawRow),
       });
       return;
     }
@@ -135,30 +94,24 @@ function validateRows(
       full_name,
       email,
       role: normalizedRole as CreateUserPayload["role"],
+      assignments: assignments ? assignments.split(";").map(a => a.trim()).filter(Boolean) : [],
     });
   });
 
-  return { valid, errors, fileName, fileType };
+  return { valid, errors, fileName };
 }
-
-// ---------------------------------------------------------------------------
-// File parsers
-// ---------------------------------------------------------------------------
 
 function parseCSVText(text: string, fileName: string): ParseResult {
   const lines = text
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
-
-  if (lines.length < 2) {
-    return { valid: [], errors: [], fileName, fileType: "csv" };
-  }
+  if (lines.length < 2) return { valid: [], errors: [], fileName };
 
   const headers = lines[0]
     .split(",")
     .map((h) => h.replace(/^"|"$/g, "").trim());
-  const rows: Record<string, unknown>[] = lines.slice(1).map((line) => {
+  const rows = lines.slice(1).map((line) => {
     const cols = line.split(",").map((c) => c.replace(/^"|"$/g, "").trim());
     const obj: Record<string, unknown> = {};
     headers.forEach((h, i) => {
@@ -167,116 +120,26 @@ function parseCSVText(text: string, fileName: string): ParseResult {
     return obj;
   });
 
-  return validateRows(rows, "csv", fileName);
+  return validateRows(rows, fileName);
 }
 
 function parseExcelBuffer(buffer: ArrayBuffer, fileName: string): ParseResult {
   const wb = XLSX.read(buffer, { type: "array" });
-  const ws = wb.Sheets[wb.SheetNames[0]]; // ambil sheet pertama
-  // header: 1 → baris pertama jadi key object
+  const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
     defval: "",
-    raw: false, // semua nilai jadi string, hindari number/date confusion
+    raw: false,
   });
-
-  return validateRows(rows, "excel", fileName);
+  return validateRows(rows, fileName);
 }
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-function ProgressBar({
-  processed,
-  total,
-}: {
-  processed: number;
-  total: number;
-}) {
-  const pct = total > 0 ? Math.round((processed / total) * 100) : 0;
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between text-xs text-zinc-500">
-        <span>Mengupload pengguna...</span>
-        <span>
-          {processed} / {total}
-        </span>
-      </div>
-      <div className="h-2 bg-zinc-100 rounded-full overflow-hidden">
-        <div
-          className="h-full bg-zinc-900 rounded-full transition-all duration-300"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <p className="text-xs text-zinc-400 text-right">{pct}%</p>
-    </div>
-  );
-}
-
-function ResultSummary({ result }: { result: BulkUploadResult }) {
-  const { succeeded, failed } = result;
-  const allOk = failed.length === 0;
-
-  return (
-    <div className="space-y-4">
-      <div
-        className={`flex items-start gap-3 p-4 rounded-lg border ${
-          allOk
-            ? "bg-green-50 border-green-200"
-            : "bg-amber-50 border-amber-200"
-        }`}
-      >
-        {allOk ? (
-          <CheckCircle2 className="size-5 text-green-600 mt-0.5 flex-shrink-0" />
-        ) : (
-          <AlertTriangle className="size-5 text-amber-600 mt-0.5 flex-shrink-0" />
-        )}
-        <div>
-          <p className="text-sm font-medium text-zinc-800">
-            {allOk
-              ? `${succeeded.length} pengguna berhasil diimport`
-              : `${succeeded.length} berhasil, ${failed.length} gagal`}
-          </p>
-          {!allOk && (
-            <p className="text-xs text-zinc-500 mt-1">
-              Email yang sudah terdaftar dilewati secara otomatis.
-            </p>
-          )}
-        </div>
-      </div>
-
-      {failed.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-zinc-600">Detail gagal:</p>
-          <div className="max-h-40 overflow-y-auto rounded border divide-y text-xs">
-            {failed.map((f, i) => (
-              <div key={i} className="flex items-center gap-2 px-3 py-2">
-                <XCircle className="size-3.5 text-rose-500 flex-shrink-0" />
-                <span className="font-medium text-zinc-700">
-                  {f.user.email}
-                </span>
-                <span className="text-zinc-400 truncate">{f.reason}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Template download helpers
-// ---------------------------------------------------------------------------
 
 function downloadCSVTemplate() {
   const csv = [
-    "full_name,email,role",
-    "Budi Santoso,budi@bps.go.id,ppl",
-    "Siti Rahmawati,siti@bps.go.id,pml",
-    "Admin BPS,admin@bps.go.id,admin",
+    "full_name,email,role,assignments",
+    "Budi Santoso,budi@bps.go.id,ppl,3510010001;3510010002",
+    "Siti Rahmawati,siti@bps.go.id,pml,3510010",
+    "Admin BPS,admin@bps.go.id,admin,",
   ].join("\n");
-
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -288,43 +151,37 @@ function downloadCSVTemplate() {
 
 function downloadExcelTemplate() {
   const data = [
-    { full_name: "Budi Santoso", email: "budi@bps.go.id", role: "ppl" },
-    { full_name: "Siti Rahmawati", email: "siti@bps.go.id", role: "pml" },
-    { full_name: "Admin BPS", email: "admin@bps.go.id", role: "admin" },
+    { full_name: "Budi Santoso", email: "budi@bps.go.id", role: "ppl", assignments: "3510010001;3510010002" },
+    { full_name: "Siti Rahmawati", email: "siti@bps.go.id", role: "pml", assignments: "3510010" },
+    { full_name: "Admin BPS", email: "admin@bps.go.id", role: "admin", assignments: "" },
   ];
-
   const ws = XLSX.utils.json_to_sheet(data);
-
-  // Style header row (bold) — SheetJS community edition support terbatas,
-  // tapi kita bisa set column widths
   ws["!cols"] = [{ wch: 25 }, { wch: 30 }, { wch: 10 }];
-
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Pengguna");
   XLSX.writeFile(wb, "template_import_pengguna.xlsx");
 }
 
-// ---------------------------------------------------------------------------
-// Main Dialog Component
-// ---------------------------------------------------------------------------
-
-interface BulkUploadDialogProps {
+interface BulkUploadModalProps {
+  isOpen: boolean;
+  onClose: () => void;
   onUpload: (users: CreateUserPayload[]) => Promise<BulkUploadResult>;
-  isRunning: boolean;
+  isUploading: boolean;
   progress: { processed: number; total: number };
 }
 
-export function BulkUploadDialog({
+export function BulkUploadModal({
+  isOpen,
+  onClose,
   onUpload,
-  isRunning,
+  isUploading,
   progress,
-}: BulkUploadDialogProps) {
+}: BulkUploadModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [uploadResult, setUploadResult] = useState<BulkUploadResult | null>(
     null,
   );
-  const [open, setOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   const processFile = useCallback((file: File) => {
@@ -337,44 +194,24 @@ export function BulkUploadDialog({
     }
 
     const reader = new FileReader();
-
     if (isCSV) {
-      reader.onload = (e) => {
-        const text = e.target?.result as string;
-        setParseResult(parseCSVText(text, file.name));
-        setUploadResult(null);
-      };
+      reader.onload = (e) =>
+        setParseResult(parseCSVText(e.target?.result as string, file.name));
       reader.readAsText(file, "UTF-8");
     } else {
-      reader.onload = (e) => {
-        const buffer = e.target?.result as ArrayBuffer;
-        setParseResult(parseExcelBuffer(buffer, file.name));
-        setUploadResult(null);
-      };
+      reader.onload = (e) =>
+        setParseResult(
+          parseExcelBuffer(e.target?.result as ArrayBuffer, file.name),
+        );
       reader.readAsArrayBuffer(file);
     }
+    setUploadResult(null);
   }, []);
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) processFile(file);
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) processFile(file);
-  };
 
   const handleUpload = async () => {
     if (!parseResult || parseResult.valid.length === 0) return;
-    try {
-      const result = await onUpload(parseResult.valid);
-      setUploadResult(result);
-    } catch {
-      // error sudah di-handle di hook (toast)
-    }
+    const result = await onUpload(parseResult.valid);
+    setUploadResult(result);
   };
 
   const reset = () => {
@@ -383,180 +220,251 @@ export function BulkUploadDialog({
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  const handleClose = () => {
+    reset();
+    onClose();
+  };
+
   const isOverCap = (parseResult?.valid.length ?? 0) > MAX_USERS;
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (!v) reset();
-      }}
-    >
-      <DialogTrigger asChild>
-        <Button variant="outline" className="h-10 px-4 shadow-sm">
-          <Upload className="mr-2 size-4" />
-          Import File
-        </Button>
-      </DialogTrigger>
-
-      <DialogContent className="sm:max-w-[520px]">
-        <DialogHeader className="p-6 pb-3">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex items-center justify-center w-10 h-10 bg-blue-50 text-blue-600 rounded-full">
-              <FileSpreadsheet className="size-5" />
-            </div>
-            <div>
-              <DialogTitle className="text-lg">
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[560px] border-stone-200 rounded-md p-0 overflow-hidden">
+        <div className="p-6 pb-0">
+          <DialogHeader className="flex flex-row items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="border border-stone-200 w-8 h-8 flex items-center justify-center">
+                <FileSpreadsheet
+                  className="size-4 text-primary"
+                  strokeWidth={1.5}
+                />
+              </div>
+              <DialogTitle className="text-lg font-light tracking-tight">
                 Import Pengguna Massal
               </DialogTitle>
-              <DialogDescription className="text-xs mt-0.5">
-                Upload CSV atau Excel. Maks. {MAX_USERS} pengguna per upload.
-              </DialogDescription>
             </div>
-          </div>
-        </DialogHeader>
+            <button
+              onClick={handleClose}
+              className="p-1.5 hover:bg-stone-50 transition-colors rounded-md"
+            >
+              <X className="size-3.5 text-stone-400" strokeWidth={1.5} />
+            </button>
+          </DialogHeader>
+          <p className="text-sm text-stone-400 mt-1.5">
+            Upload CSV atau Excel. Maks. {MAX_USERS} pengguna per upload.
+          </p>
+        </div>
 
-        <div className="px-6 pb-6 space-y-5">
-          {/* Template downloads */}
-          <div className="flex items-center gap-4">
-            <span className="text-xs text-zinc-500">Download template:</span>
+        <div className="p-6 space-y-5">
+          {/* Template Downloads */}
+          <div className="flex items-center gap-4 border border-stone-200 rounded-md p-3">
+            <span className="text-xs font-medium text-stone-500 uppercase tracking-wide">
+              Template:
+            </span>
             <button
               onClick={downloadCSVTemplate}
-              className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 hover:underline"
+              className="flex items-center gap-2 text-xs text-stone-600 hover:text-primary transition-colors"
             >
-              <FileText className="size-3.5" />
+              <FileText className="size-3.5" strokeWidth={1.5} />
               CSV
             </button>
             <button
               onClick={downloadExcelTemplate}
-              className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-700 hover:underline"
+              className="flex items-center gap-2 text-xs text-stone-600 hover:text-primary transition-colors"
             >
-              <FileSpreadsheet className="size-3.5" />
-              Excel (.xlsx)
+              <FileSpreadsheet className="size-3.5" strokeWidth={1.5} />
+              Excel
             </button>
           </div>
 
-          {/* Drop zone */}
-          {!uploadResult && (
+          {/* Drop Zone */}
+          {!uploadResult && !isUploading && (
             <div
               onDragOver={(e) => {
                 e.preventDefault();
                 setIsDragging(true);
               }}
               onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const file = e.dataTransfer.files[0];
+                if (file) processFile(file);
+              }}
               onClick={() => fileRef.current?.click()}
               className={`
-                relative flex flex-col items-center justify-center gap-2
-                h-32 border-2 border-dashed rounded-xl cursor-pointer
-                transition-colors duration-200
-                ${isDragging ? "border-blue-400 bg-blue-50" : ""}
-                ${parseResult && !isDragging ? "border-zinc-300 bg-zinc-50" : ""}
-                ${!parseResult && !isDragging ? "border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50" : ""}
+                relative flex flex-col items-center justify-center gap-3
+                h-36 border-2 border-dashed cursor-pointer rounded-md
+                transition-all duration-200
+                ${isDragging ? "border-primary bg-primary/5" : "border-stone-200 hover:border-stone-300 hover:bg-stone-50"}
               `}
             >
               <input
                 ref={fileRef}
                 type="file"
                 accept={ACCEPTED_EXTENSIONS}
-                onChange={handleFileInput}
+                onChange={(e) =>
+                  e.target.files?.[0] && processFile(e.target.files[0])
+                }
                 className="hidden"
               />
-              <Upload className="size-6 text-zinc-400" />
+              <Upload
+                className={`size-5 ${parseResult ? "text-emerald-600" : "text-stone-400"}`}
+                strokeWidth={1.5}
+              />
               {parseResult ? (
                 <>
-                  <p className="text-sm text-zinc-600 font-medium">
-                    ✓ {parseResult.fileName}
+                  <p className="text-sm text-stone-700">
+                    {parseResult.fileName}
                   </p>
-                  <p className="text-xs text-zinc-400">
-                    {parseResult.fileType === "excel" ? "Excel" : "CSV"} ·{" "}
+                  <p className="text-xs text-stone-400">
                     {parseResult.valid.length + parseResult.errors.length} baris
-                    data
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="text-sm text-zinc-500">
+                  <p className="text-sm text-stone-500">
                     Drag & drop atau klik untuk pilih file
                   </p>
-                  <p className="text-xs text-zinc-400">
-                    Mendukung .csv · .xlsx · .xls
-                  </p>
+                  <p className="text-xs text-stone-400">CSV · Excel</p>
                 </>
               )}
             </div>
           )}
 
-          {/* Parse result */}
-          {parseResult && !uploadResult && !isRunning && (
-            <div className="space-y-3">
-              <div className="flex gap-3">
-                <div className="flex-1 p-3 bg-green-50 border border-green-200 rounded-lg text-center">
-                  <p className="text-xl font-bold text-green-700">
+          {/* Upload Progress */}
+          {isUploading && (
+            <div className="space-y-2 border border-stone-200 rounded-md p-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-stone-600">Mengupload...</span>
+                <span className="text-stone-400">
+                  {progress.processed} / {progress.total}
+                </span>
+              </div>
+              <div className="h-0.5 bg-stone-200 overflow-hidden rounded-full">
+                <div
+                  className="h-full bg-primary transition-all duration-300"
+                  style={{
+                    width: `${(progress.processed / progress.total) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Parse Result */}
+          {parseResult && !uploadResult && !isUploading && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="border border-stone-200 rounded-md p-3 text-center">
+                  <p className="text-2xl font-light text-stone-900">
                     {parseResult.valid.length}
                   </p>
-                  <p className="text-xs text-green-600">Siap diimport</p>
+                  <p className="text-xs text-stone-400 uppercase tracking-wide mt-0.5">
+                    Siap diimport
+                  </p>
                 </div>
-                <div className="flex-1 p-3 bg-rose-50 border border-rose-200 rounded-lg text-center">
-                  <p className="text-xl font-bold text-rose-700">
+                <div className="border border-stone-200 rounded-md p-3 text-center">
+                  <p className="text-2xl font-light text-stone-900">
                     {parseResult.errors.length}
                   </p>
-                  <p className="text-xs text-rose-600">Baris error</p>
+                  <p className="text-xs text-stone-400 uppercase tracking-wide mt-0.5">
+                    Baris error
+                  </p>
                 </div>
               </div>
 
               {isOverCap && (
-                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <AlertTriangle className="size-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                  <p className="text-xs text-amber-700">
-                    Jumlah data valid ({parseResult.valid.length}) melebihi
-                    batas {MAX_USERS} pengguna. Pecah menjadi beberapa file.
+                <div className="flex gap-2 border border-amber-200 rounded-md p-3 bg-amber-50">
+                  <AlertTriangle
+                    className="size-4 text-amber-600 flex-shrink-0 mt-0.5"
+                    strokeWidth={1.5}
+                  />
+                  <p className="text-xs text-stone-600">
+                    Melebihi batas {MAX_USERS} pengguna. Pecah menjadi beberapa
+                    file.
                   </p>
                 </div>
               )}
 
               {parseResult.errors.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-zinc-600">
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">
                     Error pada baris:
                   </p>
-                  <div className="max-h-28 overflow-y-auto rounded border divide-y text-xs">
-                    {parseResult.errors.map((e, i) => (
-                      <div key={i} className="flex gap-2 px-3 py-1.5">
-                        <span className="text-zinc-400 flex-shrink-0">
-                          Baris {e.row}
+                  <div className="max-h-32 overflow-y-auto space-y-1">
+                    {parseResult.errors.slice(0, 5).map((e, i) => (
+                      <div
+                        key={i}
+                        className="flex gap-2 text-xs border-l-2 border-red-500 rounded-md pl-3 py-1.5 bg-red-50"
+                      >
+                        <span className="text-stone-600 font-medium">
+                          Baris {e.row}:
                         </span>
-                        <span className="text-rose-600 truncate">
-                          {e.reason}
-                        </span>
+                        <span className="text-stone-500">{e.reason}</span>
                       </div>
                     ))}
+                    {parseResult.errors.length > 5 && (
+                      <p className="text-xs text-stone-400 text-center pt-1">
+                        +{parseResult.errors.length - 5} error lainnya
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Progress */}
-          {isRunning && (
-            <ProgressBar
-              processed={progress.processed}
-              total={progress.total}
-            />
+          {/* Result Summary */}
+          {uploadResult && (
+            <div
+              className={`border rounded-md p-4 ${uploadResult.failed.length === 0 ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}
+            >
+              <div className="flex gap-3">
+                {uploadResult.failed.length === 0 ? (
+                  <CheckCircle2
+                    className="size-5 text-emerald-600 flex-shrink-0"
+                    strokeWidth={1.5}
+                  />
+                ) : (
+                  <AlertTriangle
+                    className="size-5 text-amber-600 flex-shrink-0"
+                    strokeWidth={1.5}
+                  />
+                )}
+                <div>
+                  <p className="text-sm text-stone-700">
+                    {uploadResult.succeeded.length} berhasil,{" "}
+                    {uploadResult.failed.length} gagal
+                  </p>
+                  {uploadResult.failed.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {uploadResult.failed.slice(0, 3).map((f, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 text-xs"
+                        >
+                          <XCircle
+                            className="size-3 text-red-500"
+                            strokeWidth={1.5}
+                          />
+                          <span className="text-stone-600">{f.user.email}</span>
+                          <span className="text-stone-400">- {f.reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
 
-          {/* Result */}
-          {uploadResult && <ResultSummary result={uploadResult} />}
-
           {/* Actions */}
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex justify-end gap-3 pt-2 border-t border-stone-200 mt-2">
             {uploadResult ? (
               <Button
-                onClick={() => {
-                  reset();
-                  setOpen(false);
-                }}
+                onClick={handleClose}
+                className="rounded-md bg-primary hover:bg-primary/90 h-9 px-4 text-sm font-normal"
               >
                 Selesai
               </Button>
@@ -565,7 +473,8 @@ export function BulkUploadDialog({
                 <Button
                   variant="outline"
                   onClick={reset}
-                  disabled={isRunning || !parseResult}
+                  disabled={isUploading || !parseResult}
+                  className="rounded-md border-stone-200 text-stone-600 hover:bg-stone-50 h-9 px-4 text-sm font-normal"
                 >
                   Reset
                 </Button>
@@ -575,12 +484,21 @@ export function BulkUploadDialog({
                     !parseResult ||
                     parseResult.valid.length === 0 ||
                     isOverCap ||
-                    isRunning
+                    isUploading
                   }
+                  className="rounded-md bg-primary hover:bg-primary/90 h-9 px-4 text-sm font-normal"
                 >
-                  {isRunning
-                    ? "Mengupload..."
-                    : `Import ${parseResult?.valid.length ?? 0} Pengguna`}
+                  {isUploading ? (
+                    <>
+                      <Loader2
+                        className="mr-2 size-3.5 animate-spin"
+                        strokeWidth={1.5}
+                      />
+                      Mengupload...
+                    </>
+                  ) : (
+                    `Import ${parseResult?.valid.length ?? 0} Pengguna`
+                  )}
                 </Button>
               </>
             )}

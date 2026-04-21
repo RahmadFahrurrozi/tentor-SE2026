@@ -124,6 +124,13 @@ if role == "ppl":
 if role == "pml":
     st.sidebar.caption(f"Wilayah Tugas: {len(assigned_idkec)} Kecamatan")
 
+if role in ("ppl", "pml"):
+    st.markdown("""
+    <style>
+        /* Sembunyikan semua toolbar action di dataframe (termasuk download) */
+        [data-testid="stElementToolbarButton"] { display: none !important; }
+    </style>
+    """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
 # LOAD DATA
@@ -370,14 +377,13 @@ sls_opacity   = st.sidebar.slider("SLS opacity",      0.0, 1.0, 0.3, 0.05)
 build_opacity = st.sidebar.slider("Bangunan opacity", 0.0, 1.0, 0.6, 0.05)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Data")
 if st.sidebar.button("Refresh Data Sekarang"):
     st.cache_data.clear()
     st.rerun()
 
 # ── Kontrol Admin & Logout ────────────────────────────────────────────────────
 if role == "admin":
-    st.sidebar.link_button("⚙️ User Management (Portal)", "http://localhost:5173/users", use_container_width=True)
+    st.sidebar.link_button("User Management (Portal)", "http://localhost:5173/users", use_container_width=True)
 
 if st.sidebar.button("Keluar (Log Out)", use_container_width=True):
     # Hapus semua session state Streamlit
@@ -549,7 +555,7 @@ if show_usaha:
     df_sample["total_bangunan"]  = "-"
     df_sample["sudah_terdata"]   = "-"
     df_sample["belum_terdata"]   = "-"
-    df_sample["color"]           = df_sample["gc final"].apply(gc_to_color)
+    df_sample["color"] = [[255, 220, 50, 220]] * len(df_sample)
 
     kolom_pydeck = [
         "lon", "lat", "color", "nama", "alamat", "gc_label",

@@ -1,4 +1,34 @@
-"use client";
+/**
+ * login-page.tsx
+ *
+ * Fix utama: pisahkan "logout" dari "kembali ke dashboard".
+ *
+ * Problem sebelumnya:
+ * Streamlit sidebar punya dua tombol berbeda:
+ *   - "Kembali ke Dashboard" → redirect ke LOGIN_URL (tanpa flag apapun)
+ *   - "Logout"               → redirect ke LOGIN_URL?logout=true
+ *
+ * Tapi di login page, CASE 3 (auto-SSO) selalu dipanggil setelah logout check.
+ * Kalau user klik "Kembali ke Dashboard" (tanpa ?logout), flow masuk ke CASE 3,
+ * detect ada session Supabase → generate OTC baru → redirect balik ke Streamlit.
+ * Ini BENAR dan harusnya jalan.
+ *
+ * Masalah sebenarnya: "Kembali ke Dashboard" di Streamlit lo redirect ke
+ * LOGIN_URL (portal login), bukan ke Streamlit itu sendiri.
+ * Harusnya kalau user sudah login dan klik "Kembali ke Dashboard",
+ * generate OTC baru langsung dan redirect ke Streamlit — tidak perlu ke login page.
+ *
+ * Fix di sini:
+ * 1. ?logout=true → logout Supabase + set flag, STOP (tidak generate OTC)
+ * 2. ?back=true   → ada session → generate OTC → redirect Streamlit langsung
+ * 3. Normal load  → ada session → auto redirect ke Streamlit (SSO)
+ *
+ * Di Streamlit, ganti tombol "Kembali ke Dashboard":
+ *   href = LOGIN_URL?back=true   (bukan ?logout=true)
+ *
+ * Dan tombol "Logout":
+ *   href = LOGIN_URL?logout=true (tetap sama)
+ */
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -10,66 +40,82 @@ import { authService } from "@/services/auth.service";
 import { useAuth } from "@/hooks/use-auth";
 import { LoginIllustration } from "@/components/auth/login-illustration";
 
-// ─── FLAG KEY ──────────────────────────────────────────────────────────────────
-// Dipakai untuk menandai bahwa user baru saja logout — skip auto-SSO sekali
+const STREAMLIT_URL =
+  import.meta.env.VITE_STREAMLIT_URL ?? "http://localhost:8501";
+
 const JUST_LOGGED_OUT_KEY = "bspatial_just_logged_out";
+
+async function redirectToStreamlit(userId: string) {
+  const token = await authService.generateOtc(userId);
+  window.location.href = `${STREAMLIT_URL}?code=${token}`;
+}
 
 function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
 
-  // Sync dengan useAuth, disable default redirect
   const { form, login, isLoggingIn } = useAuth({ disableRedirect: true });
-
-  // const watchEmail = form.watch("email");
   const watchPassword = form.watch("password");
 
-  // ── AUTO SSO + LOGOUT HANDLER ────────────────────────────────────────────────
   useEffect(() => {
     const checkSession = async () => {
       const urlParams = new URLSearchParams(window.location.search);
 
-      // CASE 1: Streamlit redirect ke ?logout=true
+      // ── CASE 1: ?logout=true — user klik tombol Logout di Streamlit ──────────
       if (urlParams.get("logout") === "true") {
-        // Bersihkan URL dulu
         window.history.replaceState(
           {},
           document.title,
           window.location.pathname,
         );
-
-        // Set flag "baru logout" di sessionStorage agar auto-SSO di-skip
         sessionStorage.setItem(JUST_LOGGED_OUT_KEY, "true");
-
-        // Logout dari Supabase (hapus session browser)
         try {
           await authService.logout();
         } catch (e) {
           console.error("Gagal logout dari Supabase:", e);
         }
-
-        // Selesai — tetap di halaman login, TIDAK lanjut cek session
+        // Tetap di halaman login — STOP, tidak generate OTC
         return;
       }
 
-      // CASE 2: User baru saja logout, skip auto-SSO sekali ini
+      // ── CASE 2: ?back=true — user klik "Kembali ke Dashboard" di Streamlit ───
+      // Ini BUKAN logout. User masih login, hanya mau balik ke app.
+      // Generate OTC baru dan redirect langsung tanpa tampilkan form login.
+      if (urlParams.get("back") === "true") {
+        window.history.replaceState(
+          {},
+          document.title,
+          window.location.pathname,
+        );
+        try {
+          const data = await authService.getSession();
+          if (data?.session?.user) {
+            setIsRedirecting(true);
+            await redirectToStreamlit(data.session.user.id);
+          }
+          // Kalau tidak ada session, fall through ke form login normal
+        } catch (e) {
+          console.error("Gagal redirect ke Streamlit:", e);
+        }
+        return;
+      }
+
+      // ── CASE 3: User baru logout, skip auto-SSO sekali ───────────────────────
       if (sessionStorage.getItem(JUST_LOGGED_OUT_KEY) === "true") {
-        // Hapus flag setelah dibaca agar kalau refresh lagi bisa auto-SSO normal
         sessionStorage.removeItem(JUST_LOGGED_OUT_KEY);
         return;
       }
 
-      // CASE 3: Normal load — cek apakah ada Supabase session aktif
+      // ── CASE 4: Normal load — cek session aktif untuk auto-SSO ───────────────
       try {
         const data = await authService.getSession();
         if (data?.session?.user) {
           setIsRedirecting(true);
-          const otcData = await authService.generateOtc(data.session.user.id);
-          window.location.href = `http://localhost:8501/?code=${otcData.token}`;
+          await redirectToStreamlit(data.session.user.id);
         }
-      } catch (err) {
-        // Tidak ada session — tetap di halaman login
+      } catch {
+        // Tidak ada session — tampilkan form login
       }
     };
 
@@ -80,10 +126,8 @@ function LoginPage() {
     try {
       const authData = await login(values);
       setIsRedirecting(true);
-      // Generate OTC Token dan redirect
-      const otcData = await authService.generateOtc(authData.user.id);
-      window.location.href = `http://localhost:8501/?code=${otcData.token}`;
-    } catch (err: any) {
+      await redirectToStreamlit(authData.user.id);
+    } catch {
       setIsRedirecting(false);
     }
   });
@@ -92,14 +136,12 @@ function LoginPage() {
     <>
       <LoadingOverlay isVisible={isRedirecting} />
       <div className="min-h-screen grid lg:grid-cols-2">
-        {/* Left Content Section */}
         <LoginIllustration
           passwordLength={watchPassword.length}
           showPassword={showPassword}
           isTyping={isTyping}
         />
 
-        {/* Right Login Section */}
         <div className="flex items-center justify-center p-8 bg-background">
           <div className="w-full max-w-[420px]">
             <div className="lg:hidden flex items-center justify-center gap-2 text-lg font-semibold mb-12">
@@ -175,7 +217,7 @@ function LoginPage() {
                 type="submit"
                 className="w-full h-12 text-base font-medium"
                 size="lg"
-                disabled={isLoggingIn}
+                disabled={isLoggingIn || isRedirecting}
               >
                 {isLoggingIn ? "Signing in..." : "Log in"}
               </Button>
@@ -184,7 +226,7 @@ function LoginPage() {
             <div className="text-center text-sm text-muted-foreground mt-8">
               Don't have an account?{" "}
               <a
-                href="#"
+                href="https://wa.me/+6285237923152"
                 className="text-foreground font-medium hover:underline"
               >
                 Contact Admin

@@ -1,76 +1,133 @@
-"use client";
-
 import type { ColumnDef } from "@tanstack/react-table";
-import {
-  MoreHorizontal,
-  ArrowUpDown,
-  Trash2,
-  KeyRound,
-  Edit,
-} from "lucide-react";
-
 import { Button } from "@/components/ui/button";
+import { Trash2, MoreHorizontal } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
 export type UserType = {
   id: string;
-  email: string;
   full_name: string;
-  role: "admin" | "ppl" | "pml";
-  created_at?: string;
+  email: string;
+  role: "ppl" | "pml" | "admin";
+  created_at: string;
+  assignments?: string[];
 };
 
-export const columns: ColumnDef<UserType>[] = [
+export const columns = ({
+  onDelete,
+  onViewAssignment,
+  regions = [],
+}: {
+  onDelete: (id: string) => void;
+  onViewAssignment: (user: UserType) => void;
+  regions?: any[];
+}): ColumnDef<UserType>[] => [
   {
     accessorKey: "full_name",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="font-semibold"
-        >
-          Nama Lengkap
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
+    header: "Nama Lengkap",
+    cell: ({ row }) => (
+      <div className="font-medium text-slate-900">
+        {row.getValue("full_name")}
+      </div>
+    ),
   },
   {
     accessorKey: "email",
     header: "Email",
+    cell: ({ row }) => (
+      <div className="text-slate-600">{row.getValue("email")}</div>
+    ),
   },
   {
     accessorKey: "role",
     header: "Role",
     cell: ({ row }) => {
       const role = row.getValue("role") as string;
-      const getBadgeVariant = (role: string) => {
-        switch (role) {
-          case "admin":
-            return "bg-rose-100 text-rose-800 hover:bg-rose-100/80";
-          case "pml":
-            return "bg-amber-100 text-amber-800 hover:bg-amber-100/80";
-          case "ppl":
-            return "bg-emerald-100 text-emerald-800 hover:bg-emerald-100/80";
-          default:
-            return "bg-zinc-100 text-zinc-800";
-        }
+      const roleConfig = {
+        admin: {
+          label: "Administrator",
+          className: "bg-purple-100 text-purple-700",
+        },
+        ppl: { label: "PPL", className: "bg-blue-100 text-blue-700" },
+        pml: { label: "PML", className: "bg-emerald-100 text-emerald-700" },
       };
+      const config =
+        roleConfig[role as keyof typeof roleConfig] || roleConfig.ppl;
 
       return (
         <span
-          className={`px-2.5 py-1 rounded-md text-xs font-semibold ${getBadgeVariant(role)}`}
+          className={`px-2 py-1 rounded-lg text-xs font-medium ${config.className}`}
         >
-          {role.toUpperCase()}
+          {config.label}
         </span>
+      );
+    },
+  },
+  {
+    accessorKey: "assignments",
+    header: "Wilayah Tugas",
+    cell: ({ row }) => {
+      const user = row.original;
+      const assignments = user.assignments || [];
+
+      if (user.role === "admin") {
+        return (
+          <div className="text-slate-400 text-xs italic">Seluruh Wilayah</div>
+        );
+      }
+
+      // Map IDs to Names
+      const names = assignments.map((id) => {
+        const region = regions.find((r) => r.iddesa === id || r.idkec === id);
+        return region
+          ? user.role === "ppl"
+            ? region.nmdesa
+            : region.nmkec
+          : id;
+      });
+
+      const displaySummary =
+        names.length > 2
+          ? `${names.slice(0, 2).join(", ")} +${names.length - 2} lainnya`
+          : names.join(", ");
+
+      return (
+        <div className="flex flex-col gap-1.5 items-start">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onViewAssignment(user)}
+              className="text-indigo-600 hover:text-indigo-700 text-[10px] font-bold bg-indigo-50 px-1.5 py-0.5 rounded uppercase tracking-wider flex items-center gap-1.5"
+            >
+              {assignments.length} {user.role === "pml" ? "Kec" : "Desa"}
+            </button>
+          </div>
+          <span
+            className="text-[10px] flex items-center gap-1 text-stone-500 font-normal leading-tight max-w-[150px] truncate pl-0.5"
+            title={names.join(", ")}
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-indigo-500 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
+            </span>
+            {displaySummary}
+          </span>
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "created_at",
+    header: "Dibuat Pada",
+    cell: ({ row }) => {
+      const date = new Date(row.getValue("created_at"));
+      return (
+        <div className="text-slate-500 text-sm">
+          {date.toLocaleDateString("id-ID")}
+        </div>
       );
     },
   },
@@ -83,26 +140,16 @@ export const columns: ColumnDef<UserType>[] = [
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuItem
-              onClick={() => navigator.clipboard.writeText(user.id)}
+              onClick={() => onDelete(user.id)}
+              className="text-rose-600 focus:text-rose-600"
             >
-              Copy User ID
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-zinc-600">
-              <Edit className="mr-2 h-4 w-4" /> Edit Detail
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-amber-600">
-              <KeyRound className="mr-2 h-4 w-4" /> Reset Password
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-rose-600 focus:text-rose-600">
-              <Trash2 className="mr-2 h-4 w-4" /> Hapus Akun
+              <Trash2 className="mr-2 h-4 w-4" />
+              Hapus
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
