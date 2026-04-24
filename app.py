@@ -28,9 +28,10 @@ st.sidebar.image("logo.svg", width=60)
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 LOGIN_URL = os.environ.get("LOGIN_URL", "http://localhost:5173/login")
+GSHEET_URL = os.environ.get("GSHEET_URL")
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    st.error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env")
+if not SUPABASE_URL or not SUPABASE_KEY or not GSHEET_URL:
+    st.error("SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and GSHEET_URL must be set in .env")
     st.stop()
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -73,7 +74,7 @@ if "code" in query_params:
             if _load_user_from_supabase(user_id):
                 # Simpan user_id untuk keperluan refresh otomatis
                 st.session_state["user_id"] = user_id
-
+                st.query_params["u"] = user_id
             # Hapus OTC agar tidak bisa dipakai ulang
             supabase.table("otc_tokens").delete().eq("token", otc_code).execute()
 
@@ -102,9 +103,35 @@ if "user_id" in st.session_state and "user" not in st.session_state:
 
 
 # ── 3. Cek apakah user sudah terotentikasi ─────────────────────────────────────
+# Pindahkan pengecekan ke awal agar tidak ada UI yang muncul sebelum login valid
 if "user" not in st.session_state:
-    st.warning("Anda belum login atau sesi telah berakhir.")
-    st.markdown(f"Silakan masuk melalui **[Portal Login B-Spatial]({LOGIN_URL})** terlebih dahulu.")
+    st.markdown(f'<meta http-equiv= "refresh" content="0; url={LOGIN_URL}?back=true">', unsafe_allow_html=True)
+    # Lakukan auto-redirect ke portal login dengan parameter ?back=true
+    # Ini akan memicu portal untuk otomatis login ulang (jika sesi Supabase masih ada)
+    # dan melempar balik ke Streamlit dengan token baru secara cepat (SSO).
+    st.markdown(f"""
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh;">
+            <div class="spinner"></div>
+            <h3 style="color: #e0f0ff; font-family: sans-serif; margin-top: 20px;">Sinkronisasi Sesi...</h3>
+            <p style="color: #aaa; font-family: sans-serif;">Mohon tunggu, sedang memulihkan sesi Anda.</p>
+        </div>
+        <style>
+            .spinner {{
+                border: 4px solid rgba(255, 255, 255, 0.1);
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                border-left-color: #09f;
+                animation: spin 1s linear infinite;
+            }}
+            @keyframes spin {{
+                to {{ transform: rotate(360deg); }}
+            }}
+        </style>
+        <script>
+            window.location.href = "{LOGIN_URL}?back=true";
+        </script>
+    """, unsafe_allow_html=True)
     st.stop()
 
 
@@ -154,7 +181,7 @@ def load_building():
         return gpd.GeoDataFrame()
     return gdf
 
-GSHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRI9DTFAbw8KbLPdcBbqSutIiTiDcEZLrDvdhOcQ7n53ckypw_p5Pi9WFt1-nmrMbL5WI7KUut42xQn/pub?gid=1280473743&single=true&output=csv"
+
 
 @st.cache_data(ttl=300)
 def load_usaha():
@@ -334,7 +361,13 @@ if role != "admin":
             s_iddesa  = gdf_sls["iddesa"].astype(str).str.replace(".0", "", regex=False)
             match_desa = s_iddesa.isin(assigned_iddesa)
 
-        gdf_sls = gdf_sls[match_kec | match_desa]
+        # Pisahkan logika filter berdasarkan role agar PPL tidak melihat seluruh kecamatan
+        if role == "ppl":
+            gdf_sls = gdf_sls[match_desa]
+        elif role == "pml":
+            gdf_sls = gdf_sls[match_kec]
+        else:
+            gdf_sls = gdf_sls[match_kec | match_desa]
 
     if gdf_sls.empty:
         st.warning("Anda tidak memiliki data untuk wilayah penugasan terkait.")
@@ -366,9 +399,6 @@ else:
 filter_desa = st.sidebar.selectbox("Desa/Kelurahan", ["Semua"] + desa_options) if desa_options else "Semua"
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Filter Titik Usaha")
-GC_LABEL = {0: "0 — Tidak diketahui", 1: "1 — Akurasi tinggi", 3: "3 — Akurasi sedang", 4: "4 — Sangat tinggi", 99: "99 — Khusus"}
-filter_gc   = st.sidebar.selectbox("Kualitas Koordinat (gc)", ["Semua"] + [GC_LABEL[g] for g in sorted(GC_LABEL)])
 filter_nama = st.sidebar.text_input("Cari nama usaha", placeholder="contoh: BAKSO")
 
 st.sidebar.markdown("---")
@@ -524,9 +554,6 @@ if show_usaha:
     valid_idsls = set(gdf_sls_display["idsls_str"].dropna().unique())
     df_f = df_f[df_f["idsls_str"].isin(valid_idsls)]
     
-    if filter_gc != "Semua":
-        gc_val = int(filter_gc.split("—")[0].strip())
-        df_f = df_f[df_f["gc final"] == gc_val]
     if filter_nama.strip():
         df_f = df_f[df_f["nama final"].str.contains(filter_nama.strip(), case=False, na=False)]
 

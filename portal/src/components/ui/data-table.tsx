@@ -21,7 +21,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "./button";
 import { Input } from "./input";
 import { Skeleton } from "./skeleton";
 
@@ -63,19 +62,19 @@ export function DataTable<TData, TValue>({
           onChange={(event) =>
             table.getColumn("email")?.setFilterValue(event.target.value)
           }
-          className="max-w-sm"
+          className="max-w-sm py-6"
         />
       </div>
-      <div className="rounded-md border bg-white overflow-hidden">
+      <div className="rounded-md border border-zinc-100 bg-background dark:border-zinc-800 overflow-hidden">
         <Table>
-          <TableHeader className="bg-zinc-50 border-b">
+          <TableHeader className="bg-zinc-50 border-b dark:bg-zinc-800 dark:border-zinc-600">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
                     <TableHead
                       key={header.id}
-                      className="font-semibold text-zinc-900 border-r last:border-0 pl-4 h-12"
+                      className="font-semibold text-foreground dark:text-foreground border-r last:border-0 pl-4 h-12"
                     >
                       {header.isPlaceholder
                         ? null
@@ -106,7 +105,7 @@ export function DataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="hover:bg-zinc-50/70 border-b last:border-0"
+                  className="hover:bg-zinc-50/70 dark:hover:bg-zinc-800/20 border-b text-foreground last:border-0"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className="pl-4 h-14">
@@ -122,7 +121,7 @@ export function DataTable<TData, TValue>({
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center text-muted-foreground"
+                  className="h-24 text-center text-foreground"
                 >
                   Belum ada data.
                 </TableCell>
@@ -130,25 +129,6 @@ export function DataTable<TData, TValue>({
             )}
           </TableBody>
         </Table>
-      </div>
-
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          Next
-        </Button>
       </div>
     </div>
   );

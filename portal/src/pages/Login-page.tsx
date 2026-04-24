@@ -39,6 +39,7 @@ import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { authService } from "@/services/auth.service";
 import { useAuth } from "@/hooks/use-auth";
 import { LoginIllustration } from "@/components/auth/login-illustration";
+import { ModeToggle } from "@/components/ui/mode-toggle";
 
 const STREAMLIT_URL =
   import.meta.env.VITE_STREAMLIT_URL ?? "http://localhost:8501";
@@ -135,6 +136,9 @@ function LoginPage() {
   return (
     <>
       <LoadingOverlay isVisible={isRedirecting} />
+      <div className="fixed top-6 right-6 z-50">
+        <ModeToggle />
+      </div>
       <div className="min-h-screen grid lg:grid-cols-2">
         <LoginIllustration
           passwordLength={watchPassword.length}

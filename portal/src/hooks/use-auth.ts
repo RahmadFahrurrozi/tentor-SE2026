@@ -46,11 +46,7 @@ export const useAuth = (options?: UseAuthOptions) => {
       }
     },
     onError: (error) => {
-      const message =
-        error instanceof AuthError
-          ? error.message
-          : "Email atau password salah";
-      toast.error("Login Gagal", { description: message });
+      toast.error("Login Gagal", { description: "Email atau password salah" });
       console.error("Login Error:", error);
     },
     onSettled: () => {

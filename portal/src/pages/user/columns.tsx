@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
-import { Trash2, MoreHorizontal } from "lucide-react";
+import { Trash2, MoreHorizontal, Pencil } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,17 +20,19 @@ export type UserType = {
 export const columns = ({
   onDelete,
   onViewAssignment,
+  onEdit,
   regions = [],
 }: {
   onDelete: (id: string) => void;
   onViewAssignment: (user: UserType) => void;
+  onEdit: (user: UserType) => void;
   regions?: any[];
 }): ColumnDef<UserType>[] => [
   {
     accessorKey: "full_name",
     header: "Nama Lengkap",
     cell: ({ row }) => (
-      <div className="font-medium text-slate-900">
+      <div className="font-medium text-foreground dark:text-zinc-100">
         {row.getValue("full_name")}
       </div>
     ),
@@ -39,7 +41,9 @@ export const columns = ({
     accessorKey: "email",
     header: "Email",
     cell: ({ row }) => (
-      <div className="text-slate-600">{row.getValue("email")}</div>
+      <div className="text-muted-foreground dark:text-zinc-400">
+        {row.getValue("email")}
+      </div>
     ),
   },
   {
@@ -76,7 +80,9 @@ export const columns = ({
 
       if (user.role === "admin") {
         return (
-          <div className="text-slate-400 text-xs italic">Seluruh Wilayah</div>
+          <div className="text-muted-foreground text-xs italic">
+            Seluruh Wilayah
+          </div>
         );
       }
 
@@ -106,7 +112,7 @@ export const columns = ({
             </button>
           </div>
           <span
-            className="text-[10px] flex items-center gap-1 text-stone-500 font-normal leading-tight max-w-[150px] truncate pl-0.5"
+            className="text-[10px] flex items-center gap-1 text-muted-foreground font-normal leading-tight max-w-[150px] truncate pl-0.5"
             title={names.join(", ")}
           >
             <span className="relative flex h-1.5 w-1.5">
@@ -125,7 +131,7 @@ export const columns = ({
     cell: ({ row }) => {
       const date = new Date(row.getValue("created_at"));
       return (
-        <div className="text-slate-500 text-sm">
+        <div className="text-muted-foreground text-sm">
           {date.toLocaleDateString("id-ID")}
         </div>
       );
@@ -133,6 +139,7 @@ export const columns = ({
   },
   {
     id: "actions",
+    header: "Aksi",
     cell: ({ row }) => {
       const user = row.original;
 
@@ -150,6 +157,13 @@ export const columns = ({
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Hapus
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => onEdit(user)}
+              className="text-slate-900 focus:text-slate-900"
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              Ubah
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

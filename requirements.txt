@@ -1,30 +1,29 @@
-# ============================================================
-# B-SPATIAL BANYUWANGI — Python Requirements
-# ============================================================
-# Install: pip install -r requirements.txt
+# --- Database & Auth ---
+supabase>=2.4.0
+python-dotenv>=1.0.0
 
 # --- Web App Framework ---
 streamlit>=1.35.0
 
 # --- Geospatial ---
 geopandas>=0.14.0
-pyproj>=3.6.0          # CRS projection (dipakai oleh geopandas)
-shapely>=2.0.0         # Geometry operations (dipakai oleh geopandas)
-fiona>=1.9.0           # GeoJSON/Shapefile driver untuk geopandas
+pyproj>=3.6.0          # CRS projection
+shapely>=2.0.0         # Geometry operations
+fiona>=1.9.0           # GeoJSON/Shapefile driver
+rtree>=1.2.0           # Penting untuk sjoin_nearest (spatial index)
 
 # --- Map Visualization ---
-pydeck>=0.9.0          # WebGL map rendering (pydeck.Deck, pydeck.Layer)
+pydeck>=0.9.0          # WebGL map rendering
 
 # --- Data Processing ---
 pandas>=2.0.0
-numpy>=1.26.0          # Dependency umum pandas/geopandas
+numpy>=1.26.0
 
-# --- Parquet Support (untuk osm-building.parquet) ---
-pyarrow>=14.0.0        # Backend parquet untuk geopandas.read_parquet()
-# Alternatif: fastparquet>=2023.10.1
+# --- Parquet Support ---
+pyarrow>=14.0.0        # Untuk read/write .parquet
 
-# --- Excel Support (fallback load_usaha) ---
+# --- Excel Support ---
 openpyxl>=3.1.0        # Baca .xlsx (pd.read_excel)
 
-# --- HTTP / Google Sheets ---
-requests>=2.31.0       # Dipakai pandas di balik layar saat read_csv dari URL
+# --- HTTP ---
+requests>=2.31.0

@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase";
 import type { Database } from "@/types/database.types";
 import type { UserType } from "../pages/user/columns";
 
-type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
+// type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
 type AssignmentInsert = Database["public"]["Tables"]["assignments"]["Insert"];
 
 export interface Region {
@@ -39,42 +39,65 @@ export interface BulkUploadResult {
   failed: Array<{ user: CreateUserPayload; reason: string }>;
 }
 
-// Debug logger
+// ─── Debug Logger ────────────────────────────────────────────────────────────
 const DEBUG = true;
 
-function logDebug(action: string, data: any, error?: any) {
+function logDebug(action: string, data: unknown, error?: unknown) {
   if (!DEBUG) return;
-
-  console.group(`🔍 DEBUG: ${action}`);
-  console.log("📦 Data:", data);
-  if (error) console.error("❌ Error:", error);
-  console.trace("📍 Stack trace");
+  console.group(`[DEBUG] ${action}`);
+  console.log("data:", data);
+  if (error) console.error("error:", error);
+  console.trace("stack");
   console.groupEnd();
 }
 
-const PROFILE_COLUMNS = "id, full_name, email, role, created_at" as const;
+// ─── Auth Helper ─────────────────────────────────────────────────────────────
+async function getAuthToken(): Promise<string> {
+  let { data: { session } } = await supabase.auth.getSession();
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  if (!session) {
+    const { data } = await supabase.auth.refreshSession();
+    session = data.session;
+  }
+
+  if (!session?.access_token) {
+    throw new Error("Sesi tidak valid, silakan login ulang");
+  }
+
+  return session.access_token;
 }
 
-function toInsertPayload(data: CreateUserPayload): ProfileInsert {
-  logDebug("toInsertPayload", {
-    input: data,
-    output: {
-      full_name: data.full_name,
-      email: data.email,
-      role: data.role,
-    },
+// ─── Fetch Helper ─────────────────────────────────────────────────────────────
+async function callEdgeFunction(token: string, body: object): Promise<unknown> {
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  const result = await response.json();
+
+  logDebug("callEdgeFunction - response", {
+    status: response.status,
+    ok: response.ok,
+    body: result,
   });
 
-  return {
-    full_name: data.full_name,
-    email: data.email,
-    role: data.role,
-  } as ProfileInsert;
+  if (!response.ok) {
+    throw new Error(result?.error ?? `HTTP ${response.status}: Request gagal`);
+  }
+
+  return result;
 }
 
+// ─── Service ──────────────────────────────────────────────────────────────────
 export const userService = {
   async getUsers(
     params: PaginationParams = { page: 0, pageSize: 25 },
@@ -86,39 +109,36 @@ export const userService = {
     const to = from + pageSize - 1;
 
     try {
-      const [{ data, error }, { count, error: countError }] = await Promise.all(
-        [
-          supabase
-            .from("profiles")
-            .select(
-              `
-              id, 
-              full_name, 
-              email, 
-              role, 
-              created_at,
-              assignments(iddesa, idkec)
-            `,
-            )
-            .order("created_at", { ascending: false })
-            .range(from, to),
+      const [{ data, error }, { count, error: countError }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select(
+            `
+            id,
+            full_name,
+            email,
+            role,
+            created_at,
+            assignments(iddesa, idkec)
+          `,
+          )
+          .order("created_at", { ascending: false })
+          .range(from, to),
 
-          supabase
-            .from("profiles")
-            .select("id", { count: "exact", head: true }),
-        ],
-      );
+        supabase
+          .from("profiles")
+          .select("id", { count: "exact", head: true }),
+      ]);
 
       if (error) {
-        logDebug("getUsers - Supabase error", null, error);
+        logDebug("getUsers - supabase error", null, error);
         throw new Error(error.message);
       }
       if (countError) {
-        logDebug("getUsers - Count error", null, countError);
+        logDebug("getUsers - count error", null, countError);
         throw new Error(countError.message);
       }
 
-      // Format assignments from array of objects to array of strings
       const formattedData = (data ?? []).map((user: any) => ({
         ...user,
         assignments: Array.from(
@@ -152,135 +172,114 @@ export const userService = {
     }
   },
 
-async createUser(data: CreateUserPayload): Promise<UserType> {
-  logDebug("createUser - start", data);
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("Sesi tidak valid");
+  async createUser(data: CreateUserPayload): Promise<UserType> {
+    logDebug("createUser - start", data);
+    try {
+      const token = await getAuthToken();
 
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          mode: "single",           // ← tambah mode
-          full_name: data.full_name,
-          email: data.email,
-          role: data.role,
-          assignments: data.assignments ?? [],
-        }),
-      }
-    );
+      const result = await callEdgeFunction(token, {
+        mode: "single",
+        full_name: data.full_name,
+        email: data.email,
+        role: data.role,
+        assignments: data.assignments ?? [],
+      }) as { user: UserType };
 
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error ?? "Gagal membuat pengguna");
+      logDebug("createUser - success", result.user);
+      return result.user;
+    } catch (error) {
+      logDebug("createUser - exception", null, error);
+      throw error;
+    }
+  },
 
-    logDebug("createUser - success", result.user);
-    return result.user as UserType;
-  } catch (error) {
-    logDebug("createUser - exception", null, error);
-    throw error;
-  }
-},
+  async deleteUser(id: string): Promise<void> {
+    logDebug("deleteUser - start", { id });
+    try {
+      const token = await getAuthToken();
 
+      await callEdgeFunction(token, {
+        mode: "delete",
+        user_id: id,
+      });
 
-async deleteUser(id: string): Promise<void> {
-  logDebug("deleteUser - start", { id });
+      logDebug("deleteUser - success", { id });
+    } catch (error) {
+      logDebug("deleteUser - exception", null, error);
+      throw error;
+    }
+  },
 
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) throw new Error("Sesi tidak valid");
+  async updateUser(id: string, data: CreateUserPayload): Promise<UserType> {
+    logDebug("updateUser - start", { id, data });
+    try {
+      const token = await getAuthToken();
 
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          mode: "delete",
-          user_id: id,
-        }),
-      }
-    );
+      const result = await callEdgeFunction(token, {
+        mode: "update",
+        user_id: id,
+        full_name: data.full_name,
+        email: data.email,
+        role: data.role,
+        assignments: data.assignments ?? [],
+      }) as { user: UserType };
 
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error ?? "Gagal menghapus pengguna");
+      logDebug("updateUser - success", result.user);
+      return result.user;
+    } catch (error) {
+      logDebug("updateUser - exception", null, error);
+      throw error;
+    }
+  },
 
-    logDebug("deleteUser - success", { id });
-  } catch (error) {
-    logDebug("deleteUser - exception", null, error);
-    throw error;
-  }
-},
+  async bulkCreateUsers(
+    users: CreateUserPayload[],
+    options: BulkUploadOptions = {},
+  ): Promise<BulkUploadResult> {
+    const { maxUsers = 200, onProgress } = options;
 
-async bulkCreateUsers(
-  users: CreateUserPayload[],
-  options: BulkUploadOptions = {}
-): Promise<BulkUploadResult> {
-  const { maxUsers = 200, onProgress } = options;
+    logDebug("bulkCreateUsers - start", { total: users.length });
 
-  logDebug("bulkCreateUsers - start", { total: users.length });
+    if (users.length > maxUsers) {
+      throw new Error(
+        `Maksimal ${maxUsers} pengguna per upload. Kamu mencoba upload ${users.length}.`,
+      );
+    }
 
-  if (users.length > maxUsers) {
-    throw new Error(
-      `Maksimal ${maxUsers} pengguna per upload. Kamu mencoba upload ${users.length}.`
-    );
-  }
+    try {
+      const token = await getAuthToken();
 
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error("Sesi tidak valid");
+      onProgress?.(0, users.length);
 
-  // Simulasi progress bar karena request ini single shot
-  onProgress?.(0, users.length);
-
-  const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({
-        mode: "bulk",             // ← mode bulk
+      const result = await callEdgeFunction(token, {
+        mode: "bulk",
         users: users.map((u) => ({
           full_name: u.full_name,
           email: u.email,
           role: u.role,
           assignments: u.assignments ?? [],
         })),
-      }),
+      }) as { succeeded: UserType[]; failed: { email: string; reason: string }[] };
+
+      onProgress?.(users.length, users.length);
+
+      logDebug("bulkCreateUsers - done", {
+        succeeded: result.succeeded.length,
+        failed: result.failed.length,
+      });
+
+      return {
+        succeeded: result.succeeded,
+        failed: result.failed.map((f) => ({
+          user: users.find((u) => u.email === f.email)!,
+          reason: f.reason,
+        })),
+      };
+    } catch (error) {
+      logDebug("bulkCreateUsers - exception", null, error);
+      throw error;
     }
-  );
-
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error ?? "Bulk upload gagal");
-
-  onProgress?.(users.length, users.length);
-
-  logDebug("bulkCreateUsers - done", {
-    succeeded: result.succeeded.length,
-    failed: result.failed.length,
-  });
-
-  return {
-    succeeded: result.succeeded as UserType[],
-    failed: result.failed.map((f: { email: string; reason: string }) => ({
-      user: users.find((u) => u.email === f.email)!,
-      reason: f.reason,
-    })),
-  };
-},
+  },
 
   async getMasterRegions(): Promise<Region[]> {
     logDebug("getMasterRegions - start", null);
@@ -309,10 +308,10 @@ async bulkCreateUsers(
 
       if (error) throw new Error(error.message);
 
-      // Return combination of iddesa and idkec (flattened)
       const ids = (data || [])
         .map((a) => a.iddesa || a.idkec)
         .filter(Boolean) as string[];
+
       return Array.from(new Set(ids));
     } catch (error) {
       logDebug("getUserAssignments - error", null, error);
@@ -327,7 +326,6 @@ async bulkCreateUsers(
   ): Promise<void> {
     logDebug("updateUserAssignments - start", { userId, assignmentIds, role });
     try {
-      // 1. Delete existing assignments
       const { error: deleteError } = await supabase
         .from("assignments")
         .delete()
@@ -337,7 +335,6 @@ async bulkCreateUsers(
 
       if (assignmentIds.length === 0) return;
 
-      // 2. Insert new assignments
       const inserts: AssignmentInsert[] = assignmentIds.map((id) => {
         if (role.toLowerCase() === "ppl") {
           return { user_id: userId, iddesa: id, idkec: id.substring(0, 7) };
@@ -351,6 +348,7 @@ async bulkCreateUsers(
         .insert(inserts);
 
       if (insertError) throw new Error(insertError.message);
+
       logDebug("updateUserAssignments - success", { userId });
     } catch (error) {
       logDebug("updateUserAssignments - error", null, error);

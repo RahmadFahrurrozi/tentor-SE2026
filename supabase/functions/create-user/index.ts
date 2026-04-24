@@ -14,83 +14,89 @@ type UserPayload = {
 };
 
 type SingleBody = { mode: "single" } & UserPayload;
+type UpdateBody = { mode: "update"; user_id: string } & UserPayload;
 type BulkBody = { mode: "bulk"; users: UserPayload[] };
 type DeleteBody = { mode: "delete"; user_id: string };
 
+function generatePassword(email: string): string {
+  const prefix = email.split("@")[0].slice(0, 4);
+  return `${prefix}SE2026`;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function createOneUser(
   supabaseAdmin: ReturnType<typeof createClient>,
-  user: UserPayload
-): Promise
+  user: UserPayload,
+  existingUserId?: string
+): Promise<
   | { success: true; user: UserPayload & { id: string; created_at: string } }
   | { success: false; email: string; reason: string }
 > {
   const { full_name, email, role, assignments } = user;
 
   try {
-    // 1. Buat di auth.users
-    const { data: newAuthUser, error: createError } =
-      await supabaseAdmin.auth.admin.createUser({
-        email,
-        password: crypto.randomUUID(),
-        email_confirm: true,
+    let userId = existingUserId;
+
+    if (!userId) {
+      // Mode create: buat user baru dengan password dari email
+      const password = generatePassword(email);
+
+      const { data: newAuthUser, error: createError } =
+        await supabaseAdmin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { full_name, role },
+        });
+
+      if (createError) {
+        const isDuplicate =
+          createError.message.includes("already been registered") ||
+          createError.message.includes("already exists");
+        return {
+          success: false,
+          email,
+          reason: isDuplicate ? "Email sudah terdaftar" : createError.message,
+        };
+      }
+
+      userId = newAuthUser.user.id;
+    } else {
+      // Mode update: perbarui metadata saja, password tidak diubah
+      await supabaseAdmin.auth.admin.updateUserById(userId, {
         user_metadata: { full_name, role },
       });
+    }
 
-    if (createError) {
-      const isDuplicate =
-        createError.message.includes("already been registered") ||
-        createError.message.includes("already exists");
+    // Upsert ke profiles
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .upsert(
+        {
+          id: userId,
+          full_name,
+          email,
+          role: role.toLowerCase(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      );
+
+    if (profileError) {
+      if (!existingUserId) await supabaseAdmin.auth.admin.deleteUser(userId);
       return {
         success: false,
         email,
-        reason: isDuplicate ? "Email sudah terdaftar" : createError.message,
+        reason: `DB Profile Error: ${profileError.message} (Code: ${profileError.code})`,
       };
     }
 
-    const userId = newAuthUser.user.id;
+    // Hapus assignments lama, insert baru
+    await supabaseAdmin.from("assignments").delete().eq("user_id", userId);
 
-    // 2. Tunggu trigger selesai insert ke profiles (kalau ada trigger)
-    await new Promise((res) => setTimeout(res, 500));
-
-    // 3. Cek apakah trigger sudah insert profiles atau belum
-    const { data: existingProfile } = await supabaseAdmin
-      .from("profiles")
-      .select("id")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (existingProfile) {
-      // Trigger sudah insert → tinggal update full_name & role
-      const { error: updateError } = await supabaseAdmin
-        .from("profiles")
-        .update({ full_name, role })
-        .eq("id", userId);
-
-      if (updateError) {
-        await supabaseAdmin.auth.admin.deleteUser(userId);
-        return {
-          success: false,
-          email,
-          reason: `Profile update error: ${updateError.message}`,
-        };
-      }
-    } else {
-      // Tidak ada trigger → insert manual
-      const { error: insertError } = await supabaseAdmin
-        .from("profiles")
-        .insert({ id: userId, full_name, email, role });
-
-      if (insertError) {
-        await supabaseAdmin.auth.admin.deleteUser(userId);
-        return {
-          success: false,
-          email,
-          reason: `Profile insert error: ${insertError.message}`,
-        };
-      }
-    }
-
-    // 4. Insert assignments kalau ada
     if (assignments && assignments.length > 0) {
       const rows = assignments.map((id) =>
         role.toLowerCase() === "ppl"
@@ -103,20 +109,13 @@ async function createOneUser(
         .insert(rows);
 
       if (assignError) {
-        await supabaseAdmin.from("profiles").delete().eq("id", userId);
-        await supabaseAdmin.auth.admin.deleteUser(userId);
         return {
           success: false,
           email,
-          reason: `Assignment error: ${assignError.message}`,
+          reason: `DB Assignment Error: ${assignError.message} (Code: ${assignError.code})`,
         };
       }
     }
-
-    // 5. Kirim reset password email (non-blocking)
-    supabaseAdmin.auth.admin
-      .generateLink({ type: "recovery", email })
-      .catch((e) => console.error("Reset link gagal:", e));
 
     return {
       success: true,
@@ -150,7 +149,6 @@ Deno.serve(async (req) => {
     });
 
   try {
-    // ── Auth check ────────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return respond({ error: "Unauthorized" }, 401);
 
@@ -176,28 +174,28 @@ Deno.serve(async (req) => {
       return respond({ error: "Forbidden: hanya admin" }, 403);
     }
 
-    const body: SingleBody | BulkBody | DeleteBody = await req.json();
+    const body: SingleBody | BulkBody | DeleteBody | UpdateBody =
+      await req.json();
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // ════════════════════════════════════════════════════════════
-    // MODE: SINGLE
-    // ════════════════════════════════════════════════════════════
-    if (body.mode === "single") {
+    // ── Single / Update ──────────────────────────────────────────────────────
+    if (body.mode === "single" || body.mode === "update") {
       const { full_name, email, role, assignments } = body;
+      const user_id = body.mode === "update" ? body.user_id : undefined;
+
       if (!full_name || !email || !role) {
         return respond({ error: "full_name, email, role wajib diisi" }, 400);
       }
 
-      const result = await createOneUser(supabaseAdmin, {
-        full_name,
-        email,
-        role,
-        assignments,
-      });
+      const result = await createOneUser(
+        supabaseAdmin,
+        { full_name, email, role, assignments },
+        user_id
+      );
 
       if (!result.success) {
         const status = result.reason.includes("sudah terdaftar") ? 409 : 500;
@@ -207,42 +205,24 @@ Deno.serve(async (req) => {
       return respond({ success: true, user: result.user });
     }
 
-    // ════════════════════════════════════════════════════════════
-    // MODE: BULK
-    // ════════════════════════════════════════════════════════════
+    // ── Bulk ─────────────────────────────────────────────────────────────────
     if (body.mode === "bulk") {
       const { users } = body;
-
       if (!Array.isArray(users) || users.length === 0) {
         return respond({ error: "users array kosong" }, 400);
       }
 
       const MAX_BULK = 200;
       if (users.length > MAX_BULK) {
-        return respond(
-          {
-            error: `Maksimal ${MAX_BULK} user per upload, kamu kirim ${users.length}`,
-          },
-          400
-        );
+        return respond({ error: `Maksimal ${MAX_BULK} user` }, 400);
       }
 
-      const invalid = users
-        .map((u, i) => (!u.full_name || !u.email || !u.role ? i + 1 : null))
-        .filter(Boolean);
+      // Free plan: concurrency rendah + delay antar batch biar aman dari rate limit
+      const CONCURRENCY = 3;
+      const DELAY_MS = 700;
 
-      if (invalid.length > 0) {
-        return respond(
-          {
-            error: `Row ${invalid.join(", ")} tidak lengkap (butuh full_name, email, role)`,
-          },
-          400
-        );
-      }
-
-      const CONCURRENCY = 5;
-      const succeeded: object[] = [];
-      const failed: { email: string; reason: string }[] = [];
+      const succeeded: any[] = [];
+      const failed: any[] = [];
 
       for (let i = 0; i < users.length; i += CONCURRENCY) {
         const chunk = users.slice(i, i + CONCURRENCY);
@@ -251,57 +231,35 @@ Deno.serve(async (req) => {
         );
 
         for (const r of results) {
-          if (r.success) {
-            succeeded.push(r.user);
-          } else {
-            failed.push({ email: r.email, reason: r.reason });
-          }
+          if (r.success) succeeded.push(r.user);
+          else failed.push({ email: r.email, reason: r.reason });
         }
 
+        // Jeda antar batch kecuali batch terakhir
         if (i + CONCURRENCY < users.length) {
-          await new Promise((res) => setTimeout(res, 300));
+          await sleep(DELAY_MS);
         }
       }
 
       return respond({ success: true, succeeded, failed });
     }
 
-    // ════════════════════════════════════════════════════════════
-    // MODE: DELETE
-    // ════════════════════════════════════════════════════════════
+    // ── Delete ───────────────────────────────────────────────────────────────
     if (body.mode === "delete") {
       const { user_id } = body;
       if (!user_id) return respond({ error: "user_id wajib diisi" }, 400);
 
-      // Hapus assignments dulu (foreign key)
-      await supabaseAdmin
-        .from("assignments")
-        .delete()
-        .eq("user_id", user_id);
-
-      // Hapus profiles
-      await supabaseAdmin
-        .from("profiles")
-        .delete()
-        .eq("id", user_id);
-
-      // Hapus dari auth.users
-      const { error: deleteAuthError } =
+      await supabaseAdmin.from("assignments").delete().eq("user_id", user_id);
+      await supabaseAdmin.from("profiles").delete().eq("id", user_id);
+      const { error: delError } =
         await supabaseAdmin.auth.admin.deleteUser(user_id);
 
-      if (deleteAuthError) {
-        return respond({ error: deleteAuthError.message }, 500);
-      }
-
+      if (delError) return respond({ error: delError.message }, 500);
       return respond({ success: true });
     }
 
-    return respond({ error: "mode harus 'single', 'bulk', atau 'delete'" }, 400);
+    return respond({ error: "mode tidak valid" }, 400);
   } catch (e) {
-    console.error("Edge function error:", e);
-    return respond(
-      { error: e instanceof Error ? e.message : "Internal server error" },
-      500
-    );
+    return respond({ error: e instanceof Error ? e.message : "Error" }, 500);
   }
 });

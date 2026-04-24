@@ -9,7 +9,9 @@ export const userSchema = z.object({
     message: "Role harus dipilih",
   }),
 
-  assignments: z.array(z.string()),
+  assignments: z
+    .array(z.string())
+    .min(1, "Wajib memilih setidaknya satu wilayah penugasan."),
 });
 
 export type UserFormValues = z.infer<typeof userSchema>;

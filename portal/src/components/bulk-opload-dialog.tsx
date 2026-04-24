@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
-  X,
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -94,7 +93,12 @@ function validateRows(
       full_name,
       email,
       role: normalizedRole as CreateUserPayload["role"],
-      assignments: assignments ? assignments.split(";").map(a => a.trim()).filter(Boolean) : [],
+      assignments: assignments
+        ? assignments
+            .split(";")
+            .map((a) => a.trim())
+            .filter(Boolean)
+        : [],
     });
   });
 
@@ -151,9 +155,24 @@ function downloadCSVTemplate() {
 
 function downloadExcelTemplate() {
   const data = [
-    { full_name: "Budi Santoso", email: "budi@bps.go.id", role: "ppl", assignments: "3510010001;3510010002" },
-    { full_name: "Siti Rahmawati", email: "siti@bps.go.id", role: "pml", assignments: "3510010" },
-    { full_name: "Admin BPS", email: "admin@bps.go.id", role: "admin", assignments: "" },
+    {
+      full_name: "Budi Santoso",
+      email: "budi@bps.go.id",
+      role: "ppl",
+      assignments: "3510010001;3510010002",
+    },
+    {
+      full_name: "Siti Rahmawati",
+      email: "siti@bps.go.id",
+      role: "pml",
+      assignments: "3510010",
+    },
+    {
+      full_name: "Admin BPS",
+      email: "admin@bps.go.id",
+      role: "admin",
+      assignments: "",
+    },
   ];
   const ws = XLSX.utils.json_to_sheet(data);
   ws["!cols"] = [{ wch: 25 }, { wch: 30 }, { wch: 10 }];
@@ -243,12 +262,6 @@ export function BulkUploadModal({
                 Import Pengguna Massal
               </DialogTitle>
             </div>
-            <button
-              onClick={handleClose}
-              className="p-1.5 hover:bg-stone-50 transition-colors rounded-md"
-            >
-              <X className="size-3.5 text-stone-400" strokeWidth={1.5} />
-            </button>
           </DialogHeader>
           <p className="text-sm text-stone-400 mt-1.5">
             Upload CSV atau Excel. Maks. {MAX_USERS} pengguna per upload.
@@ -257,20 +270,20 @@ export function BulkUploadModal({
 
         <div className="p-6 space-y-5">
           {/* Template Downloads */}
-          <div className="flex items-center gap-4 border border-stone-200 rounded-md p-3">
-            <span className="text-xs font-medium text-stone-500 uppercase tracking-wide">
+          <div className="flex items-center gap-4 border border-stone-600 dark:border-stone-400 rounded-md p-3">
+            <span className="text-xs font-medium text-stone-500 dark:text-stone-400 uppercase tracking-wide">
               Template:
             </span>
             <button
               onClick={downloadCSVTemplate}
-              className="flex items-center gap-2 text-xs text-stone-600 hover:text-primary transition-colors"
+              className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-200 hover:text-primary transition-colors"
             >
               <FileText className="size-3.5" strokeWidth={1.5} />
               CSV
             </button>
             <button
               onClick={downloadExcelTemplate}
-              className="flex items-center gap-2 text-xs text-stone-600 hover:text-primary transition-colors"
+              className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-200 hover:text-primary transition-colors"
             >
               <FileSpreadsheet className="size-3.5" strokeWidth={1.5} />
               Excel
@@ -296,7 +309,7 @@ export function BulkUploadModal({
                 relative flex flex-col items-center justify-center gap-3
                 h-36 border-2 border-dashed cursor-pointer rounded-md
                 transition-all duration-200
-                ${isDragging ? "border-primary bg-primary/5" : "border-stone-200 hover:border-stone-300 hover:bg-stone-50"}
+                ${isDragging ? "border-primary bg-primary/5" : "border-stone-200 hover:border-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 "}
               `}
             >
               <input
@@ -323,7 +336,7 @@ export function BulkUploadModal({
                 </>
               ) : (
                 <>
-                  <p className="text-sm text-stone-500">
+                  <p className="text-sm text-stone-500 dark:text-stone-400">
                     Drag & drop atau klik untuk pilih file
                   </p>
                   <p className="text-xs text-stone-400">CSV · Excel</p>
