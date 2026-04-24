@@ -23,6 +23,9 @@
 - [ ] tambahkan atribut jumlah keluarga diambil dari data titik koordinat data rumah tangga
 
 **FASE 5 — Testing & Validasi**
+- [x] Consolidate imports and remove redundant blocks in `app.py`
+- [x] Implement robust cookie retrieval with error handling
+- [x] Verify the fix by running the Streamlit app
 - [ ] Test performa load data
 - [ ] Validasi kebenaran intersek
 - [ ] Test filter wilayah

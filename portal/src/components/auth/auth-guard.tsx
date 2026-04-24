@@ -1,76 +1,113 @@
-import { useEffect, useState } from "react";
+/**
+ * auth-guard.tsx
+ *
+ * Fix race condition antara Zustand rehydration dan async getSession().
+ *
+ * Problem sebelumnya:
+ * - Store di-rehydrate dari localStorage (sync) → session ada
+ * - Tapi AuthGuard juga panggil getSession() async
+ * - Selama async belum selesai, isInitializing=true → spinner
+ * - Kalau ada timing issue, session sempat null → redirect /login
+ *
+ * Fix:
+ * - Cek store dulu (hasil rehydrate dari localStorage)
+ * - Kalau sudah ada session di store → langsung render, skip spinner
+ * - getSession() tetap dipanggil untuk validasi token masih valid
+ *   tapi dilakukan di background, bukan blocking render
+ * - onAuthStateChange tetap jaga jika token expired di tengah jalan
+ */
+
+import { useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/store/auth-store";
 import { supabase } from "@/lib/supabase";
 import { profileService } from "@/services/profile.service";
 
 export function AuthGuard({ allowedRoles }: { allowedRoles?: string[] }) {
-  const { session, profile, setAuth, isLoading, setLoading } = useAuthStore();
-  const [isInitializing, setIsInitializing] = useState(true);
+  const { session, profile, setAuth, clearAuth } = useAuthStore();
   const location = useLocation();
 
+  // isInitializing hanya true saat pertama load DAN store kosong (belum ada data)
+  // Kalau store sudah ada session (dari persist), langsung false
+  const [isInitializing, setIsInitializing] = useState(!session);
+  const initialized = useRef(false);
+
   useEffect(() => {
-    let mounted = true;
+    if (initialized.current) return;
+    initialized.current = true;
 
     async function initializeAuth() {
       try {
-        setLoading(true);
         const {
           data: { session: currentSession },
         } = await supabase.auth.getSession();
 
         if (currentSession?.user) {
-          // If we have a session but no profile yet, fetch it
+          // Session masih valid di Supabase
+          // Fetch profile kalau belum ada (misalnya pertama login atau store corrupt)
           if (!profile) {
-            const userProfile = await profileService.getById(
-              currentSession.user.id,
-            );
-
-            if (mounted) {
+            try {
+              const userProfile = await profileService.getById(
+                currentSession.user.id,
+              );
               setAuth(currentSession, userProfile);
+            } catch {
+              // Profile fetch gagal tapi session valid — set session dulu
+              setAuth(currentSession, null);
             }
+          } else {
+            // Profile sudah ada dari persist, update session kalau beda
+            setAuth(currentSession, profile);
           }
-        } else if (mounted) {
-          setAuth(null, null);
+        } else {
+          // Supabase tidak punya session valid → clear store
+          clearAuth();
         }
       } catch (error) {
         console.error("Auth initialization error:", error);
+        clearAuth();
       } finally {
-        if (mounted) {
-          setIsInitializing(false);
-          setLoading(false);
-        }
+        setIsInitializing(false);
       }
     }
 
-    if (isInitializing) {
+    // Kalau store sudah ada session, validasi di background (non-blocking)
+    if (session) {
+      // Langsung render dulu, validasi belakangan
+      setIsInitializing(false);
+      initializeAuth(); // background check
+    } else {
+      // Store kosong, perlu async check dulu sebelum render
       initializeAuth();
     }
 
-    // Subscribe to auth changes
+    // Subscribe untuk handle token expired / logout dari tab lain
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-      if (mounted && event === "SIGNED_IN" && currentSession) {
-        const { data: userProfile } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", currentSession.user.id)
-          .single();
-        setAuth(currentSession, userProfile);
-      } else if (mounted && event === "SIGNED_OUT") {
-        setAuth(null, null);
+      if (event === "SIGNED_IN" && currentSession) {
+        try {
+          const userProfile = await profileService.getById(
+            currentSession.user.id,
+          );
+          setAuth(currentSession, userProfile);
+        } catch {
+          setAuth(currentSession, null);
+        }
+      } else if (event === "SIGNED_OUT") {
+        clearAuth();
+      } else if (event === "TOKEN_REFRESHED" && currentSession) {
+        // Token di-refresh otomatis oleh Supabase — update store
+        setAuth(currentSession, profile);
       }
     });
 
     return () => {
-      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
-  // Show loading state while checking session
-  if (isInitializing || isLoading) {
+  if (isInitializing) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin size-8 border-4 border-primary border-t-transparent rounded-full" />
@@ -78,15 +115,12 @@ export function AuthGuard({ allowedRoles }: { allowedRoles?: string[] }) {
     );
   }
 
-  // Not authenticated
   if (!session) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Role check if roles are specified
-  if (allowedRoles && allowedRoles.length > 0 && profile) {
-    if (!allowedRoles.includes(profile.role ?? "")) {
-      // User doesn't have required role
+  if (allowedRoles && allowedRoles.length > 0) {
+    if (!profile || !allowedRoles.includes(profile.role ?? "")) {
       return <Navigate to="/unauthorized" replace />;
     }
   }

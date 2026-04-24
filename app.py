@@ -18,9 +18,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
 st.title("TENTORING SE2026")
-st.caption(" Sistem Monitoring Bangunan Usaha Kabupaten Banyuwangi")
+st.caption("Sistem Monitoring Bangunan Usaha Kabupaten Banyuwangi")
 st.sidebar.image("logo.svg", width=60)
 
 # ─────────────────────────────────────────────
@@ -28,76 +27,137 @@ st.sidebar.image("logo.svg", width=60)
 # ─────────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+LOGIN_URL = os.environ.get("LOGIN_URL", "http://localhost:5173/login")
+GSHEET_URL = os.environ.get("GSHEET_URL")
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    st.error("⚠️ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env")
+if not SUPABASE_URL or not SUPABASE_KEY or not GSHEET_URL:
+    st.error("SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and GSHEET_URL must be set in .env")
     st.stop()
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# 1. Cek parameter URL untuk One-Time Code (OTC) "code"
+
+def _load_user_from_supabase(user_id: str) -> bool:
+    """
+    Ambil profil + wilayah penugasan dari Supabase dan simpan ke session_state.
+    Return True jika berhasil.
+    """
+    res_prof = supabase.table("profiles").select("*").eq("id", user_id).execute()
+    if not res_prof.data:
+        return False
+
+    st.session_state["user"] = res_prof.data[0]
+
+    res_assign = supabase.table("assignments").select("*").eq("user_id", user_id).execute()
+    assignments = res_assign.data if res_assign.data else []
+
+    st.session_state["assigned_iddesa"] = [
+        str(a.get("iddesa", a.get("kd_desa", ""))).strip()
+        for a in assignments if a.get("iddesa") or a.get("kd_desa")
+    ]
+    st.session_state["assigned_idkec"] = [
+        str(a.get("idkec", a.get("kd_kec", ""))).strip()
+        for a in assignments if a.get("idkec") or a.get("kd_kec")
+    ]
+    return True
+
+
+# ── 1. Cek parameter URL: One-Time Code (OTC) ──────────────────────────────────
 query_params = st.query_params
 if "code" in query_params:
     otc_code = query_params["code"]
     try:
-        # Validasi OTC token
         res_otc = supabase.table("otc_tokens").select("user_id").eq("token", otc_code).execute()
         if res_otc.data:
             user_id = res_otc.data[0]["user_id"]
-            
-            # Ambil profile lengkap
-            res_prof = supabase.table("profiles").select("*").eq("id", user_id).execute()
-            if res_prof.data:
-                st.session_state["user"] = res_prof.data[0]
-            
-            # Ambil wilayah penugasan (Ambil semua kolom untuk mencegah error jika idkec tidak ada)
-            res_assign = supabase.table("assignments").select("*").eq("user_id", user_id).execute()
-            assignments = res_assign.data if res_assign.data else []
-            
-            # Simpan ID desa/kecamatan (support nama kolom iddesa / kd_desa, idkec / kd_kec)
-            st.session_state["assigned_iddesa"] = [
-                str(a.get("iddesa", a.get("kd_desa", ""))).strip() 
-                for a in assignments if a.get("iddesa") or a.get("kd_desa")
-            ]
-            
-            st.session_state["assigned_idkec"] = [
-                str(a.get("idkec", a.get("kd_kec", ""))).strip() 
-                for a in assignments if a.get("idkec") or a.get("kd_kec")
-            ]
-            
-            # Hapus OTC agar token aman dan expired
+
+            if _load_user_from_supabase(user_id):
+                # Simpan user_id untuk keperluan refresh otomatis
+                st.session_state["user_id"] = user_id
+                st.query_params["u"] = user_id
+            # Hapus OTC agar tidak bisa dipakai ulang
             supabase.table("otc_tokens").delete().eq("token", otc_code).execute()
-            
-            # Membersihkan URL parameter 
+
+            # Bersihkan URL
             st.query_params.clear()
             st.rerun()
-            
         else:
             st.error("Token sesi tidak valid atau sudah kadaluarsa (sekali pakai).")
             st.stop()
-            
     except Exception as e:
         st.error(f"Gagal melakukan validasi sesi: {e}")
         st.stop()
 
-# 2. Cek session state apakah sudah ter-autentikasi
+
+# ── 2. Refresh otomatis: user_id sudah tersimpan tapi profil hilang ────────────
+#    Ini yang menyelesaikan masalah session hilang saat browser refresh.
+#    OTC sudah dihapus, tapi user_id masih ada di session_state (selama tab tidak ditutup).
+if "user_id" in st.session_state and "user" not in st.session_state:
+    user_id = st.session_state["user_id"]
+    try:
+        _load_user_from_supabase(user_id)
+    except Exception as e:
+        st.warning(f"Gagal memuat ulang sesi: {e}")
+        st.session_state.clear()
+        st.rerun()
+
+
+# ── 3. Cek apakah user sudah terotentikasi ─────────────────────────────────────
+# Pindahkan pengecekan ke awal agar tidak ada UI yang muncul sebelum login valid
 if "user" not in st.session_state:
-    st.warning("⚠️ Anda belum login atau sesi telah berakhir.")
-    st.markdown("Silakan masuk melalui **[Portal Login B-Spatial](http://localhost:5173/login)** terlebih dahulu.")
+    st.markdown(f'<meta http-equiv= "refresh" content="0; url={LOGIN_URL}?back=true">', unsafe_allow_html=True)
+    # Lakukan auto-redirect ke portal login dengan parameter ?back=true
+    # Ini akan memicu portal untuk otomatis login ulang (jika sesi Supabase masih ada)
+    # dan melempar balik ke Streamlit dengan token baru secara cepat (SSO).
+    st.markdown(f"""
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh;">
+            <div class="spinner"></div>
+            <h3 style="color: #e0f0ff; font-family: sans-serif; margin-top: 20px;">Sinkronisasi Sesi...</h3>
+            <p style="color: #aaa; font-family: sans-serif;">Mohon tunggu, sedang memulihkan sesi Anda.</p>
+        </div>
+        <style>
+            .spinner {{
+                border: 4px solid rgba(255, 255, 255, 0.1);
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                border-left-color: #09f;
+                animation: spin 1s linear infinite;
+            }}
+            @keyframes spin {{
+                to {{ transform: rotate(360deg); }}
+            }}
+        </style>
+        <script>
+            window.location.href = "{LOGIN_URL}?back=true";
+        </script>
+    """, unsafe_allow_html=True)
     st.stop()
 
-# Info user aktif
+
+# ── Info user aktif ─────────────────────────────────────────────────────────────
 curr_user = st.session_state["user"]
 role = str(curr_user.get("role", "petugas")).lower()
 petugas_name = curr_user.get("full_name") or curr_user.get("email") or "Petugas"
 assigned_iddesa = st.session_state.get("assigned_iddesa", [])
-assigned_idkec = st.session_state.get("assigned_idkec", [])
+assigned_idkec  = st.session_state.get("assigned_idkec", [])
 
-st.sidebar.markdown(f"**👤 {petugas_name}**")
-st.sidebar.caption(f"Status: **{role.upper()}**")
-if role != "admin":
-    st.sidebar.caption(f"Tugas: {len(assigned_iddesa)} Desa, {len(assigned_idkec)} Kec")
+st.sidebar.markdown(f"**{petugas_name}**")
+st.sidebar.caption(f"Role: **{role.upper()}**")
+# if role != "admin":
+#     st.sidebar.caption(f"Wilayah Tugas: {len(assigned_iddesa)} Desa, {len(assigned_idkec)} Kecamatan")
+if role == "ppl":
+    st.sidebar.caption(f"Wilayah Tugas: {len(assigned_iddesa)} Desa")
+if role == "pml":
+    st.sidebar.caption(f"Wilayah Tugas: {len(assigned_idkec)} Kecamatan")
 
+if role in ("ppl", "pml"):
+    st.markdown("""
+    <style>
+        /* Sembunyikan semua toolbar action di dataframe (termasuk download) */
+        [data-testid="stElementToolbarButton"] { display: none !important; }
+    </style>
+    """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
 # LOAD DATA
@@ -121,9 +181,9 @@ def load_building():
         return gpd.GeoDataFrame()
     return gdf
 
-GSHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRI9DTFAbw8KbLPdcBbqSutIiTiDcEZLrDvdhOcQ7n53ckypw_p5Pi9WFt1-nmrMbL5WI7KUut42xQn/pub?gid=1280473743&single=true&output=csv"
 
-@st.cache_data(ttl=300)  # auto-refresh setiap 5 menit
+
+@st.cache_data(ttl=300)
 def load_usaha():
     parquet_path = "data/uji-coba-peta.parquet"
     if os.path.exists(parquet_path):
@@ -139,9 +199,8 @@ def load_usaha():
             st.warning(f"Gagal load dari Google Sheets, fallback ke Excel lokal. Error: {e}")
             df = pd.read_excel("data/uji-coba-peta.xlsx")
 
-    # Cari kolom lat/long secara fleksibel
-    lat_col  = next((c for c in df.columns if "lat"  in c.lower()), None)
-    lon_col  = next((c for c in df.columns if "long" in c.lower() or "lon" in c.lower()), None)
+    lat_col   = next((c for c in df.columns if "lat"  in c.lower()), None)
+    lon_col   = next((c for c in df.columns if "long" in c.lower() or "lon" in c.lower()), None)
     idsls_col = next((c for c in df.columns if "idsls" in c.lower()), None)
 
     if lat_col and lon_col:
@@ -152,6 +211,7 @@ def load_usaha():
     df = df.dropna(subset=["lat final", "long final"])
     df = df[df["lat final"].between(-90, 90)]
     df = df[df["long final"].between(-180, 180)]
+
     def safe_idsls(x):
         if pd.isna(x): return None
         try:
@@ -160,7 +220,7 @@ def load_usaha():
             return str(int(val))
         except (ValueError, TypeError):
             return None
-            
+
     df["idsls_str"] = df["idsls final"].apply(safe_idsls)
     return df
 
@@ -180,32 +240,27 @@ def get_building_stats():
     for col in ['Bangunan Usaha', 'Rumah Tangga', 'Belum Terdata']:
         if col not in stats.columns:
             stats[col] = 0
-            
     stats['total_bangunan'] = stats['Bangunan Usaha'] + stats['Rumah Tangga'] + stats['Belum Terdata']
-    stats['sudah_terdata'] = stats['Bangunan Usaha'] + stats['Rumah Tangga']
-    stats['belum_terdata'] = stats['Belum Terdata']
+    stats['sudah_terdata']  = stats['Bangunan Usaha'] + stats['Rumah Tangga']
+    stats['belum_terdata']  = stats['Belum Terdata']
     return stats[['total_bangunan', 'sudah_terdata', 'belum_terdata']].reset_index()
 
 @st.cache_data
 def merge_sls_dengan_count():
-    gdf_sls = load_sls()
+    gdf_sls  = load_sls()
     df_usaha = load_usaha()
-    df_rt = load_rumah_tangga()
+    df_rt    = load_rumah_tangga()
 
-    # Count Usaha per SLS
     count_usaha = (
         df_usaha.dropna(subset=["idsls_str"])
-        .groupby("idsls_str")
-        .size()
+        .groupby("idsls_str").size()
         .reset_index(name="jumlah_usaha")
     )
 
-    # Count Keluarga (Rumah Tangga) per SLS
     if not df_rt.empty:
         count_keluarga = (
             df_rt.dropna(subset=["idsls_str"])
-            .groupby("idsls_str")
-            .size()
+            .groupby("idsls_str").size()
             .reset_index(name="jumlah_keluarga")
         )
     else:
@@ -214,38 +269,39 @@ def merge_sls_dengan_count():
     id_candidates = ["idsls", "id_sls", "IDSLS", "ID_SLS", "kode_sls", "id"]
     sls_id_col = next((c for c in id_candidates if c in gdf_sls.columns), None)
     if sls_id_col is None:
-        non_geom = [c for c in gdf_sls.columns if c != "geometry"]
+        non_geom   = [c for c in gdf_sls.columns if c != "geometry"]
         sls_id_col = non_geom[0] if non_geom else None
 
     if sls_id_col:
         def norm(v):
             s = str(v).strip()
             return s[:-2] if s.endswith(".0") else s
+
         gdf_sls["idsls_str"] = gdf_sls[sls_id_col].apply(norm)
-        
-        # Merge Usaha
-        gdf_sls = gdf_sls.merge(count_usaha, on="idsls_str", how="left")
-        gdf_sls["jumlah_usaha"] = gdf_sls["jumlah_usaha"].fillna(0).astype(int)
-        
-        # Merge Keluarga
+        gdf_sls = gdf_sls.merge(count_usaha,   on="idsls_str", how="left")
+        gdf_sls["jumlah_usaha"]    = gdf_sls["jumlah_usaha"].fillna(0).astype(int)
         gdf_sls = gdf_sls.merge(count_keluarga, on="idsls_str", how="left")
         gdf_sls["jumlah_keluarga"] = gdf_sls["jumlah_keluarga"].fillna(0).astype(int)
-        
-        # Merge stats bangunan
+
         stats_df = get_building_stats()
         if not stats_df.empty:
             gdf_sls = gdf_sls.merge(stats_df, on="idsls_str", how="left")
             gdf_sls["total_bangunan"] = gdf_sls["total_bangunan"].fillna(0).astype(int)
-            gdf_sls["sudah_terdata"] = gdf_sls["sudah_terdata"].fillna(0).astype(int)
-            gdf_sls["belum_terdata"] = gdf_sls["belum_terdata"].fillna(0).astype(int)
+            gdf_sls["sudah_terdata"]  = gdf_sls["sudah_terdata"].fillna(0).astype(int)
+            gdf_sls["belum_terdata"]  = gdf_sls["belum_terdata"].fillna(0).astype(int)
         else:
-            gdf_sls["total_bangunan"] = 0; gdf_sls["sudah_terdata"] = 0; gdf_sls["belum_terdata"] = 0
+            gdf_sls["total_bangunan"] = 0
+            gdf_sls["sudah_terdata"]  = 0
+            gdf_sls["belum_terdata"]  = 0
     else:
-        gdf_sls["jumlah_usaha"] = 0
+        gdf_sls["jumlah_usaha"]    = 0
         gdf_sls["jumlah_keluarga"] = 0
-        gdf_sls["total_bangunan"] = 0; gdf_sls["sudah_terdata"] = 0; gdf_sls["belum_terdata"] = 0
+        gdf_sls["total_bangunan"]  = 0
+        gdf_sls["sudah_terdata"]   = 0
+        gdf_sls["belum_terdata"]   = 0
 
     return gdf_sls, sls_id_col
+
 
 # ─────────────────────────────────────────────
 # HELPERS
@@ -277,6 +333,7 @@ def gdf_to_polygon_rows(gdf, fixed_color):
             rows.append({"polygon": [list(c) for c in poly.exterior.coords], "color": fixed_color})
     return rows
 
+
 # ─────────────────────────────────────────────
 # LOAD DATA UTAMA
 # ─────────────────────────────────────────────
@@ -286,29 +343,32 @@ with st.spinner("Loading data..."):
 with st.spinner("Menghitung usaha per SLS..."):
     gdf_sls, sls_id_col = merge_sls_dengan_count()
 
-kec_col  = next((c for c in ["nmkec", "kec", "kecamatan"] if c in gdf_sls.columns), None)
-desa_col = next((c for c in ["nmdesa", "desa", "kelurahan"] if c in gdf_sls.columns), None)
+kec_col  = next((c for c in ["nmkec",  "kec",  "kecamatan"] if c in gdf_sls.columns), None)
+desa_col = next((c for c in ["nmdesa", "desa", "kelurahan"]  if c in gdf_sls.columns), None)
 
-# --- FILTER DATA OTOMATIS BERDASAR ROLE PPL/PML ---
+
+# ── Filter wilayah untuk PPL/PML ──────────────────────────────────────────────
 if role != "admin":
-    # Pastikan data yang diambil sesuai ID wilayah yang ditugaskan kepada petugas
     if not gdf_sls.empty:
-        # Di data GeoJSON, kita asumsikan kolomnya iddesa atau idkec
-        match_kec = pd.Series(False, index=gdf_sls.index)
+        match_kec  = pd.Series(False, index=gdf_sls.index)
         match_desa = pd.Series(False, index=gdf_sls.index)
-        
+
         if "idkec" in gdf_sls.columns and assigned_idkec:
-            # Membersihkan koma atau .0 (apabila float terkonversi string)
-            s_idkec = gdf_sls["idkec"].astype(str).str.replace(".0", "", regex=False)
+            s_idkec  = gdf_sls["idkec"].astype(str).str.replace(".0", "", regex=False)
             match_kec = s_idkec.isin(assigned_idkec)
-            
+
         if "iddesa" in gdf_sls.columns and assigned_iddesa:
-            s_iddesa = gdf_sls["iddesa"].astype(str).str.replace(".0", "", regex=False)
+            s_iddesa  = gdf_sls["iddesa"].astype(str).str.replace(".0", "", regex=False)
             match_desa = s_iddesa.isin(assigned_iddesa)
-            
-        # Potong dataset khusus untuk area penugasan ini saja, filter gabungan ATAU (|)
-        gdf_sls = gdf_sls[match_kec | match_desa]
-        
+
+        # Pisahkan logika filter berdasarkan role agar PPL tidak melihat seluruh kecamatan
+        if role == "ppl":
+            gdf_sls = gdf_sls[match_desa]
+        elif role == "pml":
+            gdf_sls = gdf_sls[match_kec]
+        else:
+            gdf_sls = gdf_sls[match_kec | match_desa]
+
     if gdf_sls.empty:
         st.warning("Anda tidak memiliki data untuk wilayah penugasan terkait.")
         st.stop()
@@ -316,21 +376,22 @@ if role != "admin":
 kec_list  = sorted(gdf_sls[kec_col].dropna().unique().tolist())  if kec_col  else []
 desa_list = sorted(gdf_sls[desa_col].dropna().unique().tolist()) if desa_col else []
 
+
 # ─────────────────────────────────────────────
 # SIDEBAR
 # ─────────────────────────────────────────────
 st.sidebar.header("Layer Control")
-show_kab      = st.sidebar.checkbox("Batas Kabupaten", value=True)
-show_sls      = st.sidebar.checkbox("SLS", value=True)
-show_usaha    = st.sidebar.checkbox("Titik Usaha", value=False)
-show_rt       = st.sidebar.checkbox("Titik Rumah Tangga", value=False)
-show_build    = st.sidebar.checkbox("Bangunan (Usaha & RT)", value=False)
-enable_3d = st.sidebar.checkbox("Mode 3D Bangunan", value=False)
-show_counting = st.sidebar.checkbox("Mode Choropleth", value=False)
+show_kab      = st.sidebar.checkbox("Batas Kabupaten",          value=True)
+show_sls      = st.sidebar.checkbox("SLS",                      value=True)
+show_usaha    = st.sidebar.checkbox("Titik Usaha",              value=False)
+show_rt       = st.sidebar.checkbox("Titik Rumah Tangga",       value=False)
+show_build    = st.sidebar.checkbox("Bangunan (Usaha & RT)",    value=False)
+enable_3d     = st.sidebar.checkbox("Mode 3D Bangunan",         value=False)
+show_counting = st.sidebar.checkbox("Mode Choropleth",          value=False)
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Filter Wilayah")
-filter_kec  = st.sidebar.selectbox("Kecamatan", ["Semua"] + kec_list)  if kec_list  else "Semua"
+filter_kec = st.sidebar.selectbox("Kecamatan", ["Semua"] + kec_list) if kec_list else "Semua"
 if desa_list and desa_col and kec_col and filter_kec != "Semua":
     desa_options = sorted(gdf_sls[gdf_sls[kec_col] == filter_kec][desa_col].dropna().unique().tolist())
 else:
@@ -338,31 +399,43 @@ else:
 filter_desa = st.sidebar.selectbox("Desa/Kelurahan", ["Semua"] + desa_options) if desa_options else "Semua"
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Filter Titik Usaha")
-GC_LABEL = {0:"0 — Tidak diketahui", 1:"1 — Akurasi tinggi", 3:"3 — Akurasi sedang", 4:"4 — Sangat tinggi", 99:"99 — Khusus"}
-filter_gc   = st.sidebar.selectbox("Kualitas Koordinat (gc)", ["Semua"] + [GC_LABEL[g] for g in sorted(GC_LABEL)])
 filter_nama = st.sidebar.text_input("Cari nama usaha", placeholder="contoh: BAKSO")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Opacity")
-sls_opacity   = st.sidebar.slider("SLS opacity", 0.0, 1.0, 0.3, 0.05)
+sls_opacity   = st.sidebar.slider("SLS opacity",      0.0, 1.0, 0.3, 0.05)
 build_opacity = st.sidebar.slider("Bangunan opacity", 0.0, 1.0, 0.6, 0.05)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Data")
 if st.sidebar.button("Refresh Data Sekarang"):
     st.cache_data.clear()
     st.rerun()
-# st.sidebar.caption("Auto-refresh tiap 5 menit")
+
+# ── Kontrol Admin & Logout ────────────────────────────────────────────────────
+if role == "admin":
+    st.sidebar.link_button("User Management (Portal)", "http://localhost:5173/users", use_container_width=True)
+
+if st.sidebar.button("Keluar (Log Out)", use_container_width=True):
+    # Hapus semua session state Streamlit
+    st.session_state.clear()
+    # Redirect ke login page dengan flag ?logout=true
+    # sehingga login page tahu harus benar-benar logout dari Supabase juga
+    st.markdown(
+        f'<meta http-equiv="refresh" content="0; url={LOGIN_URL}?logout=true">',
+        unsafe_allow_html=True,
+    )
+    st.stop()
+
 
 # ─────────────────────────────────────────────
 # FILTER SLS
 # ─────────────────────────────────────────────
 gdf_sls_display = gdf_sls.copy()
 if filter_kec  != "Semua" and kec_col:
-    gdf_sls_display = gdf_sls_display[gdf_sls_display[kec_col] == filter_kec]
+    gdf_sls_display = gdf_sls_display[gdf_sls_display[kec_col]  == filter_kec]
 if filter_desa != "Semua" and desa_col:
     gdf_sls_display = gdf_sls_display[gdf_sls_display[desa_col] == filter_desa]
+
 
 # ─────────────────────────────────────────────
 # BUILD LAYERS
@@ -372,9 +445,11 @@ layers = []
 # Layer Kabupaten
 if show_kab:
     kab_rows = gdf_to_polygon_rows(gdf_kab, [0, 100, 255, 15])
-    layers.append(pdk.Layer("PolygonLayer", data=kab_rows,
+    layers.append(pdk.Layer(
+        "PolygonLayer", data=kab_rows,
         get_polygon="polygon", get_fill_color="color",
-        get_line_color=[0, 150, 255, 220], get_line_width=80, pickable=False))
+        get_line_color=[0, 150, 255, 220], get_line_width=80, pickable=False,
+    ))
 
 # Layer SLS
 if show_sls:
@@ -382,19 +457,19 @@ if show_sls:
     for _, row in gdf_sls_display.iterrows():
         geom = row.geometry
         if geom is None: continue
-        jumlah_usaha = int(row.get("jumlah_usaha", 0))
+        jumlah_usaha    = int(row.get("jumlah_usaha",    0))
         jumlah_keluarga = int(row.get("jumlah_keluarga", 0))
-        color  = jumlah_to_color(jumlah_usaha) if show_counting else [160, 32, 240, int(sls_opacity * 255)]
-        props  = {
+        color = jumlah_to_color(jumlah_usaha) if show_counting else [160, 32, 240, int(sls_opacity * 255)]
+        props = {
             "color": color,
-            "jumlah_usaha": str(jumlah_usaha),
+            "jumlah_usaha":    str(jumlah_usaha),
             "jumlah_keluarga": str(jumlah_keluarga),
-            "total_bangunan": str(int(row.get("total_bangunan", 0))),
-            "sudah_terdata": str(int(row.get("sudah_terdata", 0))),
-            "belum_terdata": str(int(row.get("belum_terdata", 0))),
-            "nama_sls": str(row.get("idsls_str", "-")),
-            "kecamatan": str(row.get(kec_col,  "-")) if kec_col  else "-",
-            "desa":      str(row.get(desa_col, "-")) if desa_col else "-",
+            "total_bangunan":  str(int(row.get("total_bangunan", 0))),
+            "sudah_terdata":   str(int(row.get("sudah_terdata",  0))),
+            "belum_terdata":   str(int(row.get("belum_terdata",  0))),
+            "nama_sls":   str(row.get("idsls_str", "-")),
+            "kecamatan":  str(row.get(kec_col,  "-")) if kec_col  else "-",
+            "desa":       str(row.get(desa_col, "-")) if desa_col else "-",
             "nama": "Info SLS", "alamat": "Satuan Lingkungan Setempat", "gc_label": "", "divider": "",
         }
         polys = [geom] if geom.geom_type == "Polygon" else list(geom.geoms)
@@ -403,220 +478,179 @@ if show_sls:
             r["polygon"] = [list(c) for c in poly.exterior.coords]
             sls_rows.append(r)
 
-    layers.append(pdk.Layer("PolygonLayer", data=sls_rows,
+    layers.append(pdk.Layer(
+        "PolygonLayer", data=sls_rows,
         get_polygon="polygon", get_fill_color="color",
-        get_line_color=[200, 200, 255, 60], 
-        get_line_width=2, line_width_min_pixels=1, 
-        pickable=True, auto_highlight=True))
+        get_line_color=[200, 200, 255, 60],
+        get_line_width=2, line_width_min_pixels=1,
+        pickable=True, auto_highlight=True,
+    ))
 
 # Layer Bangunan
 if show_build:
-    if filter_kec == "Semua" and filter_desa == "Semua":
+    if role == "admin" and filter_kec == "Semua" and filter_desa == "Semua":
         st.warning("Pilih spesifik Kecamatan/Desa di sidebar untuk memunculkan Polygon Bangunan di Peta (demi kestabilan memory browser).")
     else:
         with st.spinner("Merender bangunan untuk wilayah ini..."):
             gdf_build = load_building()
             if not gdf_build.empty:
                 valid_idsls_b = set(gdf_sls_display["idsls_str"].dropna().unique())
-                gdf_build_f = gdf_build[gdf_build["idsls_str"].isin(valid_idsls_b)].copy()
-                
+                gdf_build_f   = gdf_build[gdf_build["idsls_str"].isin(valid_idsls_b)].copy()
+
                 import ast
                 def parse_color(c):
                     if isinstance(c, str):
-                        try:
-                            lst = ast.literal_eval(c)
-                            return lst
-                        except:
-                            return [128, 128, 128, 100]
+                        try:    return ast.literal_eval(c)
+                        except: return [128, 128, 128, 100]
                     return c
-                    
+
                 build_rows = []
                 for _, row in gdf_build_f.iterrows():
                     geom = row.geometry
                     if geom is None: continue
                     color = parse_color(row.color)
                     color[3] = int(build_opacity * 255)
-                    
                     props = {
-                        "fill_color": color,
-                        "nama_sls": str(row.get("idsls_str", "-")),
-                        "status": str(row.get("status_bangunan", "-")),
-                        "jml_usaha": str(row.get("jml_usaha", "0")),
-                        "kecamatan": str(row.get("kecamatan", "-")),
-                        "desa": str(row.get("desa", "-")),
-                        "nama": "Bangunan Fisik",
-                        "alamat": "Lihat info SLS di bawah",
-                        "gc_label": "Status: " + str(row.get("status_bangunan", "-")),
-                        "divider": "<hr style='margin:6px 0;border-color:#333'/>",
-                        "jumlah_usaha": str(row.get("jml_usaha", "0")),
+                        "fill_color":      color,
+                        "nama_sls":        str(row.get("idsls_str",       "-")),
+                        "status":          str(row.get("status_bangunan", "-")),
+                        "jml_usaha":       str(row.get("jml_usaha",       "0")),
+                        "kecamatan":       str(row.get("kecamatan",       "-")),
+                        "desa":            str(row.get("desa",            "-")),
+                        "nama":            "Bangunan Fisik",
+                        "alamat":          "Lihat info SLS di bawah",
+                        "gc_label":        "Status: " + str(row.get("status_bangunan", "-")),
+                        "divider":         "<hr style='margin:6px 0;border-color:#333'/>",
+                        "jumlah_usaha":    str(row.get("jml_usaha", "0")),
                         "jumlah_keluarga": "-",
-                        "total_bangunan": "-",
-                        "sudah_terdata": "-",
-                        "belum_terdata": "-",
+                        "total_bangunan":  "-",
+                        "sudah_terdata":   "-",
+                        "belum_terdata":   "-",
                     }
-                    
                     polys = [geom] if geom.geom_type == "Polygon" else list(geom.geoms)
                     for poly in polys:
                         r = props.copy()
                         r["polygon"] = [list(c) for c in poly.exterior.coords]
                         build_rows.append(r)
-                
-                if len(build_rows) > 0:
-                    layers.append(
-                        pdk.Layer(
-                            "PolygonLayer",
-                            data=build_rows,
-                            get_polygon="polygon",
-                            get_fill_color="fill_color",
 
-                            # 3D settings
-                            extruded=enable_3d,
-                            wireframe=True,
-                            get_elevation=50, #volume bangunan
-                            elevation_scale=1,
+                if build_rows:
+                    layers.append(pdk.Layer(
+                        "PolygonLayer", data=build_rows,
+                        get_polygon="polygon", get_fill_color="fill_color",
+                        extruded=enable_3d, wireframe=True,
+                        get_elevation=50, elevation_scale=1,
+                        get_line_color=[200, 200, 200, 80],
+                        pickable=True, auto_highlight=True,
+                    ))
 
-                            # style
-                            get_line_color=[200, 200, 200, 80],
-
-                            # interaction
-                            pickable=True,
-                            auto_highlight=True,
-                        )
-                    )
-
-# Layer Titik Usaha (Dipindah ke bawah agar muncul di atas bangunan)
+# Layer Titik Usaha
 df_usaha_filtered = None
 if show_usaha:
     with st.spinner("Loading titik usaha..."):
         df_usaha = load_usaha()
 
     df_f = df_usaha.copy()
-    if filter_kec != "Semua" or filter_desa != "Semua":
-        valid_idsls = set(gdf_sls_display["idsls_str"].dropna().unique())
-        df_f = df_f[df_f["idsls_str"].isin(valid_idsls)]
-    if filter_gc != "Semua":
-        gc_val = int(filter_gc.split("—")[0].strip())
-        df_f = df_f[df_f["gc final"] == gc_val]
+    # PPL/PML sudah terfilter gdf_sls_display-nya sejak awal, jadi selalu filter titik ini ke gdf_sls_display
+    valid_idsls = set(gdf_sls_display["idsls_str"].dropna().unique())
+    df_f = df_f[df_f["idsls_str"].isin(valid_idsls)]
+    
     if filter_nama.strip():
         df_f = df_f[df_f["nama final"].str.contains(filter_nama.strip(), case=False, na=False)]
 
-    df_sample = df_f.copy()
-    st.sidebar.success(f"{len(df_sample):,} titik ditampilkan")
+    df_sample         = df_f.copy()
     df_usaha_filtered = df_sample
+    st.sidebar.success(f"{len(df_sample):,} titik ditampilkan")
 
     sls_lookup_cols = ["idsls_str", "jumlah_usaha"]
     if kec_col:  sls_lookup_cols.append(kec_col)
     if desa_col: sls_lookup_cols.append(desa_col)
     sls_lookup = gdf_sls[sls_lookup_cols].drop_duplicates("idsls_str")
+    df_sample  = df_sample.merge(sls_lookup, on="idsls_str", how="left")
 
-    df_sample = df_sample.merge(sls_lookup, on="idsls_str", how="left")
-    
-    if kec_col: df_sample["kecamatan"] = df_sample[kec_col].fillna("-").astype(str)
-    else: df_sample["kecamatan"] = "-"
-    if desa_col: df_sample["desa"] = df_sample[desa_col].fillna("-").astype(str)
-    else: df_sample["desa"] = "-"
-        
-    df_sample["jumlah_usaha"] = "1"
+    df_sample["kecamatan"]       = df_sample[kec_col].fillna("-").astype(str)  if kec_col  else "-"
+    df_sample["desa"]            = df_sample[desa_col].fillna("-").astype(str) if desa_col else "-"
+    df_sample["jumlah_usaha"]    = "1"
     df_sample["jumlah_keluarga"] = "0"
-    df_sample["nama_sls"] = df_sample["idsls_str"].fillna("-").astype(str)
-    df_sample["nama"] = df_sample["nama final"].fillna("-").astype(str)
-    df_sample["alamat"] = df_sample["alamat final"].fillna("-").astype(str)
-    df_sample["lat"] = df_sample["lat final"]
-    df_sample["lon"] = df_sample["long final"]
-    
-    df_sample["gc"] = df_sample["gc final"].fillna(0).astype(int)
-    df_sample["gc_label"] = "gc: " + df_sample["gc"].astype(str)
-    df_sample["divider"] = "<hr style='margin:6px 0;border-color:#333'/>"
-    df_sample["total_bangunan"] = "-"
-    df_sample["sudah_terdata"] = "-"
-    df_sample["belum_terdata"] = "-"
-    df_sample["color"] = df_sample["gc final"].apply(gc_to_color)
+    df_sample["nama_sls"]        = df_sample["idsls_str"].fillna("-").astype(str)
+    df_sample["nama"]            = df_sample["nama final"].fillna("-").astype(str)
+    df_sample["alamat"]          = df_sample["alamat final"].fillna("-").astype(str)
+    df_sample["lat"]             = df_sample["lat final"]
+    df_sample["lon"]             = df_sample["long final"]
+    df_sample["gc"]              = df_sample["gc final"].fillna(0).astype(int)
+    df_sample["gc_label"]        = "gc: " + df_sample["gc"].astype(str)
+    df_sample["divider"]         = "<hr style='margin:6px 0;border-color:#333'/>"
+    df_sample["total_bangunan"]  = "-"
+    df_sample["sudah_terdata"]   = "-"
+    df_sample["belum_terdata"]   = "-"
+    df_sample["color"] = [[255, 220, 50, 220]] * len(df_sample)
 
     kolom_pydeck = [
-        "lon", "lat", "color", "nama", "alamat", "gc_label", 
+        "lon", "lat", "color", "nama", "alamat", "gc_label",
         "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha", "jumlah_keluarga",
-        "total_bangunan", "sudah_terdata", "belum_terdata"
+        "total_bangunan", "sudah_terdata", "belum_terdata",
     ]
-    
     layers.append(pdk.Layer(
-        "ScatterplotLayer", 
-        data=df_sample[kolom_pydeck],
-        get_position=["lon", "lat"], 
-        get_color="color",
-        get_radius=15, 
-        radius_scale=1,       
-        radius_min_pixels=1,
-        radius_max_pixels=6,
-        pickable=True,
-        auto_highlight=True
+        "ScatterplotLayer", data=df_sample[kolom_pydeck],
+        get_position=["lon", "lat"], get_color="color",
+        get_radius=15, radius_scale=1,
+        radius_min_pixels=1, radius_max_pixels=6,
+        pickable=True, auto_highlight=True,
     ))
 
-
-# Layer Titik Rumah Tangga (Dipindah ke bawah bangunan agar di layer atas)
+# Layer Titik Rumah Tangga
 if show_rt:
-    if filter_kec == "Semua" and filter_desa == "Semua":
+    if role == "admin" and filter_kec == "Semua" and filter_desa == "Semua":
         st.warning("Pilih spesifik Kecamatan/Desa di sidebar untuk memunculkan Titik Rumah Tangga (demi kestabilan memory browser).")
     else:
         with st.spinner("Loading titik rumah tangga..."):
             df_rt = load_rumah_tangga()
-            
+
         df_rt_f = df_rt.copy()
-        if filter_kec != "Semua" or filter_desa != "Semua":
-            valid_idsls = set(gdf_sls_display["idsls_str"].dropna().unique())
-            df_rt_f = df_rt_f[df_rt_f["idsls_str"].isin(valid_idsls)]
-            
+        valid_idsls = set(gdf_sls_display["idsls_str"].dropna().unique())
+        df_rt_f = df_rt_f[df_rt_f["idsls_str"].isin(valid_idsls)]
+
         st.sidebar.success(f"{len(df_rt_f):,} titik RT ditampilkan")
         df_rt_sample = df_rt_f.copy()
-        
+
         sls_lookup_cols = ["idsls_str", "jumlah_usaha"]
-        if kec_col: sls_lookup_cols.append(kec_col)
+        if kec_col:  sls_lookup_cols.append(kec_col)
         if desa_col: sls_lookup_cols.append(desa_col)
         sls_lookup_rt = gdf_sls[sls_lookup_cols].drop_duplicates("idsls_str")
-        
-        df_rt_sample = df_rt_sample.merge(sls_lookup_rt, on="idsls_str", how="left")
-        
-        if kec_col: df_rt_sample["kecamatan"] = df_rt_sample[kec_col].fillna("-").astype(str)
-        else: df_rt_sample["kecamatan"] = "-"
-        if desa_col: df_rt_sample["desa"] = df_rt_sample[desa_col].fillna("-").astype(str)
-        else: df_rt_sample["desa"] = "-"
-        
-        df_rt_sample["jumlah_usaha"] = "0"
+        df_rt_sample  = df_rt_sample.merge(sls_lookup_rt, on="idsls_str", how="left")
+
+        df_rt_sample["kecamatan"]       = df_rt_sample[kec_col].fillna("-").astype(str)  if kec_col  else "-"
+        df_rt_sample["desa"]            = df_rt_sample[desa_col].fillna("-").astype(str) if desa_col else "-"
+        df_rt_sample["jumlah_usaha"]    = "0"
         df_rt_sample["jumlah_keluarga"] = "1"
-        df_rt_sample["nama_sls"] = df_rt_sample["idsls_str"].fillna("-").astype(str)
-        
-        # Tooltip properties
-        df_rt_sample["nama"] = "Rumah Tangga"
+        df_rt_sample["nama_sls"]        = df_rt_sample["idsls_str"].fillna("-").astype(str)
+        df_rt_sample["nama"]            = "Rumah Tangga"
         if "nama_kk" in df_rt_sample.columns:
-            df_rt_sample.loc[df_rt_sample["nama_kk"].notna(), "nama"] = "Rumah Tangga (" + df_rt_sample["nama_kk"].astype(str) + ")"
-            
-        df_rt_sample["alamat"] = "Titik Rumah Tangga"
-        df_rt_sample["gc_label"] = ""
-        df_rt_sample["divider"] = "<hr style='margin:6px 0;border-color:#333'/>"
-        df_rt_sample["lat"] = pd.to_numeric(df_rt_sample["lat final"], errors="coerce").fillna(0)
-        df_rt_sample["lon"] = pd.to_numeric(df_rt_sample["long final"], errors="coerce").fillna(0)
-        df_rt_sample["color"] = pd.Series([[0, 114, 188, 200]] * len(df_rt_sample), index=df_rt_sample.index)
+            df_rt_sample.loc[df_rt_sample["nama_kk"].notna(), "nama"] = (
+                "Rumah Tangga (" + df_rt_sample["nama_kk"].astype(str) + ")"
+            )
+        df_rt_sample["alamat"]         = "Titik Rumah Tangga"
+        df_rt_sample["gc_label"]       = ""
+        df_rt_sample["divider"]        = "<hr style='margin:6px 0;border-color:#333'/>"
+        df_rt_sample["lat"]            = pd.to_numeric(df_rt_sample["lat final"],  errors="coerce").fillna(0)
+        df_rt_sample["lon"]            = pd.to_numeric(df_rt_sample["long final"], errors="coerce").fillna(0)
+        df_rt_sample["color"]          = pd.Series([[0, 114, 188, 200]] * len(df_rt_sample), index=df_rt_sample.index)
         df_rt_sample["total_bangunan"] = "-"
-        df_rt_sample["sudah_terdata"] = "-"
-        df_rt_sample["belum_terdata"] = "-"
-        
+        df_rt_sample["sudah_terdata"]  = "-"
+        df_rt_sample["belum_terdata"]  = "-"
+
         rt_kolom_pydeck = [
-            "lon", "lat", "color", "nama", "alamat", "gc_label", 
+            "lon", "lat", "color", "nama", "alamat", "gc_label",
             "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha", "jumlah_keluarga",
-            "total_bangunan", "sudah_terdata", "belum_terdata"
+            "total_bangunan", "sudah_terdata", "belum_terdata",
         ]
-        
         layers.append(pdk.Layer(
-            "ScatterplotLayer", 
-            data=df_rt_sample[rt_kolom_pydeck],
-            get_position=["lon", "lat"], 
-            get_color="color",
-            get_radius=10,          
-            radius_scale=1,       
-            radius_min_pixels=1,    
-            radius_max_pixels=4,    
-            pickable=True,
-            auto_highlight=True
+            "ScatterplotLayer", data=df_rt_sample[rt_kolom_pydeck],
+            get_position=["lon", "lat"], get_color="color",
+            get_radius=10, radius_scale=1,
+            radius_min_pixels=1, radius_max_pixels=4,
+            pickable=True, auto_highlight=True,
         ))
+
 
 # ─────────────────────────────────────────────
 # RENDER MAP
@@ -630,20 +664,11 @@ elif filter_desa != "Semua" and not gdf_sls_display.empty:
 else:
     center_lat, center_lon, zoom = -8.2192, 114.3691, 9
 
-view_state = pdk.ViewState(
-    latitude=center_lat,
-    longitude=center_lon,
-    zoom=zoom,
-    pitch=45,  
-    bearing=0
-)
+view_state = pdk.ViewState(latitude=center_lat, longitude=center_lon, zoom=zoom, pitch=45, bearing=0)
 
-# Tooltip berbeda untuk SLS vs Titik Usaha
-# Pydeck pakai satu tooltip tapi field kosong otomatis disembunyikan
 tooltip = {
     "html": """
         <div style="display:flex; align-items:flex-start; gap:24px;">
-          <!-- SISI KIRI: INFO TEKS -->
           <div style="flex:1; min-width:140px;">
             <b style='font-size:15px;color:#ffe082'>{nama}</b>
             <div style='color:#ccc; font-size:12px; margin-bottom:4px'>{alamat}</div>
@@ -655,8 +680,6 @@ tooltip = {
               <span style='color:#aaa;font-size:11px; margin-top:4px; display:inline-block'>Desa</span><br/><b>{desa}</b>
             </div>
           </div>
-
-          <!-- SISI KANAN: DATA ANGKA -->
           <div style="flex:1; border-left:1px solid #444; padding-left:20px; min-width:120px;">
             <table style='width:100%; font-size:12px; border-collapse:collapse; color:#eee;'>
                <tr style='border-bottom:1px solid #333'>
@@ -687,17 +710,12 @@ tooltip = {
         "backgroundColor": "#1a1a2e", "color": "#e0f0ff",
         "padding": "12px 14px", "borderRadius": "8px",
         "border": "1px solid #4444aa", "maxWidth": "320px",
-    }
+    },
 }
 
 deck = pdk.Deck(layers=layers, initial_view_state=view_state, map_style="dark", tooltip=tooltip)
 st.pydeck_chart(deck, width="stretch", height=680)
 
-# Legenda
-# if show_sls and show_counting:
-#     st.markdown("**Legenda SLS:**  `0` &nbsp;|&nbsp;  `1–9` &nbsp;|&nbsp;  `10–49` &nbsp;|&nbsp;  `50–99` &nbsp;|&nbsp;  `100+`")
-# if show_build:
-#     st.markdown("**Legenda Bangunan:** 🟠 Bangunan Usaha &nbsp;|&nbsp; 🔵 Bangunan Rumah Tangga")
 
 # ─────────────────────────────────────────────
 # STATISTIK
@@ -706,34 +724,30 @@ st.write("---")
 df_usaha_stat = load_usaha()
 
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Total SLS ditampilkan", f"{len(gdf_sls_display):,}")
-c2.metric("Total Unit Usaha", f"{len(df_usaha_stat):,}")
-c3.metric("SLS dengan usaha", f"{(gdf_sls_display['jumlah_usaha'] > 0).sum():,}")
-c4.metric("Rata-rata usaha/SLS", f"{gdf_sls_display['jumlah_usaha'].mean():.1f}")
+c1.metric("Total SLS ditampilkan",  f"{len(gdf_sls_display):,}")
+c2.metric("Total Unit Usaha",       f"{len(df_usaha_stat):,}")
+c3.metric("SLS dengan usaha",       f"{(gdf_sls_display['jumlah_usaha'] > 0).sum():,}")
+c4.metric("Rata-rata usaha/SLS",    f"{gdf_sls_display['jumlah_usaha'].mean():.1f}")
 
 st.write("---")
 st.subheader("Statistik Bangunan Per Wilayah Terpilih")
 
 gdf_build = load_building()
 if not gdf_build.empty:
-    valid_idsls_b = set(gdf_sls_display["idsls_str"].dropna().unique())
+    valid_idsls_b  = set(gdf_sls_display["idsls_str"].dropna().unique())
     gdf_build_stats = gdf_build[gdf_build["idsls_str"].isin(valid_idsls_b)]
-    
-    # Hitung metrik bangunan sesuai dengan rule yang diminta
-    # Total Bangunan = Semua OSM
-    # Sudah Didatangi = Bangunan Usaha / Rumah Tangga
-    # Belum Didatangi = Kosong
-    aktif_bangunan = gdf_build_stats
-    total_bangunan = len(aktif_bangunan)
-    sudah_terdata = len(aktif_bangunan[aktif_bangunan["status_bangunan"] != "Belum Terdata"])
-    belum_terdata = len(aktif_bangunan[aktif_bangunan["status_bangunan"] == "Belum Terdata"])
-    
+
+    total_bangunan = len(gdf_build_stats)
+    sudah_terdata  = len(gdf_build_stats[gdf_build_stats["status_bangunan"] != "Belum Terdata"])
+    belum_terdata  = len(gdf_build_stats[gdf_build_stats["status_bangunan"] == "Belum Terdata"])
+
     cb1, cb2, cb3 = st.columns(3)
-    cb1.metric("Total Bangunan (OSM)", f"{total_bangunan:,}")
-    cb2.metric("Sudah Didatangi (Ada RT/Usaha)", f"{sudah_terdata:,}")
-    cb3.metric("Belum Didatangi (Kosong Total)", f"{belum_terdata:,}")
+    cb1.metric("Total Bangunan (OSM)",             f"{total_bangunan:,}")
+    cb2.metric("Sudah Didatangi (Ada RT/Usaha)",   f"{sudah_terdata:,}")
+    cb3.metric("Belum Didatangi (Kosong Total)",   f"{belum_terdata:,}")
 else:
     st.info("Data bangunan belum tersedia untuk dihitung.")
+
 
 # ─────────────────────────────────────────────
 # TABEL DETAIL USAHA PER SLS
@@ -758,12 +772,9 @@ with col_left:
 
 with col_right:
     st.markdown("**Daftar usaha di SLS tertentu**")
-    sls_options = (
-        gdf_sls_display.sort_values("jumlah_usaha", ascending=False)["idsls_str"]
-        .dropna().unique().tolist()
-    )
+    sls_options  = gdf_sls_display.sort_values("jumlah_usaha", ascending=False)["idsls_str"].dropna().unique().tolist()
     selected_sls = st.selectbox("Pilih SLS (ID)", ["— pilih SLS —"] + sls_options,
-        format_func=lambda x: x if x == "— pilih SLS —" else f"SLS {x}")
+                                format_func=lambda x: x if x == "— pilih SLS —" else f"SLS {x}")
 
     if selected_sls != "— pilih SLS —":
         df_detail = df_usaha_stat[df_usaha_stat["idsls_str"] == selected_sls].copy()
@@ -776,6 +787,7 @@ with col_right:
         else:
             st.info("Tidak ada data usaha untuk SLS ini.")
 
+
 # ─────────────────────────────────────────────
 # DISTRIBUSI
 # ─────────────────────────────────────────────
@@ -785,7 +797,6 @@ col_chart1, col_chart2 = st.columns(2)
 with col_chart1:
     st.subheader("Total Usaha per Kecamatan")
     if kec_col in gdf_sls_display.columns:
-        # Grouping data usaha per kecamatan
         kec_stats = gdf_sls_display.groupby(kec_col)["jumlah_usaha"].sum().sort_values(ascending=False).head(15)
         st.bar_chart(kec_stats, color="#7ef7a0")
     else:
@@ -794,9 +805,7 @@ with col_chart1:
 with col_chart2:
     st.subheader("Status Pendataan Bangunan")
     if not gdf_build.empty:
-        # Menghitung total kategori bangunan untuk wilayah yang dipilih
         status_counts = gdf_build_stats["status_bangunan"].value_counts()
-        # Filter hanya yang relevan untuk pendataan
         if "Belum Terdata" in status_counts:
             st.bar_chart(status_counts, color="#f77e7e")
         else:

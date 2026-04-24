@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase";
-import { AuthError } from "@supabase/supabase-js";
 
 export const authService = {
   login: async (email: string, password: string) => {
@@ -22,14 +21,17 @@ export const authService = {
     return data;
   },
 
-  generateOtc: async (userId: string) => {
+  generateOtc: async (userId: string): Promise<string> => {
+    // hapus token lama dulu
+    await supabase.from("otc_tokens").delete().eq("user_id", userId);
+
     const { data, error } = await supabase
-      .from('otc_tokens')
+      .from("otc_tokens")
       .insert({ user_id: userId })
-      .select()
+      .select("token") // ← select hanya kolom token
       .single();
-    
+
     if (error) throw new Error(`Failed to generate OTC: ${error.message}`);
-    return data;
-  }
+    return data.token as string; // ← return string UUID, bukan object
+  },
 };
