@@ -390,7 +390,7 @@ export function BulkUploadModal({
               {isOverCap && (
                 <div className="flex gap-2 border border-amber-200 rounded-md p-3 bg-amber-50">
                   <AlertTriangle
-                    className="size-4 text-amber-600 flex-shrink-0 mt-0.5"
+                    className="size-4 text-amber-600 shrink-0 mt-0.5"
                     strokeWidth={1.5}
                   />
                   <p className="text-xs text-stone-600">
@@ -436,12 +436,12 @@ export function BulkUploadModal({
               <div className="flex gap-3">
                 {uploadResult.failed.length === 0 ? (
                   <CheckCircle2
-                    className="size-5 text-emerald-600 flex-shrink-0"
+                    className="size-5 text-emerald-600 shrink-0"
                     strokeWidth={1.5}
                   />
                 ) : (
                   <AlertTriangle
-                    className="size-5 text-amber-600 flex-shrink-0"
+                    className="size-5 text-amber-600 shrink-0"
                     strokeWidth={1.5}
                   />
                 )}
