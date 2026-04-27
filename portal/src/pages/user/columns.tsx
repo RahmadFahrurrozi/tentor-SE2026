@@ -160,7 +160,7 @@ export const columns = ({
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => onEdit(user)}
-              className="text-slate-900 focus:text-slate-900"
+              className="text-foreground"
             >
               <Pencil className="mr-2 h-4 w-4" />
               Ubah
