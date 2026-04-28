@@ -3,6 +3,8 @@ import geopandas as gpd
 import pydeck as pdk
 import pandas as pd
 import os
+import requests
+import io
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
@@ -163,41 +165,75 @@ if role in ("ppl", "pml"):
 # LOAD DATA
 # ─────────────────────────────────────────────
 
-@st.cache_data
+def get_public_url(filename):
+    """Menghasilkan public URL dari Supabase Storage bucket 'spatial-data'"""
+    base = SUPABASE_URL.rstrip("/")
+    return f"{base}/storage/v1/object/public/spatial-data/{filename}"
+
+@st.cache_data(ttl=3600)
 def load_kab():
-    return gpd.read_file("data/peta-kabupaten-banyuwangi.geojson").to_crs(epsg=4326)
-
-@st.cache_data
-def load_sls():
-    return gpd.read_file("data/sls-after-ea-sls-2024.json").to_crs(epsg=4326)
-
-@st.cache_data
-def load_building():
-    parquet_path = "data/bangunan-terklasifikasi.parquet"
-    if os.path.exists(parquet_path):
-        gdf = gpd.read_parquet(parquet_path)
-    else:
-        st.warning("Data pre-processed bangunan belum ada! Jalankan preprocess_bangunan.py terlebih dahulu.")
+    url = get_public_url("peta-kabupaten-banyuwangi.geojson")
+    try:
+        r = requests.get(url)
+        r.raise_for_status()
+        return gpd.read_file(io.BytesIO(r.content)).to_crs(epsg=4326)
+    except Exception as e:
+        st.error(f"Gagal memuat peta kabupaten dari Supabase: {e}")
         return gpd.GeoDataFrame()
-    return gdf
 
+@st.cache_data(ttl=3600)
+def load_sls():
+    url = get_public_url("sls-after-ea-sls-2024.json")
+    try:
+        r = requests.get(url)
+        r.raise_for_status()
+        return gpd.read_file(io.BytesIO(r.content)).to_crs(epsg=4326)
+    except Exception as e:
+        st.error(f"Gagal memuat SLS dari Supabase: {e}")
+        return gpd.GeoDataFrame()
+
+@st.cache_data(ttl=3600)
+def load_building():
+    url = get_public_url("bangunan-terklasifikasi.parquet")
+    try:
+        r = requests.get(url)
+        r.raise_for_status()
+        
+        # Baca sebagai pandas biasa dulu
+        df = pd.read_parquet(io.BytesIO(r.content))
+        
+        # Cek kolom geometry
+        geom_col = next((c for c in df.columns if c.lower() in ["geometry", "geom"]), None)
+        
+        if geom_col:
+            from shapely import wkt, wkb
+            # Coba parse geometry (bisa WKT string atau WKB bytes)
+            try:
+                df[geom_col] = df[geom_col].apply(
+                    lambda g: wkb.loads(g) if isinstance(g, bytes) else wkt.loads(str(g))
+                )
+            except Exception:
+                df[geom_col] = gpd.GeoSeries.from_wkt(df[geom_col].astype(str))
+            
+            return gpd.GeoDataFrame(df, geometry=geom_col, crs="EPSG:4326")
+        else:
+            st.error("Kolom geometry tidak ditemukan di file bangunan.")
+            return gpd.GeoDataFrame()
+    except Exception as e:
+        st.error(f"Gagal memuat data bangunan dari Supabase: {e}")
+        return gpd.GeoDataFrame()
 
 
 @st.cache_data(ttl=300)
 def load_usaha():
-    parquet_path = "data/uji-coba-peta.parquet"
-    if os.path.exists(parquet_path):
-        try:
-            df = pd.read_parquet(parquet_path)
-        except Exception as e:
-            st.warning(f"Gagal memuat Parquet, kembali ke load sheet... Error: {e}")
-            df = pd.read_excel("data/uji-coba-peta.xlsx")
-    else:
-        try:
-            df = pd.read_csv(GSHEET_URL)
-        except Exception as e:
-            st.warning(f"Gagal load dari Google Sheets, fallback ke Excel lokal. Error: {e}")
-            df = pd.read_excel("data/uji-coba-peta.xlsx")
+    url = get_public_url("uji-coba-peta.parquet")
+    try:
+        r = requests.get(url)
+        r.raise_for_status()
+        df = pd.read_parquet(io.BytesIO(r.content))
+    except Exception as e:
+        st.error(f"Gagal memuat data usaha dari Supabase: {e}")
+        return pd.DataFrame()
 
     lat_col   = next((c for c in df.columns if "lat"  in c.lower()), None)
     lon_col   = next((c for c in df.columns if "long" in c.lower() or "lon" in c.lower()), None)
@@ -224,12 +260,16 @@ def load_usaha():
     df["idsls_str"] = df["idsls final"].apply(safe_idsls)
     return df
 
-@st.cache_data
+@st.cache_data(ttl=3600)
 def load_rumah_tangga():
-    parquet_path = "data/rumah-tangga.parquet"
-    if os.path.exists(parquet_path):
-        return pd.read_parquet(parquet_path)
-    return pd.DataFrame()
+    url = get_public_url("rumah-tangga.parquet")
+    try:
+        r = requests.get(url)
+        r.raise_for_status()
+        return pd.read_parquet(io.BytesIO(r.content))
+    except Exception as e:
+        st.error(f"Gagal memuat data rumah tangga dari Supabase: {e}")
+        return pd.DataFrame()
 
 @st.cache_data
 def get_building_stats():

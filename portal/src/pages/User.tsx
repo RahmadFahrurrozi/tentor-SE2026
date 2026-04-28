@@ -10,7 +10,9 @@ import {
   MapPin,
   Search,
   Pen,
+  HardDrive,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { DataTable } from "@/components/ui/data-table";
 import { columns } from "./user/columns";
 import { useUserForm } from "@/hooks/use-user-form";
@@ -42,6 +44,7 @@ import AssignmentMap from "@/components/user/AssignmentMap";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 
 export default function UsersPage() {
+  const navigate = useNavigate();
   const [page, setPage] = useState(0);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ processed: 0, total: 0 });
@@ -66,7 +69,6 @@ export default function UsersPage() {
   const { user } = useAuthStore();
   const {
     users,
-    total,
     totalPages,
     isLoading,
     isFetching,
@@ -249,6 +251,15 @@ export default function UsersPage() {
               >
                 <Upload className="mr-2 size-3.5" strokeWidth={1.5} />
                 Import
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => navigate("/upload")}
+                className="flex-1 lg:flex-none border-indigo-200 text-indigo-700 dark:text-indigo-400 dark:border-indigo-900/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md h-9 px-3 text-sm font-medium"
+              >
+                <HardDrive className="mr-2 size-3.5" strokeWidth={1.5} />
+                Upload Data
               </Button>
 
               <ModeToggle />
@@ -528,7 +539,7 @@ export default function UsersPage() {
                       className="flex items-center gap-2 px-3 py-1.5 bg-stone-50 rounded-md border border-stone-200"
                     >
                       <MapPin
-                        className="size-3 text-indigo-400 flex-shrink-0"
+                        className="size-3 text-indigo-400 shrink-0"
                         strokeWidth={1.5}
                       />
                       <span className="text-xs text-stone-700 font-medium truncate">
@@ -736,7 +747,7 @@ export default function UsersPage() {
                           )}
                         >
                           <div
-                            className="flex-shrink-0"
+                            className="shrink-0"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <Checkbox

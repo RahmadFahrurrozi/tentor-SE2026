@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./pages/Login-page";
 import UsersPage from "./pages/User";
+import DataUploadPage from "./pages/DataUpload";
 import UnauthorizedPage from "./pages/Unauthorized-page";
 import { NotFoundPage } from "./pages/404-page-not-found";
 import TermsOfServicePage from "./pages/term-of-service";
@@ -16,6 +17,7 @@ export default function App() {
       {/* Admin Only Routes */}
       <Route element={<AuthGuard allowedRoles={["admin"]} />}>
         <Route path="/users" element={<UsersPage />} />
+        <Route path="/upload" element={<DataUploadPage />} />
       </Route>
 
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
