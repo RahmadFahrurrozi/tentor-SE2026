@@ -446,12 +446,12 @@ export default function UsersPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex justify-between items-center mt-6 pt-6 border-t border-stone-200">
+              <div className="flex justify-between items-center mt-6 pt-6 border-t border-stone-200 dark:border-zinc-800">
                 <Button
                   variant="outline"
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0 || isFetching}
-                  className="rounded-md border-stone-200 text-stone-600 hover:bg-stone-50 h-8 px-3 text-sm font-normal"
+                  className="rounded-md border-stone-200 text-stone-600 dark:text-stone-400 dark:border-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-800 h-8 px-3 text-sm font-normal"
                 >
                   Previous
                 </Button>
@@ -464,7 +464,7 @@ export default function UsersPage() {
                     setPage((p) => Math.min(totalPages - 1, p + 1))
                   }
                   disabled={page === totalPages - 1 || isFetching}
-                  className="rounded-md border-stone-200 text-stone-600 hover:bg-stone-50 h-8 px-3 text-sm font-normal"
+                  className="rounded-md border-stone-200 text-stone-600 dark:text-stone-400 dark:border-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-800 h-8 px-3 text-sm font-normal"
                 >
                   Next
                 </Button>
