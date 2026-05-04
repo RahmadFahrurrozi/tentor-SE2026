@@ -10,7 +10,9 @@ import {
   MapPin,
   Search,
   Pen,
+  HardDrive,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { DataTable } from "@/components/ui/data-table";
 import { columns } from "./user/columns";
 import { useUserForm } from "@/hooks/use-user-form";
@@ -42,6 +44,7 @@ import AssignmentMap from "@/components/user/AssignmentMap";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 
 export default function UsersPage() {
+  const navigate = useNavigate();
   const [page, setPage] = useState(0);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ processed: 0, total: 0 });
@@ -66,7 +69,6 @@ export default function UsersPage() {
   const { user } = useAuthStore();
   const {
     users,
-    total,
     totalPages,
     isLoading,
     isFetching,
@@ -251,6 +253,15 @@ export default function UsersPage() {
                 Import
               </Button>
 
+              <Button
+                variant="outline"
+                onClick={() => navigate("/upload")}
+                className="flex-1 lg:flex-none border-indigo-200 text-indigo-700 dark:text-indigo-400 dark:border-indigo-900/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md h-9 px-3 text-sm font-medium"
+              >
+                <HardDrive className="mr-2 size-3.5" strokeWidth={1.5} />
+                Upload Data
+              </Button>
+
               <ModeToggle />
 
               <Dialog>
@@ -359,7 +370,7 @@ export default function UsersPage() {
                           />
                         </div>
 
-                        <div className="border border-stone-100 rounded-md p-1 bg-stone-50/30 max-h-[160px] overflow-y-auto custom-scrollbar">
+                        <div className="border border-stone-100 rounded-md p-1 bg-stone-50/30 dark:bg-zinc-800 dark:border-zinc-600 max-h-[160px] overflow-y-auto custom-scrollbar">
                           <div className="grid grid-cols-1 gap-0.5">
                             {availableRegions
                               .filter((r) =>
@@ -372,11 +383,11 @@ export default function UsersPage() {
                                   key={region.value}
                                   onClick={() => toggleAssignment(region.value)}
                                   className={cn(
-                                    "flex items-center gap-2 p-2 hover:bg-stone-100/50 rounded cursor-pointer transition-colors group",
+                                    "flex items-center gap-2 p-2 hover:bg-stone-100/50 dark:hover:bg-zinc-700/50 rounded cursor-pointer transition-colors group",
                                     selectedAssignments.includes(
                                       region.value,
                                     ) &&
-                                      "bg-white border border-stone-200 shadow-sm",
+                                      "bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 shadow-sm",
                                   )}
                                 >
                                   <div
@@ -435,12 +446,12 @@ export default function UsersPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex justify-between items-center mt-6 pt-6 border-t border-stone-200">
+              <div className="flex justify-between items-center mt-6 pt-6 border-t border-stone-200 dark:border-zinc-800">
                 <Button
                   variant="outline"
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0 || isFetching}
-                  className="rounded-md border-stone-200 text-stone-600 hover:bg-stone-50 h-8 px-3 text-sm font-normal"
+                  className="rounded-md border-stone-200 text-stone-600 dark:text-stone-400 dark:border-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-800 h-8 px-3 text-sm font-normal"
                 >
                   Previous
                 </Button>
@@ -453,7 +464,7 @@ export default function UsersPage() {
                     setPage((p) => Math.min(totalPages - 1, p + 1))
                   }
                   disabled={page === totalPages - 1 || isFetching}
-                  className="rounded-md border-stone-200 text-stone-600 hover:bg-stone-50 h-8 px-3 text-sm font-normal"
+                  className="rounded-md border-stone-200 text-stone-600 dark:text-stone-400 dark:border-zinc-800 hover:bg-stone-50 dark:hover:bg-zinc-800 h-8 px-3 text-sm font-normal"
                 >
                   Next
                 </Button>
@@ -528,7 +539,7 @@ export default function UsersPage() {
                       className="flex items-center gap-2 px-3 py-1.5 bg-stone-50 rounded-md border border-stone-200"
                     >
                       <MapPin
-                        className="size-3 text-indigo-400 flex-shrink-0"
+                        className="size-3 text-indigo-400 shrink-0"
                         strokeWidth={1.5}
                       />
                       <span className="text-xs text-stone-700 font-medium truncate">
@@ -640,7 +651,7 @@ export default function UsersPage() {
 
           <form onSubmit={onEditSubmit} className="px-6 pb-6 space-y-5">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-stone-600 uppercase tracking-wide">
+              <label className="text-xs font-medium text-muted-foreground dark:text-zinc-400 uppercase tracking-wide">
                 Nama Lengkap
               </label>
               <Input
@@ -656,7 +667,7 @@ export default function UsersPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-stone-600 uppercase tracking-wide">
+              <label className="text-xs font-medium text-muted-foreground dark:text-zinc-400 uppercase tracking-wide">
                 Alamat Email
               </label>
               <Input
@@ -666,18 +677,18 @@ export default function UsersPage() {
                 className="rounded-md border-stone-200 bg-stone-50/50 cursor-not-allowed h-10 text-sm"
                 readOnly
               />
-              <p className="text-[10px] text-stone-400 italic">
+              <p className="text-[10px] text-muted-foreground dark:text-zinc-500 italic">
                 Email tidak dapat diubah
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-stone-600 uppercase tracking-wide">
+              <label className="text-xs font-medium text-muted-foreground dark:text-zinc-400 uppercase tracking-wide">
                 Hak Akses
               </label>
               <select
                 {...editForm.register("role")}
-                className="w-full h-10 px-3 text-sm rounded-md border border-stone-200 bg-white focus:outline-none focus:border-primary"
+                className="w-full h-10 px-3 text-sm rounded-md border border-stone-200 dark:border-zinc-600 bg-white dark:bg-zinc-800 dark:text-zinc-100 focus:outline-none focus:border-primary"
               >
                 <option value="ppl">Petugas Pendataan Lapangan (PPL)</option>
                 <option value="pml">Pengawas Lapangan (PML)</option>
@@ -689,11 +700,11 @@ export default function UsersPage() {
 
             {(editSelectedRole === "ppl" || editSelectedRole === "pml") && (
               <div className="space-y-2">
-                <label className="text-xs font-medium text-stone-600 uppercase tracking-wide flex justify-between items-center">
+                <label className="text-xs font-medium text-muted-foreground dark:text-zinc-400 uppercase tracking-wide flex justify-between items-center">
                   <span>
                     Wilayah Penugasan ({editSelectedRole.toUpperCase()})
                   </span>
-                  <span className="text-[10px] text-stone-400 normal-case font-normal italic">
+                  <span className="text-[10px] text-stone-400 dark:text-zinc-500 normal-case font-normal italic">
                     Dipilih: {editSelectedAssignments.length}
                   </span>
                 </label>
@@ -704,11 +715,11 @@ export default function UsersPage() {
                     placeholder={`Cari ${editSelectedRole === "pml" ? "Kecamatan" : "Desa"}...`}
                     value={assignmentSearch}
                     onChange={(e) => setAssignmentSearch(e.target.value)}
-                    className="h-9 pl-8 text-xs border-stone-100 bg-stone-50/50"
+                    className="h-9 pl-8 text-xs border-stone-100 bg-stone-50/50 dark:bg-zinc-900 dark:border-zinc-600 dark:text-zinc-100"
                   />
                 </div>
 
-                <div className="border border-stone-100 rounded-md p-1 bg-stone-50/30 max-h-[160px] overflow-y-auto custom-scrollbar">
+                <div className="border border-stone-100 rounded-md p-1 bg-stone-50/30 dark:text-zinc-100 dark:bg-zinc-900 dark:border-zinc-600 max-h-[160px] overflow-y-auto custom-scrollbar">
                   <div className="grid grid-cols-1 gap-0.5">
                     {editAvailableRegions
                       .filter((r) =>
@@ -730,13 +741,13 @@ export default function UsersPage() {
                             editForm.setValue("assignments", current);
                           }}
                           className={cn(
-                            "flex items-center gap-2 p-2 hover:bg-stone-100/50 rounded cursor-pointer transition-colors group",
+                            "flex items-center gap-2 p-2 hover:bg-stone-100/50 dark:hover:bg-zinc-700/50 rounded cursor-pointer transition-colors group",
                             editSelectedAssignments.includes(region.value) &&
-                              "bg-white border border-stone-200 shadow-sm",
+                              "bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 shadow-sm",
                           )}
                         >
                           <div
-                            className="flex-shrink-0"
+                            className="shrink-0"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <Checkbox
@@ -755,7 +766,7 @@ export default function UsersPage() {
                               }}
                             />
                           </div>
-                          <span className="text-xs text-stone-700 select-none">
+                          <span className="text-xs text-foreground select-none">
                             {region.label}
                           </span>
                         </div>
