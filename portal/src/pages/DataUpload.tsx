@@ -28,7 +28,7 @@ export default function DataUploadPage() {
     "idle" | "uploading" | "success" | "error"
   >("idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const [dataType, setDataType] = useState("uji-coba-peta"); // default
+  const [dataType, setDataType] = useState("data-usaha"); // default
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
@@ -165,16 +165,12 @@ export default function DataUploadPage() {
                   disabled={uploading || status === "success"}
                   className="w-full h-11 px-4 text-sm rounded-md border border-border bg-background focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-colors"
                 >
-                  <option value="uji-coba-peta">
-                    Data Titik Usaha (Otomatis dinamai: uji-coba-peta)
+                  <option value="data-usaha">Data Titik Usaha</option>
+                  <option value="data-usaha-digital">
+                    Data Titik Usaha Digital
                   </option>
-                  <option value="bangunan-terklasifikasi">
-                    Data Titik Bangunan (Otomatis dinamai:
-                    bangunan-terklasifikasi)
-                  </option>
-                  <option value="rumah-tangga">
-                    Data Rumah Tangga (Otomatis dinamai: rumah-tangga)
-                  </option>
+                  <option value="data-bangunan">Data Titik Bangunan</option>
+                  <option value="data-rumah-tangga">Data Rumah Tangga</option>
                 </select>
                 <p className="text-xs text-muted-foreground mt-2">
                   Sistem akan secara otomatis merename file yang Anda upload

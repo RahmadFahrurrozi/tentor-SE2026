@@ -194,7 +194,7 @@ def load_sls():
 
 @st.cache_data(ttl=3600)
 def load_building():
-    url = get_public_url("bangunan-terklasifikasi.parquet")
+    url = get_public_url("data-bangunan.parquet")
     try:
         r = requests.get(url)
         r.raise_for_status()
@@ -226,7 +226,7 @@ def load_building():
 
 @st.cache_data(ttl=300)
 def load_usaha():
-    url = get_public_url("uji-coba-peta.parquet")
+    url = get_public_url("data-usaha.parquet")
     try:
         r = requests.get(url)
         r.raise_for_status()
@@ -260,9 +260,44 @@ def load_usaha():
     df["idsls_str"] = df["idsls final"].apply(safe_idsls)
     return df
 
+@st.cache_data(ttl=300)
+def load_usaha_digital():
+    url = get_public_url("data-usaha-digital.parquet")
+    try:
+        r = requests.get(url)
+        r.raise_for_status()
+        df = pd.read_parquet(io.BytesIO(r.content))
+    except Exception as e:
+        return pd.DataFrame()
+
+    lat_col   = next((c for c in df.columns if "lat"  in c.lower()), None)
+    lon_col   = next((c for c in df.columns if "long" in c.lower() or "lon" in c.lower()), None)
+    idsls_col = next((c for c in df.columns if "idsls" in c.lower()), None)
+
+    if lat_col and lon_col:
+        df = df.rename(columns={lat_col: "lat final", lon_col: "long final"})
+    if idsls_col and idsls_col != "idsls final":
+        df = df.rename(columns={idsls_col: "idsls final"})
+
+    df = df.dropna(subset=["lat final", "long final"])
+    df = df[df["lat final"].between(-90, 90)]
+    df = df[df["long final"].between(-180, 180)]
+
+    def safe_idsls(x):
+        if pd.isna(x): return None
+        try:
+            val = float(x)
+            if pd.isna(val): return None
+            return str(int(val))
+        except (ValueError, TypeError):
+            return None
+
+    df["idsls_str"] = df["idsls final"].apply(safe_idsls)
+    return df
+
 @st.cache_data(ttl=3600)
 def load_rumah_tangga():
-    url = get_public_url("rumah-tangga.parquet")
+    url = get_public_url("data-rumah-tangga.parquet")
     try:
         r = requests.get(url)
         r.raise_for_status()
@@ -289,6 +324,7 @@ def get_building_stats():
 def merge_sls_dengan_count():
     gdf_sls  = load_sls()
     df_usaha = load_usaha()
+    df_usaha_dig = load_usaha_digital()
     df_rt    = load_rumah_tangga()
 
     count_usaha = (
@@ -296,6 +332,15 @@ def merge_sls_dengan_count():
         .groupby("idsls_str").size()
         .reset_index(name="jumlah_usaha")
     )
+
+    if not df_usaha_dig.empty:
+        count_usaha_dig = (
+            df_usaha_dig.dropna(subset=["idsls_str"])
+            .groupby("idsls_str").size()
+            .reset_index(name="jumlah_usaha_digital")
+        )
+    else:
+        count_usaha_dig = pd.DataFrame(columns=["idsls_str", "jumlah_usaha_digital"])
 
     if not df_rt.empty:
         count_keluarga = (
@@ -320,6 +365,8 @@ def merge_sls_dengan_count():
         gdf_sls["idsls_str"] = gdf_sls[sls_id_col].apply(norm)
         gdf_sls = gdf_sls.merge(count_usaha,   on="idsls_str", how="left")
         gdf_sls["jumlah_usaha"]    = gdf_sls["jumlah_usaha"].fillna(0).astype(int)
+        gdf_sls = gdf_sls.merge(count_usaha_dig, on="idsls_str", how="left")
+        gdf_sls["jumlah_usaha_digital"] = gdf_sls["jumlah_usaha_digital"].fillna(0).astype(int)
         gdf_sls = gdf_sls.merge(count_keluarga, on="idsls_str", how="left")
         gdf_sls["jumlah_keluarga"] = gdf_sls["jumlah_keluarga"].fillna(0).astype(int)
 
@@ -335,6 +382,7 @@ def merge_sls_dengan_count():
             gdf_sls["belum_terdata"]  = 0
     else:
         gdf_sls["jumlah_usaha"]    = 0
+        gdf_sls["jumlah_usaha_digital"] = 0
         gdf_sls["jumlah_keluarga"] = 0
         gdf_sls["total_bangunan"]  = 0
         gdf_sls["sudah_terdata"]   = 0
@@ -423,7 +471,8 @@ desa_list = sorted(gdf_sls[desa_col].dropna().unique().tolist()) if desa_col els
 st.sidebar.header("Layer Control")
 show_kab      = st.sidebar.checkbox("Batas Kabupaten",          value=True)
 show_sls      = st.sidebar.checkbox("SLS",                      value=True)
-show_usaha    = st.sidebar.checkbox("Titik Usaha",              value=False)
+show_usaha    = st.sidebar.checkbox("Titik Usaha Biasa",        value=False)
+show_usaha_dig= st.sidebar.checkbox("Titik Usaha Digital",      value=False)
 show_rt       = st.sidebar.checkbox("Titik Rumah Tangga",       value=False)
 show_build    = st.sidebar.checkbox("Bangunan (Usaha & RT)",    value=False)
 enable_3d     = st.sidebar.checkbox("Mode 3D Bangunan",         value=False)
@@ -503,6 +552,7 @@ if show_sls:
         props = {
             "color": color,
             "jumlah_usaha":    str(jumlah_usaha),
+            "jumlah_usaha_digital": str(int(row.get("jumlah_usaha_digital", 0))),
             "jumlah_keluarga": str(jumlah_keluarga),
             "total_bangunan":  str(int(row.get("total_bangunan", 0))),
             "sudah_terdata":   str(int(row.get("sudah_terdata",  0))),
@@ -562,6 +612,7 @@ if show_build:
                         "gc_label":        "Status: " + str(row.get("status_bangunan", "-")),
                         "divider":         "<hr style='margin:6px 0;border-color:#333'/>",
                         "jumlah_usaha":    str(row.get("jml_usaha", "0")),
+                        "jumlah_usaha_digital": "-",
                         "jumlah_keluarga": "-",
                         "total_bangunan":  "-",
                         "sudah_terdata":   "-",
@@ -610,6 +661,7 @@ if show_usaha:
     df_sample["kecamatan"]       = df_sample[kec_col].fillna("-").astype(str)  if kec_col  else "-"
     df_sample["desa"]            = df_sample[desa_col].fillna("-").astype(str) if desa_col else "-"
     df_sample["jumlah_usaha"]    = "1"
+    df_sample["jumlah_usaha_digital"] = "0"
     df_sample["jumlah_keluarga"] = "0"
     df_sample["nama_sls"]        = df_sample["idsls_str"].fillna("-").astype(str)
     df_sample["nama"]            = df_sample["nama final"].fillna("-").astype(str)
@@ -626,7 +678,7 @@ if show_usaha:
 
     kolom_pydeck = [
         "lon", "lat", "color", "nama", "alamat", "gc_label",
-        "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha", "jumlah_keluarga",
+        "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha", "jumlah_usaha_digital", "jumlah_keluarga",
         "total_bangunan", "sudah_terdata", "belum_terdata",
     ]
     layers.append(pdk.Layer(
@@ -636,6 +688,65 @@ if show_usaha:
         radius_min_pixels=1, radius_max_pixels=6,
         pickable=True, auto_highlight=True,
     ))
+
+# Layer Titik Usaha Digital
+if show_usaha_dig:
+    with st.spinner("Loading titik usaha digital..."):
+        df_usaha_dig = load_usaha_digital()
+
+    if not df_usaha_dig.empty:
+        df_f_dig = df_usaha_dig.copy()
+        valid_idsls_dig = set(gdf_sls_display["idsls_str"].dropna().unique())
+        df_f_dig = df_f_dig[df_f_dig["idsls_str"].isin(valid_idsls_dig)]
+        
+        if filter_nama.strip():
+            df_f_dig = df_f_dig[df_f_dig["nama final"].str.contains(filter_nama.strip(), case=False, na=False)]
+
+        df_sample_dig = df_f_dig.copy()
+        st.sidebar.success(f"{len(df_sample_dig):,} titik digital ditampilkan")
+
+        sls_lookup_cols_dig = ["idsls_str", "jumlah_usaha_digital"]
+        if kec_col:  sls_lookup_cols_dig.append(kec_col)
+        if desa_col: sls_lookup_cols_dig.append(desa_col)
+        sls_lookup_dig = gdf_sls[sls_lookup_cols_dig].drop_duplicates("idsls_str")
+        df_sample_dig = df_sample_dig.merge(sls_lookup_dig, on="idsls_str", how="left")
+
+        df_sample_dig["kecamatan"]       = df_sample_dig[kec_col].fillna("-").astype(str)  if kec_col  else "-"
+        df_sample_dig["desa"]            = df_sample_dig[desa_col].fillna("-").astype(str) if desa_col else "-"
+        df_sample_dig["jumlah_usaha"]    = "0"
+        df_sample_dig["jumlah_usaha_digital"] = "1"
+        df_sample_dig["jumlah_keluarga"] = "0"
+        df_sample_dig["nama_sls"]        = df_sample_dig["idsls_str"].fillna("-").astype(str)
+        df_sample_dig["nama"]            = df_sample_dig["nama final"].fillna("-").astype(str)
+        df_sample_dig["alamat"]          = df_sample_dig["alamat final"].fillna("-").astype(str)
+        df_sample_dig["lat"]             = df_sample_dig["lat final"]
+        df_sample_dig["lon"]             = df_sample_dig["long final"]
+        
+        df_sample_dig["gc"]              = df_sample_dig["gc final"].fillna(0).astype(int) if "gc final" in df_sample_dig.columns else 0
+        df_sample_dig["gc_label"]        = "gc: " + df_sample_dig["gc"].astype(str)
+        df_sample_dig["divider"]         = "<hr style='margin:6px 0;border-color:#333'/>"
+        df_sample_dig["total_bangunan"]  = "-"
+        df_sample_dig["sudah_terdata"]   = "-"
+        df_sample_dig["belum_terdata"]   = "-"
+        df_sample_dig["color"] = pd.Series([[46, 204, 113, 220]] * len(df_sample_dig), index=df_sample_dig.index)
+
+        kolom_pydeck_dig = [
+            "lon", "lat", "color", "nama", "alamat", "gc_label",
+            "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha", "jumlah_usaha_digital", "jumlah_keluarga",
+            "total_bangunan", "sudah_terdata", "belum_terdata",
+        ]
+        
+        for col in kolom_pydeck_dig:
+            if col not in df_sample_dig.columns:
+                df_sample_dig[col] = "-"
+        
+        layers.append(pdk.Layer(
+            "ScatterplotLayer", data=df_sample_dig[kolom_pydeck_dig],
+            get_position=["lon", "lat"], get_color="color",
+            get_radius=15, radius_scale=1,
+            radius_min_pixels=1, radius_max_pixels=6,
+            pickable=True, auto_highlight=True,
+        ))
 
 # Layer Titik Rumah Tangga
 if show_rt:
@@ -661,6 +772,7 @@ if show_rt:
         df_rt_sample["kecamatan"]       = df_rt_sample[kec_col].fillna("-").astype(str)  if kec_col  else "-"
         df_rt_sample["desa"]            = df_rt_sample[desa_col].fillna("-").astype(str) if desa_col else "-"
         df_rt_sample["jumlah_usaha"]    = "0"
+        df_rt_sample["jumlah_usaha_digital"] = "0"
         df_rt_sample["jumlah_keluarga"] = "1"
         df_rt_sample["nama_sls"]        = df_rt_sample["idsls_str"].fillna("-").astype(str)
         df_rt_sample["nama"]            = "Rumah Tangga"
@@ -680,7 +792,7 @@ if show_rt:
 
         rt_kolom_pydeck = [
             "lon", "lat", "color", "nama", "alamat", "gc_label",
-            "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha", "jumlah_keluarga",
+            "divider", "nama_sls", "kecamatan", "desa", "jumlah_usaha", "jumlah_usaha_digital", "jumlah_keluarga",
             "total_bangunan", "sudah_terdata", "belum_terdata",
         ]
         layers.append(pdk.Layer(
@@ -735,8 +847,12 @@ tooltip = {
                    <td style='padding:5px 0; text-align:right; font-weight:bold; color:#f77e7e'>{belum_terdata}</td>
                </tr>
                <tr style='border-bottom:1px solid #333'>
-                   <td style='padding:5px 0; color:#aaa'>Jumlah Usaha</td>
+                   <td style='padding:5px 0; color:#aaa'>Jumlah Usaha Biasa</td>
                    <td style='padding:5px 0; text-align:right; font-weight:bold; color:#7ef7a0'>{jumlah_usaha}</td>
+               </tr>
+               <tr style='border-bottom:1px solid #333'>
+                   <td style='padding:5px 0; color:#aaa'>Jumlah Usaha Digital</td>
+                   <td style='padding:5px 0; text-align:right; font-weight:bold; color:#4ade80'>{jumlah_usaha_digital}</td>
                </tr>
                <tr>
                    <td style='padding:5px 0; color:#aaa'>Jumlah Keluarga</td>
