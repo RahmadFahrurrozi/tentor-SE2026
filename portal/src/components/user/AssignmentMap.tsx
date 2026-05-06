@@ -22,7 +22,7 @@ interface AssignmentMapProps {
   role: string;
 }
 
-const AssignmentMap: React.FC<AssignmentMapProps> = ({ assignments, role }) => {
+const AssignmentMap: React.FC<AssignmentMapProps> = ({ assignments }) => {
   const [geoData, setGeoData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 

@@ -523,7 +523,7 @@ export default function UsersPage() {
               </h4>
 
               <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                {viewingUserAssignment?.assignments?.map((id) => {
+                {viewingUserAssignment?.assignments?.map((id: string) => {
                   const region = regions.find(
                     (r) => r.iddesa === id || r.idkec === id,
                   );

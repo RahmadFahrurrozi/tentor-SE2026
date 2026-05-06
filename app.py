@@ -27,9 +27,10 @@ st.sidebar.image("logo.svg", width=60)
 # ─────────────────────────────────────────────
 # DATABASE & AUTHENTICATION (SUPABASE)
 # ─────────────────────────────────────────────
+PORTAL_URL = os.environ.get("PORTAL_URL", "http://localhost:5173")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-LOGIN_URL = os.environ.get("LOGIN_URL", "http://localhost:5173/login")
+LOGIN_URL = os.environ.get("LOGIN_URL", f"{PORTAL_URL}/login")
 GSHEET_URL = os.environ.get("GSHEET_URL")
 
 if not SUPABASE_URL or not SUPABASE_KEY or not GSHEET_URL:
@@ -502,7 +503,7 @@ if st.sidebar.button("Refresh Data Sekarang"):
 
 # ── Kontrol Admin & Logout ────────────────────────────────────────────────────
 if role == "admin":
-    st.sidebar.link_button("User Management (Portal)", "http://localhost:5173/users", use_container_width=True)
+    st.sidebar.link_button("User Management (Portal)", f"{PORTAL_URL}/users", use_container_width=True)
 
 if st.sidebar.button("Keluar (Log Out)", use_container_width=True):
     # Hapus semua session state Streamlit

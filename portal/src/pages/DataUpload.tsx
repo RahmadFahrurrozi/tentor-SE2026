@@ -94,7 +94,7 @@ export default function DataUploadPage() {
         .toLowerCase();
       const targetFileName = `${dataType}${originalExt}`;
 
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from("spatial-data")
         .upload(targetFileName, file, {
           cacheControl: "3600",
