@@ -19,6 +19,7 @@ build/
 # ─── Virtual environment ─────────────────────────────────────────────
 .env.*
 .env
+venv/
 
 # ─── Streamlit ───────────────────────────────────────────────────────
 .streamlit/secrets.toml
