@@ -27,10 +27,16 @@ st.sidebar.image("logo.svg", width=60)
 # ─────────────────────────────────────────────
 # DATABASE & AUTHENTICATION (SUPABASE)
 # ─────────────────────────────────────────────
-PORTAL_URL = os.environ.get("PORTAL_URL", "http://localhost:5173")
+PORTAL_URL = os.environ.get("PORTAL_URL", "http://localhost:5173").rstrip("/")
+if not PORTAL_URL.startswith("http"):
+    PORTAL_URL = "https://" + PORTAL_URL
+
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 LOGIN_URL = os.environ.get("LOGIN_URL", f"{PORTAL_URL}/login")
+if not LOGIN_URL.startswith("http"):
+    LOGIN_URL = "https://" + LOGIN_URL
+
 GSHEET_URL = os.environ.get("GSHEET_URL")
 
 if not SUPABASE_URL or not SUPABASE_KEY or not GSHEET_URL:
@@ -665,11 +671,11 @@ if show_usaha:
     df_sample["jumlah_usaha_digital"] = "0"
     df_sample["jumlah_keluarga"] = "0"
     df_sample["nama_sls"]        = df_sample["idsls_str"].fillna("-").astype(str)
-    df_sample["nama"]            = df_sample["nama final"].fillna("-").astype(str)
-    df_sample["alamat"]          = df_sample["alamat final"].fillna("-").astype(str)
-    df_sample["lat"]             = df_sample["lat final"]
-    df_sample["lon"]             = df_sample["long final"]
-    df_sample["gc"]              = df_sample["gc final"].fillna(0).astype(int)
+    df_sample["nama"]            = df_sample["nama final"].fillna("-").astype(str) if "nama final" in df_sample.columns else "-"
+    df_sample["alamat"]          = df_sample["alamat final"].fillna("-").astype(str) if "alamat final" in df_sample.columns else "-"
+    df_sample["lat"]             = df_sample["lat final"] if "lat final" in df_sample.columns else 0
+    df_sample["lon"]             = df_sample["long final"] if "long final" in df_sample.columns else 0
+    df_sample["gc"]              = df_sample["gc final"].fillna(0).astype(int) if "gc final" in df_sample.columns else 0
     df_sample["gc_label"]        = "gc: " + df_sample["gc"].astype(str)
     df_sample["divider"]         = "<hr style='margin:6px 0;border-color:#333'/>"
     df_sample["total_bangunan"]  = "-"
@@ -718,10 +724,10 @@ if show_usaha_dig:
         df_sample_dig["jumlah_usaha_digital"] = "1"
         df_sample_dig["jumlah_keluarga"] = "0"
         df_sample_dig["nama_sls"]        = df_sample_dig["idsls_str"].fillna("-").astype(str)
-        df_sample_dig["nama"]            = df_sample_dig["nama final"].fillna("-").astype(str)
-        df_sample_dig["alamat"]          = df_sample_dig["alamat final"].fillna("-").astype(str)
-        df_sample_dig["lat"]             = df_sample_dig["lat final"]
-        df_sample_dig["lon"]             = df_sample_dig["long final"]
+        df_sample_dig["nama"]            = df_sample_dig["nama final"].fillna("-").astype(str) if "nama final" in df_sample_dig.columns else "-"
+        df_sample_dig["alamat"]          = df_sample_dig["alamat final"].fillna("-").astype(str) if "alamat final" in df_sample_dig.columns else "-"
+        df_sample_dig["lat"]             = df_sample_dig["lat final"] if "lat final" in df_sample_dig.columns else 0
+        df_sample_dig["lon"]             = df_sample_dig["long final"] if "long final" in df_sample_dig.columns else 0
         
         df_sample_dig["gc"]              = df_sample_dig["gc final"].fillna(0).astype(int) if "gc final" in df_sample_dig.columns else 0
         df_sample_dig["gc_label"]        = "gc: " + df_sample_dig["gc"].astype(str)
