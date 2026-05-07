@@ -5,6 +5,7 @@ import pandas as pd
 import os
 import requests
 import io
+import gc
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
@@ -509,9 +510,9 @@ if st.sidebar.button("Refresh Data Sekarang"):
 
 # ── Kontrol Admin & Logout ────────────────────────────────────────────────────
 if role == "admin":
-    st.sidebar.link_button("User Management (Portal)", f"{PORTAL_URL}/users", use_container_width=True)
+    st.sidebar.link_button("User Management (Portal)", f"{PORTAL_URL}/users", width="stretch")
 
-if st.sidebar.button("Keluar (Log Out)", use_container_width=True):
+if st.sidebar.button("Keluar (Log Out)", width="stretch"):
     # Hapus semua session state Streamlit
     st.session_state.clear()
     # Redirect ke login page dengan flag ?logout=true
@@ -526,7 +527,7 @@ if st.sidebar.button("Keluar (Log Out)", use_container_width=True):
 # ─────────────────────────────────────────────
 # FILTER SLS
 # ─────────────────────────────────────────────
-gdf_sls_display = gdf_sls.copy()
+gdf_sls_display = gdf_sls
 if filter_kec  != "Semua" and kec_col:
     gdf_sls_display = gdf_sls_display[gdf_sls_display[kec_col]  == filter_kec]
 if filter_desa != "Semua" and desa_col:
@@ -592,7 +593,7 @@ if show_build:
             gdf_build = load_building()
             if not gdf_build.empty:
                 valid_idsls_b = set(gdf_sls_display["idsls_str"].dropna().unique())
-                gdf_build_f   = gdf_build[gdf_build["idsls_str"].isin(valid_idsls_b)].copy()
+                gdf_build_f   = gdf_build[gdf_build["idsls_str"].isin(valid_idsls_b)]
 
                 import ast
                 def parse_color(c):
@@ -647,15 +648,14 @@ if show_usaha:
     with st.spinner("Loading titik usaha..."):
         df_usaha = load_usaha()
 
-    df_f = df_usaha.copy()
     # PPL/PML sudah terfilter gdf_sls_display-nya sejak awal, jadi selalu filter titik ini ke gdf_sls_display
     valid_idsls = set(gdf_sls_display["idsls_str"].dropna().unique())
-    df_f = df_f[df_f["idsls_str"].isin(valid_idsls)]
+    df_f = df_usaha[df_usaha["idsls_str"].isin(valid_idsls)]
     
     if filter_nama.strip():
         df_f = df_f[df_f["nama final"].str.contains(filter_nama.strip(), case=False, na=False)]
 
-    df_sample         = df_f.copy()
+    df_sample         = df_f
     df_usaha_filtered = df_sample
     st.sidebar.success(f"{len(df_sample):,} titik ditampilkan")
 
@@ -702,14 +702,13 @@ if show_usaha_dig:
         df_usaha_dig = load_usaha_digital()
 
     if not df_usaha_dig.empty:
-        df_f_dig = df_usaha_dig.copy()
         valid_idsls_dig = set(gdf_sls_display["idsls_str"].dropna().unique())
-        df_f_dig = df_f_dig[df_f_dig["idsls_str"].isin(valid_idsls_dig)]
+        df_f_dig = df_usaha_dig[df_usaha_dig["idsls_str"].isin(valid_idsls_dig)]
         
         if filter_nama.strip():
             df_f_dig = df_f_dig[df_f_dig["nama final"].str.contains(filter_nama.strip(), case=False, na=False)]
 
-        df_sample_dig = df_f_dig.copy()
+        df_sample_dig = df_f_dig
         st.sidebar.success(f"{len(df_sample_dig):,} titik digital ditampilkan")
 
         sls_lookup_cols_dig = ["idsls_str", "jumlah_usaha_digital"]
@@ -763,12 +762,11 @@ if show_rt:
         with st.spinner("Loading titik rumah tangga..."):
             df_rt = load_rumah_tangga()
 
-        df_rt_f = df_rt.copy()
         valid_idsls = set(gdf_sls_display["idsls_str"].dropna().unique())
-        df_rt_f = df_rt_f[df_rt_f["idsls_str"].isin(valid_idsls)]
+        df_rt_f = df_rt[df_rt["idsls_str"].isin(valid_idsls)]
 
         st.sidebar.success(f"{len(df_rt_f):,} titik RT ditampilkan")
-        df_rt_sample = df_rt_f.copy()
+        df_rt_sample = df_rt_f
 
         sls_lookup_cols = ["idsls_str", "jumlah_usaha"]
         if kec_col:  sls_lookup_cols.append(kec_col)
@@ -975,3 +973,7 @@ with col_chart2:
             st.bar_chart(status_counts)
     else:
         st.info("Data statistik bangunan tidak tersedia.")
+
+# Bersihkan memori dari variabel yang sudah tidak digunakan
+import gc
+gc.collect()
