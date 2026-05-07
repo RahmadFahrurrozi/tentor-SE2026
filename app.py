@@ -178,7 +178,7 @@ def get_public_url(filename):
     base = SUPABASE_URL.rstrip("/")
     return f"{base}/storage/v1/object/public/spatial-data/{filename}"
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, max_entries=1)
 def load_kab():
     url = get_public_url("peta-kabupaten-banyuwangi.geojson")
     try:
@@ -189,7 +189,7 @@ def load_kab():
         st.error(f"Gagal memuat peta kabupaten dari Supabase: {e}")
         return gpd.GeoDataFrame()
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, max_entries=1)
 def load_sls():
     url = get_public_url("sls-after-ea-sls-2024.json")
     try:
@@ -200,7 +200,7 @@ def load_sls():
         st.error(f"Gagal memuat SLS dari Supabase: {e}")
         return gpd.GeoDataFrame()
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, max_entries=1)
 def load_building():
     url = get_public_url("data-bangunan.parquet")
     try:
@@ -232,7 +232,7 @@ def load_building():
         return gpd.GeoDataFrame()
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, max_entries=1)
 def load_usaha():
     url = get_public_url("data-usaha.parquet")
     try:
@@ -268,7 +268,7 @@ def load_usaha():
     df["idsls_str"] = df["idsls final"].apply(safe_idsls)
     return df
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, max_entries=1)
 def load_usaha_digital():
     url = get_public_url("data-usaha-digital.parquet")
     try:
