@@ -40,18 +40,12 @@ import { authService } from "@/services/auth.service";
 import { useAuth } from "@/hooks/use-auth";
 import { LoginIllustration } from "@/components/auth/login-illustration";
 import { ModeToggle } from "@/components/ui/mode-toggle";
-
-const STREAMLIT_URL =
-  import.meta.env.VITE_STREAMLIT_URL ?? "http://localhost:8501";
+import { useNavigate } from "react-router-dom";
 
 const JUST_LOGGED_OUT_KEY = "bspatial_just_logged_out";
 
-async function redirectToStreamlit(userId: string) {
-  const token = await authService.generateOtc(userId);
-  window.location.href = `${STREAMLIT_URL}?code=${token}`;
-}
-
 function LoginPage() {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
@@ -63,7 +57,7 @@ function LoginPage() {
     const checkSession = async () => {
       const urlParams = new URLSearchParams(window.location.search);
 
-      // ── CASE 1: ?logout=true — user klik tombol Logout di Streamlit ──────────
+      // ── CASE 1: ?logout=true ────────────────────────────────────────────────
       if (urlParams.get("logout") === "true") {
         window.history.replaceState(
           {},
@@ -76,13 +70,10 @@ function LoginPage() {
         } catch (e) {
           console.error("Gagal logout dari Supabase:", e);
         }
-        // Tetap di halaman login — STOP, tidak generate OTC
         return;
       }
 
-      // ── CASE 2: ?back=true — user klik "Kembali ke Dashboard" di Streamlit ───
-      // Ini BUKAN logout. User masih login, hanya mau balik ke app.
-      // Generate OTC baru dan redirect langsung tanpa tampilkan form login.
+      // ── CASE 2: ?back=true ──────────────────────────────────────────────────
       if (urlParams.get("back") === "true") {
         window.history.replaceState(
           {},
@@ -93,11 +84,10 @@ function LoginPage() {
           const data = await authService.getSession();
           if (data?.session?.user) {
             setIsRedirecting(true);
-            await redirectToStreamlit(data.session.user.id);
+            navigate("/dashboard");
           }
-          // Kalau tidak ada session, fall through ke form login normal
         } catch (e) {
-          console.error("Gagal redirect ke Streamlit:", e);
+          console.error("Gagal redirect:", e);
         }
         return;
       }
@@ -108,26 +98,26 @@ function LoginPage() {
         return;
       }
 
-      // ── CASE 4: Normal load — cek session aktif untuk auto-SSO ───────────────
+      // ── CASE 4: Normal load — cek session aktif untuk redirect langsung ─────────
       try {
         const data = await authService.getSession();
         if (data?.session?.user) {
           setIsRedirecting(true);
-          await redirectToStreamlit(data.session.user.id);
+          navigate("/dashboard");
         }
       } catch {
-        // Tidak ada session — tampilkan form login
+        // Tidak ada session
       }
     };
 
     checkSession();
-  }, []);
+  }, [navigate]);
 
   const handleSubmit = form.handleSubmit(async (values) => {
     try {
-      const authData = await login(values);
+      await login(values);
       setIsRedirecting(true);
-      await redirectToStreamlit(authData.user.id);
+      navigate("/dashboard");
     } catch {
       setIsRedirecting(false);
     }

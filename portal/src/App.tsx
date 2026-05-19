@@ -21,8 +21,10 @@ export default function App() {
         <Route path="/upload" element={<DataUploadPage />} />
       </Route>
 
-      {/* Dashboard Route (Temporary Unprotected) */}
-      <Route path="/dashboard" element={<MapDashboard />} />
+      {/* Protected Dashboard Route */}
+      <Route element={<AuthGuard allowedRoles={["admin", "ppl", "pml"]} />}>
+        <Route path="/dashboard" element={<MapDashboard />} />
+      </Route>
 
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
       <Route path="/terms-of-service" element={<TermsOfServicePage />} />

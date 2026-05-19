@@ -150,3 +150,30 @@ export function convertTitikToGeoJson(data: any[]) {
     features
   };
 }
+
+export function calculateBbox(geoJson: any): [number, number, number, number] | null {
+  if (!geoJson || !geoJson.features || geoJson.features.length === 0) return null;
+  
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+  const extractCoords = (coords: any[]) => {
+    if (typeof coords[0] === 'number') {
+      const [x, y] = coords;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    } else {
+      coords.forEach(extractCoords);
+    }
+  };
+
+  geoJson.features.forEach((f: any) => {
+    if (f.geometry && f.geometry.coordinates) {
+      extractCoords(f.geometry.coordinates);
+    }
+  });
+
+  if (minX === Infinity) return null;
+  return [minX, minY, maxX, maxY];
+}
