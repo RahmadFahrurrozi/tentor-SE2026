@@ -10,6 +10,7 @@ export function useSpatialData() {
   const [dataBangunan, setDataBangunan] = useState<any[]>([]);
   const [dataSls, setDataSls] = useState<any>(null); // GeoJSON FeatureCollection
   const [dataKab, setDataKab] = useState<any>(null); // GeoJSON FeatureCollection
+  const [dataDesa, setDataDesa] = useState<any>(null); // GeoJSON FeatureCollection untuk batas Desa
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +82,22 @@ export function useSpatialData() {
     loadKab();
   }, []);
 
+  // 2b. Fetch outline desa (regions.json) saat hook di-mount
+  useEffect(() => {
+    async function loadDesa() {
+      try {
+        const response = await fetch('/data/regions.json');
+        if (response.ok) {
+          const geojson = await response.json();
+          setDataDesa(geojson);
+        }
+      } catch (err) {
+        console.error("Gagal load peta desa regions:", err);
+      }
+    }
+    loadDesa();
+  }, []);
+
   // 3. Fetch Penugasan User & Auto-select assignment
   useEffect(() => {
     async function loadAssignments() {
@@ -143,6 +160,7 @@ export function useSpatialData() {
 
     async function loadKecamatanData() {
       const kecId = filterKecamatan;
+      setIsLoading(true);
 
       // Cek apakah data sudah ada di cache
       if (cache.current[kecId]) {
@@ -232,6 +250,7 @@ export function useSpatialData() {
     dataBangunan,
     dataSls,
     dataKab,
+    dataDesa,
     isLoading,
     error,
     wilayahManifest,

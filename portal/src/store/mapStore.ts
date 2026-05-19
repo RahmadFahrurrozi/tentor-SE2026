@@ -29,11 +29,11 @@ export const useMapStore = create<MapState>((set) => ({
   // Default values berdasarkan Streamlit
   showKab: true,
   showSls: true,
-  showUsaha: true, // Default true agar terlihat
+  showUsaha: false, // Default true agar terlihat
   showUsahaDigital: false,
   showRt: false,
   showBuild: true, // Default true sesuai request user
-  enable3d: true,  // Aktifkan 3D secara default
+  enable3d: false,  // Aktifkan 3D secara default
   showCounting: true, // Choropleth aktif default
 
   filterKecamatan: 'Semua',

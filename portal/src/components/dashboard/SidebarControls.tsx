@@ -70,10 +70,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
             <Label htmlFor="showSls" className="text-sm">Batas SLS</Label>
             <Switch id="showSls" checked={store.showSls} onCheckedChange={() => store.toggleLayer('showSls')} />
           </div>
-          <div className="flex items-center justify-between">
-            <Label htmlFor="showCounting" className="text-sm text-muted-foreground">↳ Mode Choropleth</Label>
-            <Switch id="showCounting" checked={store.showCounting} onCheckedChange={() => store.toggleLayer('showCounting')} disabled={!store.showSls} />
-          </div>
+
           
           <div className="flex items-center justify-between">
             <Label htmlFor="showBuild" className="text-sm">Bangunan Fisik</Label>

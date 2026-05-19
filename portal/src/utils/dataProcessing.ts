@@ -77,6 +77,7 @@ export function processSlsData(
       properties: {
         ...feature.properties,
         idsls_str: idslsStr,
+        iddesa: idslsStr.substring(0, 10),
         jumlah_usaha: usahaCount[idslsStr] || 0,
         jumlah_usaha_digital: usahaDigitalCount[idslsStr] || 0,
         jumlah_keluarga: keluargaCount[idslsStr] || 0,

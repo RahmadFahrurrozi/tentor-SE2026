@@ -313,6 +313,7 @@ export function BulkUploadModal({
               `}
             >
               <input
+                placeholder="file"
                 ref={fileRef}
                 type="file"
                 accept={ACCEPTED_EXTENSIONS}
