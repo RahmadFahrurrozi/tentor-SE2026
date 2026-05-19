@@ -166,10 +166,16 @@ export function useSpatialData() {
             const url = getChunksPublicUrl(`${dataset}/kec_${kecId}.json`);
             const res = await fetch(url);
             if (!res.ok) {
-              console.warn(`[WARN] Chunks ${dataset} untuk kecamatan ${kecId} belum tersedia atau gagal dimuat: HTTP ${res.status}`);
               return [];
             }
-            return await res.json();
+            const json = await res.json();
+            // Data dari python uploader dibungkus dalam { data: [], count: n }
+            const finalData = json.data || json || [];
+            if (finalData.length > 0) {
+              console.log(`[DATA BERHASIL DI-FETCH] ${dataset} untuk kecamatan ${kecId}: ${finalData.length} baris`);
+              console.log(`Contoh detail baris pertama dari ${dataset}:`, finalData[0]);
+            }
+            return finalData;
           } catch (e) {
             console.error(`[ERROR] Gagal fetch ${dataset} chunk:`, e);
             return [];
