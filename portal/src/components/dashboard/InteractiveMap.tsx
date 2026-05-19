@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Map, MapControls } from "@/components/ui/map";
-import { Loader2 } from "lucide-react";
 import maplibregl from "maplibre-gl";
 
 import { processSlsData, convertBangunanToGeoJson, convertTitikToGeoJson, calculateBbox } from '@/utils/dataProcessing';
@@ -49,25 +48,33 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     );
   }, [dataSls, dataUsaha, dataUsahaDigital, dataRumahTangga, dataBangunan, isLoading]);
 
+  const filterDataByDesa = (data: any[]) => {
+    if (store.filterDesa === 'Semua' || !data || !data.length) return data;
+    return data.filter(row => {
+      const idslsStr = String(row['idsls_str'] || row['idsls final'] || '');
+      return idslsStr.substring(0, 10) === store.filterDesa;
+    });
+  };
+
   const geoJsonBangunan = useMemo(() => {
     if (!dataBangunan.length || isLoading) return null;
-    return convertBangunanToGeoJson(dataBangunan);
-  }, [dataBangunan, isLoading]);
+    return convertBangunanToGeoJson(filterDataByDesa(dataBangunan));
+  }, [dataBangunan, isLoading, store.filterDesa]);
 
   const geoJsonUsaha = useMemo(() => {
     if (!dataUsaha.length || isLoading) return null;
-    return convertTitikToGeoJson(dataUsaha);
-  }, [dataUsaha, isLoading]);
+    return convertTitikToGeoJson(filterDataByDesa(dataUsaha));
+  }, [dataUsaha, isLoading, store.filterDesa]);
 
   const geoJsonUsahaDigital = useMemo(() => {
     if (!dataUsahaDigital.length || isLoading) return null;
-    return convertTitikToGeoJson(dataUsahaDigital);
-  }, [dataUsahaDigital, isLoading]);
+    return convertTitikToGeoJson(filterDataByDesa(dataUsahaDigital));
+  }, [dataUsahaDigital, isLoading, store.filterDesa]);
 
   const geoJsonRt = useMemo(() => {
     if (!dataRumahTangga.length || isLoading) return null;
-    return convertTitikToGeoJson(dataRumahTangga);
-  }, [dataRumahTangga, isLoading]);
+    return convertTitikToGeoJson(filterDataByDesa(dataRumahTangga));
+  }, [dataRumahTangga, isLoading, store.filterDesa]);
 
   // Efek untuk mengupdate layer peta
   useEffect(() => {
@@ -209,6 +216,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             id: 'usaha-circle-layer',
             type: 'circle',
             source: 'usaha-source',
+            layout: { visibility: useMapStore.getState().showUsaha ? 'visible' : 'none' },
             paint: {
               'circle-radius': 5,
               'circle-color': '#ffdc32',
@@ -240,6 +248,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             id: 'usaha-digital-circle-layer',
             type: 'circle',
             source: 'usaha-digital-source',
+            layout: { visibility: useMapStore.getState().showUsahaDigital ? 'visible' : 'none' },
             paint: {
               'circle-radius': 5,
               'circle-color': '#ff32dc', // Warna pink magenta untuk bedakan
@@ -271,9 +280,10 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             id: 'rt-circle-layer',
             type: 'circle',
             source: 'rt-source',
+            layout: { visibility: useMapStore.getState().showRt ? 'visible' : 'none' },
             paint: {
               'circle-radius': 4,
-              'circle-color': '#0055ff', // biru cerah
+              'circle-color': '#00BFFF', // biru muda (Deep Sky Blue) agar lebih cerah
               'circle-stroke-width': 1,
               'circle-stroke-color': '#ffffff'
             }
@@ -314,9 +324,36 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           map.getCanvas().style.cursor = '';
           setHoverInfo(null);
         });
+
+        // Event Klik untuk memunculkan Popup MapLibre
+        if (['usaha-circle-layer', 'usaha-digital-circle-layer', 'rt-circle-layer'].includes(layerId)) {
+          map.on('click', layerId, (e) => {
+            if (!e.features || e.features.length === 0) return;
+            const props = e.features[0].properties;
+            
+            const nama = props['nama final'] || props['nama_krt'] || 'Titik Lokasi';
+            const alamat = props['alamat final'] || props['alamat'] || '-';
+            const kategori = props['kategori'] || props['jenis_rt'] || '-';
+            
+            const html = `
+              <div style="color: #333; padding: 4px; max-width: 200px;">
+                <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 4px;">
+                  ${nama}
+                </h3>
+                <p style="margin: 0 0 4px 0; font-size: 12px;"><strong>Kategori:</strong> ${kategori}</p>
+                <p style="margin: 0; font-size: 12px; line-height: 1.4;">${alamat}</p>
+              </div>
+            `;
+            
+            new maplibregl.Popup({ closeButton: true, closeOnClick: true, maxWidth: '250px' })
+              .setLngLat(e.lngLat)
+              .setHTML(html)
+              .addTo(map);
+          });
+        }
       });
     }
-  }, [processedSls, geoJsonBangunan, geoJsonUsaha, dataKab]);
+  }, [processedSls, geoJsonBangunan, geoJsonUsaha, dataKab, geoJsonUsahaDigital, geoJsonRt]);
 
   // Efek untuk Auto-Zoom saat filter berubah
   useEffect(() => {
@@ -416,10 +453,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
   return (
     <div className="relative h-full w-full rounded-xl overflow-hidden border">
       {isLoading && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
-          <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
-          <p className="text-sm font-medium text-foreground">Memuat dan memproses data spasial Parquet...</p>
-        </div>
+        <div className="absolute inset-0 z-50 bg-black/60 pointer-events-none transition-opacity duration-300 backdrop-blur-[2px]" />
       )}
       
       {error && (

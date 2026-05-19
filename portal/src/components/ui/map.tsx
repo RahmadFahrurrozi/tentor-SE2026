@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 
 const defaultStyles = {
   dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-  light: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+  light: "https://tiles.openfreemap.org/styles/liberty",
 };
 
 type Theme = "light" | "dark";
