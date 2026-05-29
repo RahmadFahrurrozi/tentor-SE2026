@@ -66,7 +66,7 @@ export default function UsersPage() {
       });
   }, []);
 
-  const { user } = useAuthStore();
+  // const { user } = useAuthStore();
   const {
     users,
     totalPages,
@@ -163,13 +163,7 @@ export default function UsersPage() {
   };
 
   const handleBackToDashboard = async () => {
-    if (!user?.id) return;
-    try {
-      const token = await authService.generateOtc(user.id);
-      window.location.href = `${import.meta.env.VITE_STREAMLIT_URL ?? "http://localhost:8501"}?code=${token}`;
-    } catch {
-      toast.error("Gagal redirect ke dashboard.");
-    }
+    navigate("/dashboard");
   };
 
   const handleBulkUpload = (

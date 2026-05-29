@@ -6,14 +6,15 @@ interface MapState {
   showSls: boolean;
   showUsaha: boolean;
   showUsahaDigital: boolean;
+  showUsahaPertanian: boolean;   
   showRt: boolean;
   showBuild: boolean;
   enable3d: boolean;
   showCounting: boolean;
 
   // Filter Wilayah
-  filterKecamatan: string;
-  filterDesa: string;
+  filterKecamatan: string | null;
+  filterDesa: string | null;
   filterNama: string;
 
   // Opacity
@@ -23,26 +24,57 @@ interface MapState {
   // Actions
   toggleLayer: (layer: keyof MapState) => void;
   setFilter: (key: keyof MapState, value: any) => void;
+  resetFilter: (role?: string, assignedDesas?: string[], allKecamatans?: any[]) => void;
 }
 
-export const useMapStore = create<MapState>((set) => ({
-  // Default values berdasarkan Streamlit
-  showKab: true,
+export const useMapStore = create<MapState>((set, get) => ({
+  // Default values
+  showKab: false,
   showSls: true,
-  showUsaha: false, // Default true agar terlihat
+  showUsaha: false,
   showUsahaDigital: false,
+  showUsahaPertanian: false,    
   showRt: false,
-  showBuild: true, // Default true sesuai request user
-  enable3d: false,  // Aktifkan 3D secara default
-  showCounting: true, // Choropleth aktif default
+  showBuild: true,
+  enable3d: false,
+  showCounting: true,
 
-  filterKecamatan: 'Semua',
-  filterDesa: 'Semua',
-  filterNama: '',
+  filterKecamatan: null,
+  filterDesa: null,
+  filterNama: "",
 
   slsOpacity: 0.3,
   buildOpacity: 0.6,
 
   toggleLayer: (layer) => set((state) => ({ [layer]: !state[layer as keyof MapState] })),
-  setFilter: (key, value) => set(() => ({ [key]: value })),
+
+  setFilter: (key, value) => {
+    set({ [key]: value });
+  },
+
+  resetFilter: (role, assignedDesas, allKecamatans) => {
+    set({
+      filterKecamatan: null,
+      filterDesa: null,
+      filterNama: "",
+    });
+
+    if (role === "ppl" && assignedDesas && assignedDesas.length > 0 && allKecamatans) {
+      for (const kec of allKecamatans) {
+        const hasAssignedDesa = kec.desa?.some((d: any) =>
+          assignedDesas.includes(d.iddesa)
+        );
+        if (hasAssignedDesa) {
+          set({ filterKecamatan: kec.idkec });
+          const firstDesa = kec.desa?.find((d: any) =>
+            assignedDesas.includes(d.iddesa)
+          );
+          if (firstDesa) {
+            set({ filterDesa: firstDesa.iddesa });
+          }
+          break;
+        }
+      }
+    }
+  },
 }));
