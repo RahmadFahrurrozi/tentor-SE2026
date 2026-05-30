@@ -150,7 +150,11 @@ export interface LoginIllustrationProps {
   isTyping: boolean;
 }
 
-export const LoginIllustration = ({ passwordLength, showPassword, isTyping }: LoginIllustrationProps) => {
+export const LoginIllustration = ({
+  passwordLength,
+  showPassword,
+  isTyping,
+}: LoginIllustrationProps) => {
   const [mouseX, setMouseX] = useState<number>(0);
   const [mouseY, setMouseY] = useState<number>(0);
   const [isPurpleBlinking, setIsPurpleBlinking] = useState(false);
@@ -248,10 +252,7 @@ export const LoginIllustration = ({ passwordLength, showPassword, isTyping }: Lo
       </div>
 
       <div className="relative z-20 flex items-end justify-center h-[500px]">
-        <div
-          className="relative"
-          style={{ width: "550px", height: "400px" }}
-        >
+        <div className="relative" style={{ width: "550px", height: "400px" }}>
           {/* Purple character */}
           <div
             ref={purpleRef}
@@ -515,10 +516,7 @@ export const LoginIllustration = ({ passwordLength, showPassword, isTyping }: Lo
         >
           Terms of Service
         </a>
-        <a
-          href="#"
-          className="hover:text-primary-foreground transition-colors"
-        >
+        <a href="#" className="hover:text-primary-foreground transition-colors">
           Contact
         </a>
       </div>
