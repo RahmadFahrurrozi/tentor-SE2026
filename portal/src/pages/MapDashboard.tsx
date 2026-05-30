@@ -33,16 +33,18 @@ export default function MapDashboard() {
       {/* Kontainer Peta Utama */}
       <div className="flex-1 h-full relative p-0 md:p-4 flex flex-col">
         {/* Mobile Header / Toggle Button */}
-        <div className="md:hidden absolute top-4 left-4 z-50">
-          <Button
-            variant="secondary"
-            size="icon"
-            className="shadow-md rounded-md"
-            onClick={() => setIsSidebarOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-        </div>
+        {!isSidebarOpen && (
+          <div className="md:hidden absolute top-4 left-4 z-50">
+            <Button
+              variant="secondary"
+              size="icon"
+              className="shadow-md rounded-md"
+              onClick={() => setIsSidebarOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          </div>
+        )}
 
         <div className="h-full w-full relative">
           <InteractiveMap spatialData={spatialData} />
