@@ -81,6 +81,15 @@ const getPointsNearBuilding = (
 };
 
 export function InteractiveMap({ spatialData }: { spatialData: any }) {
+  // const escapeHtml = (str: string) => {
+  //   if (!str) return "";
+  //   return str
+  //     .replace(/&/g, "&amp;")
+  //     .replace(/</g, "&lt;")
+  //     .replace(/>/g, "&gt;")
+  //     .replace(/"/g, "&quot;")
+  //     .replace(/'/g, "&#39;");
+  // };
   const mapRef = useRef<maplibregl.Map>(null);
   const store = useMapStore();
   const { theme } = useTheme();
@@ -94,7 +103,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
   const {
     dataUsaha,
     dataUsahaDigital,
-    dataUsahaPertanian, // ← BARU
+    dataUsahaPertanian,
     dataRumahTangga,
     dataBangunan,
     dataSls,
@@ -119,6 +128,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       dataUsahaDigital,
       dataRumahTangga,
       dataBangunan,
+      dataUsahaPertanian,
     );
   }, [
     dataSls,
@@ -126,6 +136,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     dataUsahaDigital,
     dataRumahTangga,
     dataBangunan,
+    dataUsahaPertanian,
     isLoading,
   ]);
 
@@ -165,13 +176,31 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     return { type: "FeatureCollection", features };
   }, [dataDesa, store.filterDesa]);
 
-  const filterDataByDesaAndSearch = (data: any[]) => {
+  const filterDataByDesaAndSearch = (data: any[], dataType?: string) => {
     if (!data || !data.length) return [];
     let filtered = data;
 
     if (store.filterDesa !== "Semua") {
       filtered = filtered.filter((row) => {
-        const idslsStr = String(row["idsls_str"] || row["idsls final"] || "");
+        let desaId = "";
+
+        if (dataType === "pertanian") {
+          desaId =
+            row["iddesa"] ||
+            row["id_desa"] ||
+            row["desa_id"] ||
+            row["kode_desa"] ||
+            "";
+        } else {
+          desaId =
+            row["idsls_str"] || row["idsls final"] || row["iddesa"] || "";
+        }
+
+        if (!desaId) {
+          desaId = row["idsls_str"] || row["idsls final"] || "";
+        }
+
+        const idslsStr = String(desaId);
         return idslsStr.substring(0, 10) === store.filterDesa;
       });
     }
@@ -184,13 +213,21 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             row["nama_krt"] ||
             row["nama"] ||
             row["nama_kpl"] ||
+            row["nm_project"] ||
             "",
         ).toLowerCase();
         const alamat = String(
-          row["alamat final"] || row["alamat"] || "",
+          row["deskripsi_project"] ||
+            row["alamat final"] ||
+            row["alamat"] ||
+            "",
         ).toLowerCase();
         const kategori = String(
-          row["kategori"] || row["jenis_rt"] || "",
+          row["kategori"] ||
+            row["jenis_rt"] ||
+            row["tipe_landmark"] ||
+            row["kategori_landmark"] ||
+            "",
         ).toLowerCase();
         return (
           nama.includes(query) ||
@@ -289,12 +326,12 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     return convertTitikToGeoJson(filterDataByDesaAndSearch(dataUsahaDigital));
   }, [dataUsahaDigital, isLoading, store.filterDesa, store.filterNama]);
 
-  // ── BARU: usaha pertanian ──────────────────────────────────────
   const geoJsonUsahaPertanian = useMemo(() => {
     if (!dataUsahaPertanian?.length || isLoading) return null;
-    return convertTitikToGeoJson(filterDataByDesaAndSearch(dataUsahaPertanian));
+    return convertTitikToGeoJson(
+      filterDataByDesaAndSearch(dataUsahaPertanian, "pertanian"),
+    );
   }, [dataUsahaPertanian, isLoading, store.filterDesa, store.filterNama]);
-  // ──────────────────────────────────────────────────────────────
 
   const geoJsonRt = useMemo(() => {
     if (!dataRumahTangga.length || isLoading) return null;
@@ -325,6 +362,8 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       const total = properties.total_bangunan || 0;
       const usaha = properties.jumlah_usaha || 0;
       const rt = properties.jumlah_keluarga || 0;
+      const usahaDigital = properties.jumlah_usaha_digital || 0;
+      // const usahaPertanian = properties.jumlah_usaha_pertanian || 0;
 
       html = `
         <div style="font-family: 'Outfit', 'Inter', sans-serif;">
@@ -347,6 +386,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             </p>
             <p style="display: flex; justify-content: space-between; color: #3B82F6; margin: 0;">
               <span>Titik Keluarga:</span><span style="font-weight: 600;">${rt}</span>
+            </p>
+            <p style="display: flex; justify-content: space-between; color: #FF32DC; margin: 0;">
+              <span>Titik Usaha Digital:</span><span style="font-weight: 600;">${usahaDigital}</span>
             </p>
           </div>
         </div>
@@ -384,7 +426,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       [
         "usaha-circle-layer",
         "usaha-digital-circle-layer",
-        "usaha-pertanian-circle-layer", // ← BARU
+        "usaha-pertanian-circle-layer",
         "rt-circle-layer",
       ].includes(layerId)
     ) {
@@ -393,7 +435,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           ? "Titik Usaha Biasa"
           : layerId === "usaha-digital-circle-layer"
             ? "Titik Usaha Digital"
-            : layerId === "usaha-pertanian-circle-layer" // ← BARU
+            : layerId === "usaha-pertanian-circle-layer"
               ? "Titik Usaha Pertanian"
               : "Titik Rumah Tangga";
 
@@ -402,22 +444,36 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           ? "#F59E0B"
           : layerId === "usaha-digital-circle-layer"
             ? "#FF32DC"
-            : layerId === "usaha-pertanian-circle-layer" // ← BARU
+            : layerId === "usaha-pertanian-circle-layer"
               ? "#10B981"
               : "#3B82F6";
 
+      // FIX: prioritaskan field pertanian untuk hover tooltip juga
       const nama =
-        properties["nama_kk"] ||
-        properties["nama final"] ||
-        properties["nama_krt"] ||
-        properties["nama_kpl"] ||
-        properties["nama"] ||
-        "Titik Lokasi";
+        layerId === "usaha-pertanian-circle-layer"
+          ? properties["nama_krt"] ||
+            properties["nm_project"] ||
+            properties["nama final"] ||
+            properties["nama"] ||
+            "Titik Usaha Pertanian"
+          : properties["nama_kk"] ||
+            properties["nama_krt"] ||
+            properties["nama final"] ||
+            properties["nama_kpl"] ||
+            properties["nama"] ||
+            "Titik Lokasi";
+
       const alamat =
-        properties["deskripsi_project"] ||
-        properties["alamat final"] ||
-        properties["alamat"] ||
-        "-";
+        layerId === "usaha-pertanian-circle-layer"
+          ? properties["deskripsi_project"] ||
+            properties["alamat_project"] ||
+            properties["alamat final"] ||
+            properties["alamat"] ||
+            "-"
+          : properties["deskripsi_project"] ||
+            properties["alamat final"] ||
+            properties["alamat"] ||
+            "-";
 
       html = `
         <div style="font-family: 'Outfit', 'Inter', sans-serif;">
@@ -442,7 +498,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
 
   const triggerRadarAnimation = (
     coords: [number, number],
-    type: "usaha" | "rt" | "usaha-digital" | "usaha-pertanian", // ← BARU
+    type: "usaha" | "rt" | "usaha-digital" | "usaha-pertanian",
   ) => {
     const map = mapRef.current;
     if (!map) return;
@@ -460,7 +516,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         ? "#F59E0B"
         : type === "usaha-digital"
           ? "#FF32DC"
-          : type === "usaha-pertanian" // ← BARU
+          : type === "usaha-pertanian"
             ? "#10B981"
             : "#2563EB";
 
@@ -608,7 +664,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
               "line-color":
                 theme === "dark"
                   ? "rgba(0, 255, 204, 0.7)"
-                  : "rgba(0, 180, 140, 0.7)",
+                  : "rgb(160, 32, 240)",
               "line-width": 1.5,
               "line-opacity": 0.7,
             },
@@ -852,7 +908,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         }
       }
 
-      // 5b. Titik Usaha Pertanian ← BARU
+      // 5b. Titik Usaha Pertanian
       if (geoJsonUsahaPertanian) {
         if (map.getSource("usaha-pertanian-source")) {
           (
@@ -872,7 +928,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             },
             paint: {
               "circle-radius": 6,
-              "circle-color": "#10B981", // emerald-500
+              "circle-color": "#10B981",
               "circle-stroke-width": 1.5,
               "circle-stroke-color": "#ffffff",
               "circle-opacity": 0.9,
@@ -914,7 +970,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         "bangunan-3d-layer": store.showBuild,
         "usaha-circle-layer": store.showUsaha,
         "usaha-digital-circle-layer": store.showUsahaDigital,
-        "usaha-pertanian-circle-layer": store.showUsahaPertanian, // ← BARU
+        "usaha-pertanian-circle-layer": store.showUsahaPertanian,
         "rt-circle-layer": store.showRt,
         "kab-line-layer": store.showKab,
         "desa-boundary-layer":
@@ -938,7 +994,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         "bangunan-3d-layer",
         "usaha-circle-layer",
         "usaha-digital-circle-layer",
-        "usaha-pertanian-circle-layer", // ← BARU
+        "usaha-pertanian-circle-layer",
         "rt-circle-layer",
       ];
 
@@ -996,7 +1052,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             [
               "usaha-circle-layer",
               "usaha-digital-circle-layer",
-              "usaha-pertanian-circle-layer", // ← BARU
+              "usaha-pertanian-circle-layer",
               "rt-circle-layer",
             ].includes(layerId)
           ) {
@@ -1005,20 +1061,33 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
                 ? "usaha"
                 : layerId === "usaha-digital-circle-layer"
                   ? "usaha-digital"
-                  : layerId === "usaha-pertanian-circle-layer" // ← BARU
+                  : layerId === "usaha-pertanian-circle-layer"
                     ? "usaha-pertanian"
                     : "rt";
 
+            // FIX: prioritaskan field pertanian (nm_project, deskripsi_project)
             const nama =
+              (type === "usaha-pertanian"
+                ? props["nama_krt"] ||
+                  props["nm_project"] ||
+                  props["nama_project"]
+                : null) ||
               props["nama final"] ||
               props["nama_kk"] ||
               props["nama"] ||
               props["nama_kpl"] ||
-              (type === "rt" ? "Rumah Tangga" : "Titik Usaha");
+              (type === "rt"
+                ? "Rumah Tangga"
+                : type === "usaha-pertanian"
+                  ? "Usaha Pertanian"
+                  : "Titik Usaha");
+
             const alamat =
+              (type === "usaha-pertanian"
+                ? props["deskripsi_project"] || props["alamat_project"]
+                : null) ||
               props["alamat final"] ||
               props["alamat"] ||
-              props["deskripsi_project"] ||
               "-";
 
             triggerRadarAnimation([e.lngLat.lng, e.lngLat.lat], type);
@@ -1028,7 +1097,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
                 ? "background-color: rgba(245, 158, 11, 0.15); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3);"
                 : type === "usaha-digital"
                   ? "background-color: rgba(255, 50, 220, 0.15); color: #FF32DC; border: 1px solid rgba(255, 50, 220, 0.3);"
-                  : type === "usaha-pertanian" // ← BARU
+                  : type === "usaha-pertanian"
                     ? "background-color: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3);"
                     : "background-color: rgba(37, 99, 235, 0.15); color: #2563EB; border: 1px solid rgba(37, 99, 235, 0.3);";
 
@@ -1037,7 +1106,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
                 ? "Usaha Biasa"
                 : type === "usaha-digital"
                   ? "Usaha Digital"
-                  : type === "usaha-pertanian" // ← BARU
+                  : type === "usaha-pertanian"
                     ? "Usaha Pertanian"
                     : "Rumah Tangga";
 
@@ -1096,7 +1165,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     geoJsonBangunan,
     geoJsonUsaha,
     geoJsonUsahaDigital,
-    geoJsonUsahaPertanian, // ← BARU
+    geoJsonUsahaPertanian,
     geoJsonRt,
     geoJsonDesaBoundary,
     geoJsonDesaSelected,
@@ -1106,7 +1175,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     store.showBuild,
     store.showUsaha,
     store.showUsahaDigital,
-    store.showUsahaPertanian, // ← BARU
+    store.showUsahaPertanian,
     store.showRt,
     store.showKab,
     store.filterKecamatan,

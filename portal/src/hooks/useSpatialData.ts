@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useMapStore } from '@/store/mapStore';
 import { useAuthStore } from '@/store/auth-store';
+import { assignSlsToPoints } from '@/utils/dataProcessing';
 
 export function useSpatialData() {
   const [dataUsaha, setDataUsaha] = useState<any[]>([]);
   const [dataUsahaDigital, setDataUsahaDigital] = useState<any[]>([]);
-  const [dataUsahaPertanian, setDataUsahaPertanian] = useState<any[]>([]);  // ← BARU
+  const [dataUsahaPertanian, setDataUsahaPertanian] = useState<any[]>([]);
   const [dataRumahTangga, setDataRumahTangga] = useState<any[]>([]);
   const [dataBangunan, setDataBangunan] = useState<any[]>([]);
   const [dataSls, setDataSls] = useState<any>(null);
@@ -26,11 +27,10 @@ export function useSpatialData() {
   const filterKecamatan = useMapStore((state) => state.filterKecamatan);
   const setFilter = useMapStore((state) => state.setFilter);
 
-  // Cache kini menyimpan usahaPertanian juga
   const cache = useRef<Record<string, {
     usaha: any[];
     usahaDigital: any[];
-    usahaPertanian: any[];          // ← BARU
+    usahaPertanian: any[];
     rumahTangga: any[];
     bangunan: any[];
     sls: any;
@@ -135,9 +135,8 @@ export function useSpatialData() {
     loadAssignments();
   }, [profile]);
 
-  // 4. Fetch data per kecamatan (dengan caching) — termasuk usaha_pertanian
+  // 4. Fetch data per kecamatan (dengan caching)
   useEffect(() => {
-    // CEK NULL DULU - ini yang penting!
     if (!filterKecamatan || filterKecamatan === 'Semua') {
       setDataUsaha([]);
       setDataUsahaDigital([]);
@@ -150,7 +149,7 @@ export function useSpatialData() {
     }
 
     async function loadKecamatanData() {
-      const kecId = filterKecamatan as string; 
+      const kecId = filterKecamatan as string;
       setIsLoading(true);
 
       if (cache.current[kecId]) {
@@ -167,8 +166,7 @@ export function useSpatialData() {
 
       try {
         setError(null);
-        
-        // Fungsi fetch tetap sama seperti kode kamu sebelumnya
+
         const fetchChunkSafe = async (dataset: string) => {
           try {
             const url = getChunksPublicUrl(`${dataset}/kec_${kecId}.json`);
@@ -194,8 +192,8 @@ export function useSpatialData() {
           }
         };
 
-        // Fetch semua dataset
-        const [usaha, usahaDigital, usahaPertanian, rumahTangga, bangunan, sls] =
+        // Fetch semua dataset paralel
+        const [usaha, usahaDigital, usahaPertanianRaw, rumahTangga, bangunan, sls] =
           await Promise.all([
             fetchChunkSafe('usaha'),
             fetchChunkSafe('usaha_digital'),
@@ -205,14 +203,23 @@ export function useSpatialData() {
             fetchSlsChunkSafe(),
           ]);
 
-        // Simpan ke cache - aman
-        cache.current[kecId] = { 
-          usaha, 
-          usahaDigital, 
-          usahaPertanian, 
-          rumahTangga, 
-          bangunan, 
-          sls 
+        // FIX: Spatial join — assign idsls_str ke setiap titik pertanian
+        // berdasarkan koordinatnya jatuh di SLS mana
+        const usahaPertanian = assignSlsToPoints(usahaPertanianRaw, sls);
+
+        console.log(
+          `[PERTANIAN] ${kecId}: ${usahaPertanianRaw.length} titik, ` +
+          `${usahaPertanian.filter((p: any) => p.idsls_str).length} berhasil di-assign SLS`
+        );
+
+        // Simpan ke cache (sudah include hasil spatial join)
+        cache.current[kecId] = {
+          usaha,
+          usahaDigital,
+          usahaPertanian,
+          rumahTangga,
+          bangunan,
+          sls,
         };
 
         setDataUsaha(usaha);
@@ -221,7 +228,7 @@ export function useSpatialData() {
         setDataRumahTangga(rumahTangga);
         setDataBangunan(bangunan);
         setDataSls(sls);
-        
+
       } catch (err: any) {
         console.error(`Gagal load data kecamatan ${kecId}:`, err);
         setError(`Gagal memuat data spasial kecamatan: ${err.message}`);
@@ -231,12 +238,12 @@ export function useSpatialData() {
     }
 
     loadKecamatanData();
-  }, [filterKecamatan]); // dependency-nya tetap filterKecamatan
+  }, [filterKecamatan]);
 
   return {
     dataUsaha,
     dataUsahaDigital,
-    dataUsahaPertanian,             // ← BARU: expose ke komponen
+    dataUsahaPertanian,
     dataRumahTangga,
     dataBangunan,
     dataSls,

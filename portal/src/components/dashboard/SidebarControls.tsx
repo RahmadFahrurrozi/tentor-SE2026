@@ -139,7 +139,14 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
             />
           </div>
 
-          <div className="flex items-center justify-between">
+          <div
+            className="flex items-center justify-between"
+            style={{
+              cursor: "not-allowed",
+              opacity: 0.5,
+              pointerEvents: "none",
+            }}
+          >
             <Label htmlFor="showSls" className="text-sm">
               Batas SLS
             </Label>
