@@ -39,8 +39,8 @@ export const useMapStore = create<MapState>((set) => ({
   enable3d: false,
   showCounting: true,
 
-  filterKecamatan: null,
-  filterDesa: null,
+  filterKecamatan: "",
+  filterDesa: "",
   filterNama: "",
 
   slsOpacity: 0.3,
