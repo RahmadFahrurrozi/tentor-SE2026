@@ -27,7 +27,7 @@ interface MapState {
   resetFilter: (role?: string, assignedDesas?: string[], allKecamatans?: any[]) => void;
 }
 
-export const useMapStore = create<MapState>((set, get) => ({
+export const useMapStore = create<MapState>((set) => ({
   // Default values
   showKab: false,
   showSls: true,
