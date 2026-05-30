@@ -48,9 +48,7 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   toggleLayer: (layer) => set((state) => ({ [layer]: !state[layer as keyof MapState] })),
 
-  setFilter: (key, value) => {
-    set({ [key]: value });
-  },
+  setFilter: (key: string, value: any) => set({ [key]: value }),
 
   resetFilter: (role, assignedDesas, allKecamatans) => {
     set({

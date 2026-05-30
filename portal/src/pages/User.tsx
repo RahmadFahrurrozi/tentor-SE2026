@@ -26,8 +26,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useAuthStore } from "@/store/auth-store";
-import { authService } from "@/services/auth.service";
 import { toast } from "sonner";
 import { useUsersQuery } from "@/hooks/use-users";
 import {

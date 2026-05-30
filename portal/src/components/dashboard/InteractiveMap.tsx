@@ -10,7 +10,6 @@ import {
 } from "@/utils/dataProcessing";
 import { useMapStore } from "@/store/mapStore";
 import { useTheme } from "@/context/theme-provider";
-import { useAuthStore } from "@/store/auth-store";
 
 const getGeometryCentroid = (geometry: any): [number, number] | null => {
   if (!geometry || !geometry.coordinates) return null;
@@ -85,7 +84,6 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
   const mapRef = useRef<maplibregl.Map>(null);
   const store = useMapStore();
   const { theme } = useTheme();
-  const { profile } = useAuthStore();
 
   const activePopupRef = useRef<maplibregl.Popup | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);

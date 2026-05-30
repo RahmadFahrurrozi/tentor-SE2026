@@ -122,7 +122,7 @@ export function useSpatialData() {
 
         if (assignedKecs.length > 0) {
           const activeKec = useMapStore.getState().filterKecamatan;
-          if (activeKec === 'Semua' || !assignedKecs.includes(activeKec)) {
+          if (activeKec === 'Semua' || activeKec === null || !assignedKecs.includes(activeKec)) {
             setFilter('filterKecamatan', assignedKecs[0]);
           }
         }
@@ -137,10 +137,11 @@ export function useSpatialData() {
 
   // 4. Fetch data per kecamatan (dengan caching) — termasuk usaha_pertanian
   useEffect(() => {
-    if (filterKecamatan === 'Semua') {
+    // CEK NULL DULU - ini yang penting!
+    if (!filterKecamatan || filterKecamatan === 'Semua') {
       setDataUsaha([]);
       setDataUsahaDigital([]);
-      setDataUsahaPertanian([]);      // ← BARU: kosongkan saat reset
+      setDataUsahaPertanian([]);
       setDataRumahTangga([]);
       setDataBangunan([]);
       setDataSls(null);
@@ -149,15 +150,16 @@ export function useSpatialData() {
     }
 
     async function loadKecamatanData() {
-      const kecId = filterKecamatan;
+      // Sekarang filterKecamatan sudah pasti string, bukan null
+      const kecId = filterKecamatan; 
       setIsLoading(true);
 
-      // Hit cache
+      // Hit cache - aman karena kecId sudah pasti string
       if (cache.current[kecId]) {
         const cached = cache.current[kecId];
         setDataUsaha(cached.usaha);
         setDataUsahaDigital(cached.usahaDigital);
-        setDataUsahaPertanian(cached.usahaPertanian);  // ← BARU
+        setDataUsahaPertanian(cached.usahaPertanian);
         setDataRumahTangga(cached.rumahTangga);
         setDataBangunan(cached.bangunan);
         setDataSls(cached.sls);
@@ -167,37 +169,15 @@ export function useSpatialData() {
 
       try {
         setError(null);
-
+        
+        // Fungsi fetch tetap sama seperti kode kamu sebelumnya
         const fetchChunkSafe = async (dataset: string) => {
           try {
             const url = getChunksPublicUrl(`${dataset}/kec_${kecId}.json`);
             const res = await fetch(url);
             if (!res.ok) return [];
             const json = await res.json();
-            const finalData = json.data || json || [];
-
-            if (finalData.length > 0) {
-              console.log(`[DATA] ${dataset} kec ${kecId}: ${finalData.length} baris`);
-
-              // Log detail struktur khusus untuk usaha_pertanian
-              if (dataset === 'usaha_pertanian') {
-                const sample = finalData[0];
-                console.group('[USAHA PERTANIAN] Struktur kolom');
-                console.log('Semua kolom:', Object.keys(sample));
-                console.log('Contoh baris pertama:', sample);
-                const kolomLat  = Object.keys(sample).find(k => ['lat final', 'latitude', 'lat'].includes(k.toLowerCase()));
-                const kolomLon  = Object.keys(sample).find(k => ['long final', 'longitude', 'lon', 'long'].includes(k.toLowerCase()));
-                const kolomNama = Object.keys(sample).find(k => ['nama final', 'nama', 'name'].includes(k.toLowerCase()));
-                console.log('Kolom lat  :', kolomLat  ?? '❌ TIDAK DITEMUKAN');
-                console.log('Kolom lon  :', kolomLon  ?? '❌ TIDAK DITEMUKAN');
-                console.log('Kolom nama :', kolomNama ?? '❌ TIDAK DITEMUKAN');
-                if (kolomLat)  console.log('Nilai lat  :', sample[kolomLat]);
-                if (kolomLon)  console.log('Nilai lon  :', sample[kolomLon]);
-                console.groupEnd();
-              }
-            }
-
-            return finalData;
+            return json.data || json || [];
           } catch (e) {
             console.error(`[ERROR] Gagal fetch ${dataset} chunk:`, e);
             return [];
@@ -216,26 +196,34 @@ export function useSpatialData() {
           }
         };
 
-        // Fetch semua dataset paralel — usaha_pertanian ikut di sini
+        // Fetch semua dataset
         const [usaha, usahaDigital, usahaPertanian, rumahTangga, bangunan, sls] =
           await Promise.all([
             fetchChunkSafe('usaha'),
             fetchChunkSafe('usaha_digital'),
-            fetchChunkSafe('usaha_pertanian'),    // ← BARU
+            fetchChunkSafe('usaha_pertanian'),
             fetchChunkSafe('rumah_tangga'),
             fetchChunkSafe('bangunan'),
             fetchSlsChunkSafe(),
           ]);
 
-        // Simpan ke cache
-        cache.current[kecId] = { usaha, usahaDigital, usahaPertanian, rumahTangga, bangunan, sls };
+        // Simpan ke cache - aman
+        cache.current[kecId] = { 
+          usaha, 
+          usahaDigital, 
+          usahaPertanian, 
+          rumahTangga, 
+          bangunan, 
+          sls 
+        };
 
         setDataUsaha(usaha);
         setDataUsahaDigital(usahaDigital);
-        setDataUsahaPertanian(usahaPertanian);    // ← BARU
+        setDataUsahaPertanian(usahaPertanian);
         setDataRumahTangga(rumahTangga);
         setDataBangunan(bangunan);
         setDataSls(sls);
+        
       } catch (err: any) {
         console.error(`Gagal load data kecamatan ${kecId}:`, err);
         setError(`Gagal memuat data spasial kecamatan: ${err.message}`);
@@ -245,7 +233,7 @@ export function useSpatialData() {
     }
 
     loadKecamatanData();
-  }, [filterKecamatan]);
+  }, [filterKecamatan]); // dependency-nya tetap filterKecamatan
 
   return {
     dataUsaha,
