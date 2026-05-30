@@ -54,23 +54,28 @@ export const useAuth = (options?: UseAuthOptions) => {
     },
   });
 
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      await authService.logout();
-    },
-    onSuccess: () => {
-      clearAuth();
-      if (!options?.disableRedirect) {
-        navigate("/login");
-      }
-      toast.info("Anda telah logout");
-    },
-    onError: (error) => {
-      const message =
-        error instanceof AuthError ? error.message : "Terjadi kesalahan";
-      toast.error("Logout Gagal", { description: message });
-    },
-  });
+const logoutMutation = useMutation({
+  mutationFn: async () => {
+    await authService.logout();
+  },
+  onSuccess: () => {
+    clearAuth();
+    if (!options?.disableRedirect) {
+      navigate("/login");
+    }
+    toast.info("Anda telah logout");
+  },
+  onError: (error) => {
+    clearAuth();
+    if (!options?.disableRedirect) {
+      navigate("/login");
+    }
+    const message =
+      error instanceof AuthError ? error.message : "Terjadi kesalahan";
+    toast.error("Sesi telah berakhir", { description: "Anda telah dikeluarkan" });
+    console.error("Logout error (session mungkin sudah expired):", message);
+  },
+});
 
   return {
     form,
