@@ -150,11 +150,9 @@ export function useSpatialData() {
     }
 
     async function loadKecamatanData() {
-      // Sekarang filterKecamatan sudah pasti string, bukan null
-      const kecId = filterKecamatan; 
+      const kecId = filterKecamatan as string; 
       setIsLoading(true);
 
-      // Hit cache - aman karena kecId sudah pasti string
       if (cache.current[kecId]) {
         const cached = cache.current[kecId];
         setDataUsaha(cached.usaha);
