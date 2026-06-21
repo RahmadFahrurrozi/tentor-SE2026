@@ -1199,51 +1199,62 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     }
   }, [hoveredSlsId]);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
+useEffect(() => {
+  const map = mapRef.current;
+  if (!map) return;
 
-    const zoomToFeature = () => {
-      if (store.filterKecamatan !== "Semua" && filteredSls) {
-        let geoToUse = filteredSls as any;
-        if (store.filterDesa !== "Semua") {
-          const desaFeatures = filteredSls.features.filter((f: any) => {
-            const iddesa =
-              f.properties.iddesa ||
-              String(f.properties.idsls_str || "").substring(0, 10);
-            return String(iddesa) === store.filterDesa;
-          });
-          if (desaFeatures.length > 0) {
-            geoToUse = { type: "FeatureCollection", features: desaFeatures };
-          }
-        }
-        const bbox = calculateBbox(geoToUse);
-        if (bbox) {
-          map.fitBounds(
-            [
-              [bbox[0], bbox[1]],
-              [bbox[2], bbox[3]],
-            ],
-            { padding: 50, duration: 1200 },
-          );
-        }
-      } else if (store.filterKecamatan === "Semua" && dataKab) {
-        const bbox = calculateBbox(dataKab);
-        if (bbox) {
-          map.fitBounds(
-            [
-              [bbox[0], bbox[1]],
-              [bbox[2], bbox[3]],
-            ],
-            { padding: 50, duration: 1200 },
-          );
-        }
-      }
-    };
+  const magneticZoom = () => {
+    let bbox = null;
 
-    if (map.loaded()) zoomToFeature();
-    else map.once("load", zoomToFeature);
-  }, [store.filterKecamatan, store.filterDesa, filteredSls, dataKab]);
+    // 1. Prioritas utama: Kalau ada Desa yang dipilih
+    if (store.filterDesa && store.filterDesa !== "Semua" && geoJsonDesaSelected?.features?.length > 0) {
+      bbox = calculateBbox(geoJsonDesaSelected);
+    } 
+    // 2. Prioritas kedua: Kalau ada Kecamatan yang dipilih (tapi Desa "Semua")
+    else if (store.filterKecamatan && store.filterKecamatan !== "Semua" && geoJsonDesaBoundary?.features?.length > 0) {
+      bbox = calculateBbox(geoJsonDesaBoundary);
+    } 
+    // 3. Prioritas terakhir: Balik ke Kabupaten
+    else if (dataKab?.features?.length > 0) {
+      bbox = calculateBbox(dataKab);
+    }
+
+    // Kalau koordinat bbox dapet, lakuin efek "Woozz"
+    if (bbox && bbox.length === 4) {
+      map.fitBounds(
+        [[bbox[0], bbox[1]], [bbox[2], bbox[3]]], 
+        {
+          padding: 80,         // Kasih jarak pinggir biar wilayahnya nggak mepet layar
+          duration: 2500,      // Durasi 2.5 detik biar efek terbangnya kerasa banget
+          pitch: store.enable3d ? 60 : 0, // Kalau lagi 3D, pertahankan angle-nya
+          essential: true,     // Maksa Maplibre jalanin animasi ini tanpa ragu
+          curve: 1.5,          // Bikin kurva terbangnya makin melengkung ala "woozz"
+        }
+      );
+    }
+  };
+
+  // KUNCI PENTING: Kasih jeda (delay) dikit.
+  // Kadang React butuh waktu nol koma sekian detik buat nge-set geoJsonDesaSelected dll.
+  // Kalau langsung ditembak, bbox-nya bisa null atau animasi tabrakan.
+  const timeoutId = setTimeout(() => {
+    if (map.loaded()) {
+      magneticZoom();
+    } else {
+      map.once("load", magneticZoom);
+    }
+  }, 150); // Jeda 150ms
+
+  return () => clearTimeout(timeoutId);
+
+}, [
+  store.filterKecamatan, 
+  store.filterDesa, 
+  geoJsonDesaSelected, 
+  geoJsonDesaBoundary, 
+  dataKab,
+  store.enable3d
+]);
 
   useEffect(() => {
     const map = mapRef.current;
