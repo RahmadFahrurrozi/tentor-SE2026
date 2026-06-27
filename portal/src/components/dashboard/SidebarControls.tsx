@@ -19,7 +19,7 @@ import { useEffect } from "react";
 
 export function SidebarControls({ spatialData }: { spatialData: any }) {
   const store = useMapStore();
-  const { profile } = useAuthStore();
+  const { profile, user } = useAuthStore();
   const { logout, isLoggingOut } = useAuth();
 
   const {
@@ -111,9 +111,27 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
     }
   };
 
+  const userEmail = profile?.email || user?.email || "";
+  const userFullName = profile?.full_name || "PML User";
+  const userInitials = userFullName
+    .split(" ")
+    .filter(Boolean)
+    .map((n: string) => n[0])
+    .join("")
+    .substring(0, 2)
+    .toUpperCase() || "U";
+
+  const displayRole = role === "admin"
+    ? "Admin"
+    : role === "pml"
+      ? "PML"
+      : role === "ppl"
+        ? "PPL"
+        : role?.toUpperCase();
+
   return (
-    <Card className="h-full w-full max-w-[300px] flex flex-col rounded-none border-y-0 border-l-0 overflow-y-auto">
-      <CardHeader className="pb-4 flex flex-row items-center justify-between space-y-0">
+    <Card className="h-full w-full max-w-[300px] flex flex-col rounded-none border-y-0 border-l-0">
+      <CardHeader className="pb-4 shrink-0 flex flex-row items-center justify-between space-y-0">
         <div className="flex items-center gap-3">
           <img
             src="/logo.svg"
@@ -125,7 +143,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
         <ModeToggle />
       </CardHeader>
 
-      <CardContent className="space-y-6">
+      <CardContent className="flex-1 overflow-y-auto space-y-6">
         {/* Layer Visibility */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -306,21 +324,45 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
           </Button>
         </div>
 
-        <hr />
-
-        {/* Logout */}
-        <div className="pt-2">
-          <Button
-            variant="destructive"
-            className="w-full"
-            onClick={() => logout()}
-            disabled={isLoggingOut}
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            {isLoggingOut ? "Keluar..." : "Logout"}
-          </Button>
-        </div>
       </CardContent>
+
+      {/* Footer Profil & Logout */}
+      <div className="shrink-0 p-6 border-t bg-card space-y-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm border border-primary/20 shrink-0">
+            {userInitials}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground truncate" title={userFullName}>
+              {userFullName}
+            </p>
+            <p className="text-xs text-muted-foreground truncate" title={userEmail}>
+              {userEmail}
+            </p>
+            <div className="mt-1">
+              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                role === "admin"
+                  ? "bg-red-500/10 text-red-500 border-red-500/20"
+                  : role === "pml"
+                    ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                    : "bg-green-500/10 text-green-500 border-green-500/20"
+              }`}>
+                {displayRole}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <Button
+          variant="destructive"
+          className="w-full text-xs h-9"
+          onClick={() => logout()}
+          disabled={isLoggingOut}
+        >
+          <LogOut className="mr-2 h-3.5 w-3.5" />
+          {isLoggingOut ? "Keluar..." : "Logout"}
+        </Button>
+      </div>
     </Card>
   );
 }
