@@ -12,22 +12,25 @@ import {
 } from "@/components/ui/select";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
-import { Eraser, LogOut } from "lucide-react";
+import {
+  Eraser,
+  LogOut,
+  BookOpen,
+  ArrowLeftRight,
+  Database,
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 export function SidebarControls({ spatialData }: { spatialData: any }) {
   const store = useMapStore();
   const { profile, user } = useAuthStore();
   const { logout, isLoggingOut } = useAuth();
+  const navigate = useNavigate();
 
-  const {
-    wilayahManifest,
-    isLoadingManifest,
-    assignments,
-    isLoadingAssignments,
-  } = spatialData;
+  const { wilayahManifest, assignments } = spatialData;
 
   const role = profile?.role ?? "ppl";
 
@@ -46,7 +49,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
   });
 
   const selectedKecObj = allKecamatans.find(
-    (k: any) => k.idkec === store.filterKecamatan,
+    (k: any) => String(k.idkec) === String(store.filterKecamatan),
   );
   const rawDesaOptions = selectedKecObj?.desa || [];
   const desaOptions = rawDesaOptions.filter((d: any) => {
@@ -61,7 +64,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
       store.filterKecamatan !== "Semua"
     ) {
       const kecamatan = allKecamatans.find(
-        (k: any) => k.idkec === store.filterKecamatan,
+        (k: any) => String(k.idkec) === String(store.filterKecamatan),
       );
       if (kecamatan && kecamatan.desa) {
         const firstAssignedDesa = kecamatan.desa.find((d: any) =>
@@ -113,21 +116,23 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
 
   const userEmail = profile?.email || user?.email || "";
   const userFullName = profile?.full_name || "PML User";
-  const userInitials = userFullName
-    .split(" ")
-    .filter(Boolean)
-    .map((n: string) => n[0])
-    .join("")
-    .substring(0, 2)
-    .toUpperCase() || "U";
+  const userInitials =
+    userFullName
+      .split(" ")
+      .filter(Boolean)
+      .map((n: string) => n[0])
+      .join("")
+      .substring(0, 2)
+      .toUpperCase() || "U";
 
-  const displayRole = role === "admin"
-    ? "Admin"
-    : role === "pml"
-      ? "PML"
-      : role === "ppl"
-        ? "PPL"
-        : role?.toUpperCase();
+  const displayRole =
+    role === "admin"
+      ? "Admin"
+      : role === "pml"
+        ? "PML"
+        : role === "ppl"
+          ? "PPL"
+          : role?.toUpperCase();
 
   return (
     <Card className="h-full w-full max-w-[300px] flex flex-col rounded-none border-y-0 border-l-0">
@@ -144,6 +149,59 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
       </CardHeader>
 
       <CardContent className="flex-1 overflow-y-auto space-y-6">
+        {/* Dataset Switcher & Quick Tools */}
+        <div className="space-y-3 p-3 bg-muted/40 rounded-lg border">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold flex items-center gap-1.5">
+              <Database className="w-3.5 h-3.5 text-primary" /> Versi Dataset
+            </span>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                store.activeDatasetVersion === "se2026"
+                  ? "bg-emerald-500/15 text-emerald-500"
+                  : "bg-amber-500/15 text-amber-500"
+              }`}
+            >
+              {store.activeDatasetVersion === "se2026" ? "SE 2026" : "Prelist"}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1 bg-background p-1 rounded-md border">
+            <Button
+              size="sm"
+              variant={
+                store.activeDatasetVersion === "prelist" ? "default" : "ghost"
+              }
+              className="text-[11px] h-7 px-1"
+              onClick={() => store.setDatasetVersion("prelist")}
+            >
+              Baseline Prelist
+            </Button>
+            <Button
+              size="sm"
+              variant={
+                store.activeDatasetVersion === "se2026" ? "default" : "ghost"
+              }
+              className="text-[11px] h-7 px-1"
+              onClick={() => store.setDatasetVersion("se2026")}
+            >
+              SE 2026 Baru
+            </Button>
+          </div>
+
+          <div className="pt-1">
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full text-xs h-8 gap-1.5 border-primary/40 text-primary"
+              onClick={() => store.setCompareMode(!store.isCompareMode)}
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5" />
+              {store.isCompareMode ? "Tutup Komparasi" : "Mode Komparasi"}
+            </Button>
+          </div>
+        </div>
+
         {/* Layer Visibility */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -188,6 +246,17 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
           </div>
 
           <div className="flex items-center justify-between">
+            <Label htmlFor="showSyntheticBuildings" className="text-sm text-muted-foreground">
+              ↳ Bangunan Buatan Sintetis (6m×6m)
+            </Label>
+            <Switch
+              id="showSyntheticBuildings"
+              checked={store.showSyntheticBuildings !== false}
+              onCheckedChange={() => store.toggleLayer("showSyntheticBuildings")}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
             <Label htmlFor="showUsaha" className="text-sm">
               Titik Usaha Biasa
             </Label>
@@ -209,7 +278,6 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
             />
           </div>
 
-          {/* ── BARU: Titik Usaha Pertanian ───────────────────── */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Label htmlFor="showUsahaPertanian" className="text-sm">
@@ -222,7 +290,6 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
               onCheckedChange={() => store.toggleLayer("showUsahaPertanian")}
             />
           </div>
-          {/* ─────────────────────────────────────────────────── */}
 
           <div className="flex items-center justify-between">
             <Label htmlFor="showRt" className="text-sm">
@@ -248,16 +315,11 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
               value={store.filterKecamatan || undefined}
               onValueChange={(val) => {
                 store.setFilter("filterKecamatan", val);
-                if (role !== "ppl") store.setFilter("filterDesa", "Semua");
+                store.setFilter("filterDesa", "Semua");
               }}
-              disabled={isLoadingManifest || isLoadingAssignments}
             >
               <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    isLoadingManifest ? "Memuat..." : "Pilih Kecamatan"
-                  }
-                />
+                <SelectValue placeholder="Pilih Kecamatan" />
               </SelectTrigger>
               <SelectContent>
                 {role === "admin" && (
@@ -265,7 +327,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
                 )}
                 {kecOptions.map((k: any) => (
                   <SelectItem key={k.idkec} value={k.idkec}>
-                    {k.nama}
+                    {k.nmkec || k.nama || k.name || k.idkec}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -280,19 +342,17 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
               disabled={
                 !store.filterKecamatan ||
                 store.filterKecamatan === "Semua" ||
-                isLoadingManifest
+                desaOptions.length === 0
               }
             >
               <SelectTrigger>
                 <SelectValue placeholder="Pilih Desa" />
               </SelectTrigger>
               <SelectContent>
-                {role !== "ppl" && (
-                  <SelectItem value="Semua">Semua Desa</SelectItem>
-                )}
+                <SelectItem value="Semua">Semua Desa</SelectItem>
                 {desaOptions.map((d: any) => (
                   <SelectItem key={d.iddesa} value={d.iddesa}>
-                    {d.nama}
+                    {d.nmdesa || d.nama || d.name || d.iddesa}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -312,18 +372,17 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
           />
         </div>
 
-        <div className="pt-2">
+        <div className="pt-2 space-y-2">
           <Button
             variant="outline"
             size="sm"
-            className="w-full"
+            className="w-full text-xs"
             onClick={handleResetFilter}
           >
-            <Eraser className="mr-2 h-4 w-4" />
+            <Eraser className="mr-2 h-3.5 w-3.5" />
             Reset Filter
           </Button>
         </div>
-
       </CardContent>
 
       {/* Footer Profil & Logout */}
@@ -333,20 +392,28 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
             {userInitials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-foreground truncate" title={userFullName}>
+            <p
+              className="text-sm font-semibold text-foreground truncate"
+              title={userFullName}
+            >
               {userFullName}
             </p>
-            <p className="text-xs text-muted-foreground truncate" title={userEmail}>
+            <p
+              className="text-xs text-muted-foreground truncate"
+              title={userEmail}
+            >
               {userEmail}
             </p>
             <div className="mt-1">
-              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                role === "admin"
-                  ? "bg-red-500/10 text-red-500 border-red-500/20"
-                  : role === "pml"
-                    ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
-                    : "bg-green-500/10 text-green-500 border-green-500/20"
-              }`}>
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                  role === "admin"
+                    ? "bg-red-500/10 text-red-500 border-red-500/20"
+                    : role === "pml"
+                      ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                      : "bg-green-500/10 text-green-500 border-green-500/20"
+                }`}
+              >
                 {displayRole}
               </span>
             </div>

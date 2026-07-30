@@ -28,14 +28,13 @@ export function processSlsData(
     return acc;
   }, {} as Record<string, number>);
 
-  // 3. Hitung jumlah usaha pertanian per IDDESA (10 digit)
-  // FIX: key tetap pakai iddesa (10 digit), nanti di-lookup juga pakai iddesa
+  // 3. Hitung jumlah usaha pertanian per SLS (idsls_str)
   const usahaPertanianCount: Record<string, number> = {};
   if (dataUsahaPertanian) {
     dataUsahaPertanian.forEach((curr) => {
-      const iddesa = String(curr['iddesa'] || curr['id_desa'] || '').trim();
-      if (iddesa) {
-        usahaPertanianCount[iddesa] = (usahaPertanianCount[iddesa] || 0) + 1;
+      const idsls = curr['idsls_str'] || curr['idsls final'] || curr['idsls'];
+      if (idsls) {
+        usahaPertanianCount[idsls] = (usahaPertanianCount[idsls] || 0) + 1;
       }
     });
   }
@@ -93,8 +92,7 @@ export function processSlsData(
         iddesa: iddesa,
         jumlah_usaha: usahaCount[idslsStr] || 0,
         jumlah_usaha_digital: usahaDigitalCount[idslsStr] || 0,
-        // FIX: lookup pakai iddesa (10 digit), bukan idslsStr (12 digit)
-        jumlah_usaha_pertanian: usahaPertanianCount[iddesa] || 0,
+        jumlah_usaha_pertanian: usahaPertanianCount[idslsStr] || 0,
         jumlah_keluarga: keluargaCount[idslsStr] || 0,
         sudah_terdata: sudahTerdata,
         belum_terdata: belumTerdata,
@@ -258,4 +256,31 @@ export function assignSlsToPoints(points: any[], slsGeoJson: any): any[] {
       idsls_str: foundSls || point.idsls_str || null,
     };
   });
+}
+
+export function generateSyntheticBuildingForPoint(
+  lat: number,
+  lng: number,
+  sizeMeters = 6
+): any {
+  // 1 meter ≈ 0.000009 derajat koordinat GPS
+  const halfDegrees = (sizeMeters / 2) * 0.000009;
+
+  const minLng = lng - halfDegrees;
+  const maxLng = lng + halfDegrees;
+  const minLat = lat - halfDegrees;
+  const maxLat = lat + halfDegrees;
+
+  return {
+    type: "Polygon",
+    coordinates: [
+      [
+        [minLng, minLat],
+        [maxLng, minLat],
+        [maxLng, maxLat],
+        [minLng, maxLat],
+        [minLng, minLat],
+      ],
+    ],
+  };
 }

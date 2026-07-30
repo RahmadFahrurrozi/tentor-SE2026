@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+export type DatasetVersion = 'prelist' | 'se2026';
+
 interface MapState {
   // Layer Visibility
   showKab: boolean;
@@ -9,6 +11,7 @@ interface MapState {
   showUsahaPertanian: boolean;   
   showRt: boolean;
   showBuild: boolean;
+  showSyntheticBuildings: boolean;
   enable3d: boolean;
   showCounting: boolean;
 
@@ -21,10 +24,19 @@ interface MapState {
   slsOpacity: number;
   buildOpacity: number;
 
+  // Features
+  activeDatasetVersion: DatasetVersion;
+  isCompareMode: boolean;
+  isStatisticsOpen: boolean;
+
   // Actions
   toggleLayer: (layer: keyof MapState) => void;
   setFilter: (key: keyof MapState, value: any) => void;
   resetFilter: (role?: string, assignedDesas?: string[], allKecamatans?: any[]) => void;
+  setDatasetVersion: (version: DatasetVersion) => void;
+  setCompareMode: (enabled: boolean) => void;
+  setStatisticsOpen: (open: boolean) => void;
+  toggleStatisticsOpen: () => void;
 }
 
 export const useMapStore = create<MapState>((set) => ({
@@ -36,6 +48,7 @@ export const useMapStore = create<MapState>((set) => ({
   showUsahaPertanian: false,    
   showRt: false,
   showBuild: true,
+  showSyntheticBuildings: true,
   enable3d: false,
   showCounting: true,
 
@@ -46,14 +59,18 @@ export const useMapStore = create<MapState>((set) => ({
   slsOpacity: 0.3,
   buildOpacity: 0.6,
 
+  activeDatasetVersion: 'prelist',
+  isCompareMode: false,
+  isStatisticsOpen: true,
+
   toggleLayer: (layer) => set((state) => ({ [layer]: !state[layer as keyof MapState] })),
 
   setFilter: (key: string, value: any) => set({ [key]: value }),
 
   resetFilter: (role, assignedDesas, allKecamatans) => {
     set({
-      filterKecamatan: null,
-      filterDesa: null,
+      filterKecamatan: "Semua",
+      filterDesa: "Semua",
       filterNama: "",
     });
 
@@ -75,4 +92,9 @@ export const useMapStore = create<MapState>((set) => ({
       }
     }
   },
+
+  setDatasetVersion: (version) => set({ activeDatasetVersion: version }),
+  setCompareMode: (enabled) => set({ isCompareMode: enabled }),
+  setStatisticsOpen: (open) => set({ isStatisticsOpen: open }),
+  toggleStatisticsOpen: () => set((state) => ({ isStatisticsOpen: !state.isStatisticsOpen })),
 }));

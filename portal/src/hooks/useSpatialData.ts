@@ -25,6 +25,7 @@ export function useSpatialData() {
 
   const { profile } = useAuthStore();
   const filterKecamatan = useMapStore((state) => state.filterKecamatan);
+  const activeDatasetVersion = useMapStore((state) => state.activeDatasetVersion);
   const setFilter = useMapStore((state) => state.setFilter);
 
   const cache = useRef<Record<string, {
@@ -150,10 +151,11 @@ export function useSpatialData() {
 
     async function loadKecamatanData() {
       const kecId = filterKecamatan as string;
+      const cacheKey = `${activeDatasetVersion}_${kecId}`;
       setIsLoading(true);
 
-      if (cache.current[kecId]) {
-        const cached = cache.current[kecId];
+      if (cache.current[cacheKey]) {
+        const cached = cache.current[cacheKey];
         setDataUsaha(cached.usaha);
         setDataUsahaDigital(cached.usahaDigital);
         setDataUsahaPertanian(cached.usahaPertanian);
@@ -169,8 +171,17 @@ export function useSpatialData() {
 
         const fetchChunkSafe = async (dataset: string) => {
           try {
-            const url = getChunksPublicUrl(`${dataset}/kec_${kecId}.json`);
-            const res = await fetch(url);
+            let path = `${dataset}/kec_${kecId}.json`;
+            if (activeDatasetVersion === 'se2026') {
+              path = `se2026/${dataset}/kec_${kecId}.json`;
+            }
+
+            let res = await fetch(getChunksPublicUrl(path));
+
+            if (!res.ok && activeDatasetVersion === 'se2026') {
+              res = await fetch(getChunksPublicUrl(`${dataset}/kec_${kecId}.json`));
+            }
+
             if (!res.ok) return [];
             const json = await res.json();
             return json.data || json || [];
@@ -182,8 +193,16 @@ export function useSpatialData() {
 
         const fetchSlsChunkSafe = async () => {
           try {
-            const url = getChunksPublicUrl(`sls/kec_${kecId}.json`);
-            const res = await fetch(url);
+            let path = `sls/kec_${kecId}.json`;
+            if (activeDatasetVersion === 'se2026') {
+              path = `se2026/sls/kec_${kecId}.json`;
+            }
+
+            let res = await fetch(getChunksPublicUrl(path));
+            if (!res.ok && activeDatasetVersion === 'se2026') {
+              res = await fetch(getChunksPublicUrl(`sls/kec_${kecId}.json`));
+            }
+
             if (!res.ok) return null;
             return await res.json();
           } catch (e) {
@@ -203,17 +222,11 @@ export function useSpatialData() {
             fetchSlsChunkSafe(),
           ]);
 
-        // FIX: Spatial join — assign idsls_str ke setiap titik pertanian
-        // berdasarkan koordinatnya jatuh di SLS mana
+        // Spatial join — assign idsls_str ke setiap titik pertanian
         const usahaPertanian = assignSlsToPoints(usahaPertanianRaw, sls);
 
-        console.log(
-          `[PERTANIAN] ${kecId}: ${usahaPertanianRaw.length} titik, ` +
-          `${usahaPertanian.filter((p: any) => p.idsls_str).length} berhasil di-assign SLS`
-        );
-
-        // Simpan ke cache (sudah include hasil spatial join)
-        cache.current[kecId] = {
+        // Simpan ke cache
+        cache.current[cacheKey] = {
           usaha,
           usahaDigital,
           usahaPertanian,
@@ -238,7 +251,7 @@ export function useSpatialData() {
     }
 
     loadKecamatanData();
-  }, [filterKecamatan]);
+  }, [filterKecamatan, activeDatasetVersion]);
 
   return {
     dataUsaha,

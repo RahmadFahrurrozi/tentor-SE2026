@@ -6,6 +6,7 @@ import UnauthorizedPage from "./pages/Unauthorized-page";
 import { NotFoundPage } from "./pages/404-page-not-found";
 import TermsOfServicePage from "./pages/term-of-service";
 import PrivacyPolicyPage from "./pages/prifacy-policy";
+import DocumentationPage from "./pages/DocumentationPage";
 import { AuthGuard } from "./components/auth/auth-guard";
 import MapDashboard from "./pages/MapDashboard";
 
@@ -21,9 +22,10 @@ export default function App() {
         <Route path="/upload" element={<DataUploadPage />} />
       </Route>
 
-      {/* Protected Dashboard Route */}
+      {/* Protected Dashboard & Documentation Route */}
       <Route element={<AuthGuard allowedRoles={["admin", "ppl", "pml"]} />}>
         <Route path="/dashboard" element={<MapDashboard />} />
+        <Route path="/documentation" element={<DocumentationPage />} />
       </Route>
 
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
