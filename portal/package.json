@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "gen:types": "npx supabase gen types typescript --project-id xecqftjhqonemrrtcjzp > portal/src/types/database.types.ts"
+    "gen:types": "npx supabase gen types typescript --project-id xecqftjhqonemrrtcjzp > portal/src/types/database.types.ts",
+    "test": "vitest"
   },
   "dependencies": {
     "@fontsource-variable/nunito-sans": "^5.2.7",
