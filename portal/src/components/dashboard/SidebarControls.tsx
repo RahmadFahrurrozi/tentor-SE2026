@@ -233,7 +233,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
               id="enable3d"
               checked={store.enable3d}
               onCheckedChange={() => store.toggleLayer("enable3d")}
-              disabled={true}
+              disabled={!store.showBuild}
             />
           </div>
 
@@ -250,6 +250,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
               onCheckedChange={() =>
                 store.toggleLayer("showSyntheticBuildings")
               }
+              disabled={true}
             />
           </div>
 
