@@ -191,7 +191,7 @@ export function calculateBbox(geoJson: any): [number, number, number, number] | 
 }
 
 // Point-in-polygon check menggunakan ray casting algorithm
-function isPointInPolygon(point: [number, number], polygon: number[][]): boolean {
+export function isPointInPolygon(point: [number, number], polygon: number[][]): boolean {
   const [px, py] = point;
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -204,7 +204,7 @@ function isPointInPolygon(point: [number, number], polygon: number[][]): boolean
   return inside;
 }
 
-function getPolygonRings(geometry: any): number[][][] {
+export function getPolygonRings(geometry: any): number[][][] {
   if (!geometry) return [];
   if (geometry.type === 'Polygon') {
     return [geometry.coordinates[0]];
