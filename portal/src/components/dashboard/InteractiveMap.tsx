@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Map, MapControls } from "@/components/ui/map";
 import maplibregl from "maplibre-gl";
+import { AlertTriangle, BookOpen } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import {
   processSlsData,
   convertBangunanToGeoJson,
   convertTitikToGeoJson,
   calculateBbox,
+  generateSyntheticBuildingForPoint,
 } from "@/utils/dataProcessing";
 import { useMapStore } from "@/store/mapStore";
 import { useTheme } from "@/context/theme-provider";
@@ -80,7 +83,10 @@ const getPointsNearBuilding = (
   };
 };
 
+import { Button } from "@/components/ui/button";
+
 export function InteractiveMap({ spatialData }: { spatialData: any }) {
+  const navigate = useNavigate();
   // const escapeHtml = (str: string) => {
   //   if (!str) return "";
   //   return str
@@ -241,7 +247,8 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
   };
 
   const geoJsonBangunan = useMemo(() => {
-    if (!dataBangunan.length || isLoading) return null;
+    if (!dataBangunan.length || isLoading || store.filterKecamatan === "Semua")
+      return null;
 
     const filteredBuildings =
       store.filterDesa === "Semua"
@@ -305,38 +312,141 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       return feature;
     });
 
+    // Generasi Bangunan Sintetis (6m x 6m) untuk titik berdiri sendiri (orphan points)
+    if (store.showSyntheticBuildings !== false) {
+      const existingCentroids: [number, number][] = geo.features
+        .map((f: any) => getGeometryCentroid(f.geometry))
+        .filter(Boolean) as [number, number][];
+
+      const activePertanian = filterDataByDesaAndSearch(
+        dataUsahaPertanian,
+        "pertanian",
+      );
+
+      const allActivePoints = [
+        ...activeUsaha.map((p) => ({ ...p, _type: "Usaha Biasa" })),
+        ...activeUsahaDigital.map((p) => ({ ...p, _type: "Usaha Digital" })),
+        ...activePertanian.map((p) => ({ ...p, _type: "Usaha Pertanian" })),
+        ...activeRt.map((p) => ({ ...p, _type: "Rumah Tangga" })),
+      ];
+
+      const maxDistSq = 0.00015 * 0.00015; // ~15m threshold
+
+      allActivePoints.forEach((point: any, idx: number) => {
+        const lat = parseFloat(point["lat final"] || point.lat || point.latitude);
+        const lng = parseFloat(
+          point["long final"] || point["long"] || point.lon || point.longitude,
+        );
+
+        if (isNaN(lat) || isNaN(lng)) return;
+
+        let isNearBuilding = false;
+        for (const [bx, by] of existingCentroids) {
+          const dx = lng - bx;
+          const dy = lat - by;
+          if (dx * dx + dy * dy <= maxDistSq) {
+            isNearBuilding = true;
+            break;
+          }
+        }
+
+        if (!isNearBuilding) {
+          const synthGeom = generateSyntheticBuildingForPoint(lat, lng, 6);
+          const synthFeature = {
+            type: "Feature",
+            geometry: synthGeom,
+            properties: {
+              id_bangunan: `SYNTH_${point.id || idx}`,
+              idsls_str: point.idsls_str || point["idsls final"] || "",
+              status_bangunan:
+                point._type === "Rumah Tangga"
+                  ? "Rumah Tangga"
+                  : "Bangunan Usaha",
+              nama_bangunan: `Bangunan Sintetis (${point._type} 6m x 6m)`,
+              is_synthetic: true,
+              tinggi_bangunan: 1.8,
+              ...point,
+            },
+          };
+          geo.features.push(synthFeature);
+        }
+      });
+    }
+
     return geo;
   }, [
     dataBangunan,
     dataUsaha,
     dataUsahaDigital,
+    dataUsahaPertanian,
     dataRumahTangga,
     isLoading,
     store.filterDesa,
     store.filterNama,
+    store.showSyntheticBuildings,
   ]);
 
   const geoJsonUsaha = useMemo(() => {
-    if (!dataUsaha.length || isLoading) return null;
+    if (!dataUsaha.length || isLoading || store.filterKecamatan === "Semua")
+      return null;
     return convertTitikToGeoJson(filterDataByDesaAndSearch(dataUsaha));
-  }, [dataUsaha, isLoading, store.filterDesa, store.filterNama]);
+  }, [
+    dataUsaha,
+    isLoading,
+    store.filterKecamatan,
+    store.filterDesa,
+    store.filterNama,
+  ]);
 
   const geoJsonUsahaDigital = useMemo(() => {
-    if (!dataUsahaDigital.length || isLoading) return null;
+    if (
+      !dataUsahaDigital.length ||
+      isLoading ||
+      store.filterKecamatan === "Semua"
+    )
+      return null;
     return convertTitikToGeoJson(filterDataByDesaAndSearch(dataUsahaDigital));
-  }, [dataUsahaDigital, isLoading, store.filterDesa, store.filterNama]);
+  }, [
+    dataUsahaDigital,
+    isLoading,
+    store.filterKecamatan,
+    store.filterDesa,
+    store.filterNama,
+  ]);
 
   const geoJsonUsahaPertanian = useMemo(() => {
-    if (!dataUsahaPertanian?.length || isLoading) return null;
+    if (
+      !dataUsahaPertanian?.length ||
+      isLoading ||
+      store.filterKecamatan === "Semua"
+    )
+      return null;
     return convertTitikToGeoJson(
       filterDataByDesaAndSearch(dataUsahaPertanian, "pertanian"),
     );
-  }, [dataUsahaPertanian, isLoading, store.filterDesa, store.filterNama]);
+  }, [
+    dataUsahaPertanian,
+    isLoading,
+    store.filterKecamatan,
+    store.filterDesa,
+    store.filterNama,
+  ]);
 
   const geoJsonRt = useMemo(() => {
-    if (!dataRumahTangga.length || isLoading) return null;
+    if (
+      !dataRumahTangga.length ||
+      isLoading ||
+      store.filterKecamatan === "Semua"
+    )
+      return null;
     return convertTitikToGeoJson(filterDataByDesaAndSearch(dataRumahTangga));
-  }, [dataRumahTangga, isLoading, store.filterDesa, store.filterNama]);
+  }, [
+    dataRumahTangga,
+    isLoading,
+    store.filterKecamatan,
+    store.filterDesa,
+    store.filterNama,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -357,19 +467,42 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
 
     let html = "";
     if (layerId === "sls-fill-layer") {
+      const idslsStr = String(properties.idsls_str || "");
+      const idkec = properties.idkec || idslsStr.substring(0, 7);
+      const iddesa = properties.iddesa || idslsStr.substring(0, 10);
+
+      const kecObj = spatialData?.wilayahManifest?.kecamatan?.find(
+        (k: any) => String(k.idkec) === String(idkec),
+      );
+      const desaObj = kecObj?.desa?.find(
+        (d: any) => String(d.iddesa) === String(iddesa),
+      );
+
+      const nmKec = kecObj?.nmkec || properties.nmkec || `Kec. ${idkec}`;
+      const nmDesa = desaObj?.nmdesa || properties.nmdesa || `Desa ${iddesa}`;
+      const nmSls =
+        properties.nmsls ||
+        properties.nm_sls ||
+        properties.dusun ||
+        `SLS ${idslsStr}`;
+
       const sudah = properties.sudah_terdata || 0;
       const belum = properties.belum_terdata || 0;
       const total = properties.total_bangunan || 0;
       const usaha = properties.jumlah_usaha || 0;
       const rt = properties.jumlah_keluarga || 0;
       const usahaDigital = properties.jumlah_usaha_digital || 0;
-      // const usahaPertanian = properties.jumlah_usaha_pertanian || 0;
+      const usahaPertanian = properties.jumlah_usaha_pertanian || 0;
 
       html = `
         <div style="font-family: 'Outfit', 'Inter', sans-serif;">
-          <p style="font-weight: 700; border-bottom: 1px solid ${theme === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"}; padding-bottom: 6px; margin-bottom: 8px; font-size: 13px;">
-            SLS: ${properties.idsls_str}
-          </p>
+          <div style="border-bottom: 1px solid ${theme === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"}; padding-bottom: 6px; margin-bottom: 8px;">
+            <p style="font-weight: 700; font-size: 13px; margin: 0; color: ${theme === "dark" ? "#60A5FA" : "#2563EB"};">${nmSls}</p>
+            <p style="font-size: 10px; margin: 2px 0 0 0; opacity: 0.8; line-height: 1.3;">
+              📍 ${nmDesa}, ${nmKec}
+            </p>
+            <p style="font-size: 9px; margin: 1px 0 0 0; opacity: 0.6;">ID SLS: ${idslsStr}</p>
+          </div>
           <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
             <p style="display: flex; justify-content: space-between; margin: 0;">
               <span>Total Bangunan:</span><span style="font-weight: 600;">${total}</span>
@@ -382,13 +515,16 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             </p>
             <div style="height: 1px; background: ${theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}; margin: 6px 0;"></div>
             <p style="display: flex; justify-content: space-between; color: #F59E0B; margin: 0;">
-              <span>Titik Usaha:</span><span style="font-weight: 600;">${usaha}</span>
+              <span>Titik Usaha Biasa:</span><span style="font-weight: 600;">${usaha}</span>
+            </p>
+            <p style="display: flex; justify-content: space-between; color: #EC4899; margin: 0;">
+              <span>Titik Usaha Digital:</span><span style="font-weight: 600;">${usahaDigital}</span>
+            </p>
+            <p style="display: flex; justify-content: space-between; color: #10B981; margin: 0;">
+              <span>Titik Usaha Pertanian:</span><span style="font-weight: 600;">${usahaPertanian}</span>
             </p>
             <p style="display: flex; justify-content: space-between; color: #3B82F6; margin: 0;">
-              <span>Titik Keluarga:</span><span style="font-weight: 600;">${rt}</span>
-            </p>
-            <p style="display: flex; justify-content: space-between; color: #FF32DC; margin: 0;">
-              <span>Titik Usaha Digital:</span><span style="font-weight: 600;">${usahaDigital}</span>
+              <span>Titik Keluarga (RT):</span><span style="font-weight: 600;">${rt}</span>
             </p>
           </div>
         </div>
@@ -407,7 +543,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       html = `
         <div style="font-family: 'Outfit', 'Inter', sans-serif;">
           <p style="font-weight: 700; border-bottom: 1px solid ${theme === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"}; padding-bottom: 6px; margin-bottom: 8px; font-size: 13px;">
-            Bangunan Fisik
+            ${properties.is_synthetic ? "Bangunan Sintetis (6m × 6m)" : "Bangunan Fisik"}
           </p>
           <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
             <p style="display: flex; justify-content: space-between; margin: 0;">
@@ -415,9 +551,11 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
               <span style="font-weight: 700; color: ${statusColor};">${status}</span>
             </p>
             ${
-              isMixed
-                ? `<p style="color: #A855F7; font-weight: 600; font-size: 10px; margin: 4px 0 0 0; text-align: center;">Klik untuk detail Campuran!</p>`
-                : `<p style="display: flex; justify-content: space-between; margin: 0;"><span>Jml Usaha:</span><span style="font-weight: 600;">${properties.jml_usaha || 0}</span></p>`
+              properties.is_synthetic
+                ? `<p style="color: #6366F1; font-weight: 600; font-size: 10px; margin: 4px 0 0 0; text-align: center; background: rgba(99, 102, 241, 0.12); padding: 3px 6px; border-radius: 6px; border: 1px solid rgba(99, 102, 241, 0.25);">✨ Generatif Spasial 6m × 6m</p>`
+                : isMixed
+                  ? `<p style="color: #A855F7; font-weight: 600; font-size: 10px; margin: 4px 0 0 0; text-align: center;">Klik untuk detail Campuran!</p>`
+                  : `<p style="display: flex; justify-content: space-between; margin: 0;"><span>Jml Usaha:</span><span style="font-weight: 600;">${properties.jml_usaha || 0}</span></p>`
             }
           </div>
         </div>
@@ -708,6 +846,12 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             },
           });
         }
+      } else {
+        if (map.getSource("desa-boundary-source")) {
+          (
+            map.getSource("desa-boundary-source") as maplibregl.GeoJSONSource
+          ).setData({ type: "FeatureCollection", features: [] });
+        }
       }
 
       // 0c. Batas Desa Terpilih
@@ -827,6 +971,13 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           (
             map.getSource("bangunan-source") as maplibregl.GeoJSONSource
           ).setData(geoJsonBangunan as any);
+          if (map.getLayer("bangunan-3d-layer")) {
+            map.setPaintProperty(
+              "bangunan-3d-layer",
+              "fill-extrusion-color",
+              theme === "dark" ? "#334155" : "#cbd5e1",
+            );
+          }
         } else {
           map.addSource("bangunan-source", {
             type: "geojson",
@@ -837,20 +988,15 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             type: "fill-extrusion",
             source: "bangunan-source",
             paint: {
-              "fill-extrusion-color": [
-                "match",
-                ["get", "status_bangunan"],
-                "Bangunan Usaha",
-                "#F59E0B",
-                "Rumah Tangga",
-                "#2563EB",
-                "Campuran",
-                "#A855F7",
-                "#808080",
+              "fill-extrusion-color": theme === "dark" ? "#334155" : "#cbd5e1",
+              "fill-extrusion-height": [
+                "coalesce",
+                ["get", "tinggi_bangunan"],
+                ["get", "height"],
+                2.5,
               ],
-              "fill-extrusion-height": 20,
               "fill-extrusion-base": 0,
-              "fill-extrusion-opacity": 0.8,
+              "fill-extrusion-opacity": 0.7,
             },
           });
         }
@@ -1199,62 +1345,72 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     }
   }, [hoveredSlsId]);
 
-useEffect(() => {
-  const map = mapRef.current;
-  if (!map) return;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
 
-  const magneticZoom = () => {
-    let bbox = null;
+    const magneticZoom = () => {
+      let bbox = null;
 
-    // 1. Prioritas utama: Kalau ada Desa yang dipilih
-    if (store.filterDesa && store.filterDesa !== "Semua" && geoJsonDesaSelected?.features?.length > 0) {
-      bbox = calculateBbox(geoJsonDesaSelected);
-    } 
-    // 2. Prioritas kedua: Kalau ada Kecamatan yang dipilih (tapi Desa "Semua")
-    else if (store.filterKecamatan && store.filterKecamatan !== "Semua" && geoJsonDesaBoundary?.features?.length > 0) {
-      bbox = calculateBbox(geoJsonDesaBoundary);
-    } 
-    // 3. Prioritas terakhir: Balik ke Kabupaten
-    else if (dataKab?.features?.length > 0) {
-      bbox = calculateBbox(dataKab);
-    }
+      // 1. Prioritas utama: Kalau ada Desa yang dipilih
+      if (
+        store.filterDesa &&
+        store.filterDesa !== "Semua" &&
+        geoJsonDesaSelected?.features?.length > 0
+      ) {
+        bbox = calculateBbox(geoJsonDesaSelected);
+      }
+      // 2. Prioritas kedua: Kalau ada Kecamatan yang dipilih (tapi Desa "Semua")
+      else if (
+        store.filterKecamatan &&
+        store.filterKecamatan !== "Semua" &&
+        geoJsonDesaBoundary?.features?.length > 0
+      ) {
+        bbox = calculateBbox(geoJsonDesaBoundary);
+      }
+      // 3. Prioritas terakhir: Balik ke Kabupaten
+      else if (dataKab?.features?.length > 0) {
+        bbox = calculateBbox(dataKab);
+      }
 
-    // Kalau koordinat bbox dapet, lakuin efek "Woozz"
-    if (bbox && bbox.length === 4) {
-      map.fitBounds(
-        [[bbox[0], bbox[1]], [bbox[2], bbox[3]]], 
-        {
-          padding: 80,         // Kasih jarak pinggir biar wilayahnya nggak mepet layar
-          duration: 2500,      // Durasi 2.5 detik biar efek terbangnya kerasa banget
-          pitch: store.enable3d ? 60 : 0, // Kalau lagi 3D, pertahankan angle-nya
-          essential: true,     // Maksa Maplibre jalanin animasi ini tanpa ragu
-          curve: 1.5,          // Bikin kurva terbangnya makin melengkung ala "woozz"
-        }
-      );
-    }
-  };
+      // Kalau koordinat bbox dapet, lakuin efek "Woozz"
+      if (bbox && bbox.length === 4) {
+        map.fitBounds(
+          [
+            [bbox[0], bbox[1]],
+            [bbox[2], bbox[3]],
+          ],
+          {
+            padding: 80, // Kasih jarak pinggir biar wilayahnya nggak mepet layar
+            duration: 2500, // Durasi 2.5 detik biar efek terbangnya kerasa banget
+            pitch: store.enable3d ? 60 : 0, // Kalau lagi 3D, pertahankan angle-nya
+            essential: true, // Maksa Maplibre jalanin animasi ini tanpa ragu
+            curve: 1.5, // Bikin kurva terbangnya makin melengkung ala "woozz"
+          },
+        );
+      }
+    };
 
-  // KUNCI PENTING: Kasih jeda (delay) dikit.
-  // Kadang React butuh waktu nol koma sekian detik buat nge-set geoJsonDesaSelected dll.
-  // Kalau langsung ditembak, bbox-nya bisa null atau animasi tabrakan.
-  const timeoutId = setTimeout(() => {
-    if (map.loaded()) {
-      magneticZoom();
-    } else {
-      map.once("load", magneticZoom);
-    }
-  }, 150); // Jeda 150ms
+    // KUNCI PENTING: Kasih jeda (delay) dikit.
+    // Kadang React butuh waktu nol koma sekian detik buat nge-set geoJsonDesaSelected dll.
+    // Kalau langsung ditembak, bbox-nya bisa null atau animasi tabrakan.
+    const timeoutId = setTimeout(() => {
+      if (map.loaded()) {
+        magneticZoom();
+      } else {
+        map.once("load", magneticZoom);
+      }
+    }, 150); // Jeda 150ms
 
-  return () => clearTimeout(timeoutId);
-
-}, [
-  store.filterKecamatan, 
-  store.filterDesa, 
-  geoJsonDesaSelected, 
-  geoJsonDesaBoundary, 
-  dataKab,
-  store.enable3d
-]);
+    return () => clearTimeout(timeoutId);
+  }, [
+    store.filterKecamatan,
+    store.filterDesa,
+    geoJsonDesaSelected,
+    geoJsonDesaBoundary,
+    dataKab,
+    store.enable3d,
+  ]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1280,6 +1436,30 @@ useEffect(() => {
         .radar-ring { position: absolute; width: 10px; height: 10px; border: 2.5px solid; border-radius: 50%; animation: radar-pulse 1.8s cubic-bezier(0.215, 0.610, 0.355, 1.000) infinite; z-index: 1; }
         @keyframes radar-pulse { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(4.5); opacity: 0; } }
       `}</style>
+
+      {/* FLOATING DOCUMENTATION BUTTON MELAYANG DI DALAM PETA */}
+      <div className="absolute top-4 right-4 z-40">
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => navigate("/documentation")}
+          className="h-9 px-3 text-xs font-semibold gap-1.5 shadow-lg bg-card/90 backdrop-blur-md border border-primary/20 text-foreground hover:text-primary transition-all rounded-xl hover:shadow-xl"
+        >
+          <BookOpen className="w-4 h-4 text-primary" />
+          <span className="hidden sm:inline">Panduan & Dokumentasi</span>
+        </Button>
+      </div>
+
+      {store.filterKecamatan === "Semua" && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-amber-500/95 text-white backdrop-blur-md px-4 py-2.5 rounded-xl shadow-xl border border-amber-400/50 flex items-center gap-2.5 text-xs font-semibold max-w-[90%] sm:max-w-xl text-center pointer-events-auto">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-amber-100" />
+          <span>
+            <strong>Perhatian:</strong> Silakan pilih Kecamatan di filter
+            wilayah terlebih dahulu untuk memuat data statistik & sebaran titik
+            lokasi di peta.
+          </span>
+        </div>
+      )}
 
       {isLoading && (
         <div className="absolute inset-0 z-50 bg-black/60 pointer-events-none transition-opacity duration-300 backdrop-blur-[2px]" />

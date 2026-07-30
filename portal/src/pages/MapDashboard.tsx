@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { InteractiveMap } from "@/components/dashboard/InteractiveMap";
 import { SidebarControls } from "@/components/dashboard/SidebarControls";
+import { StatisticsPanel } from "@/components/dashboard/StatisticsPanel";
+import { CompareMapContainer } from "@/components/dashboard/CompareMapContainer";
 import { useSpatialData } from "@/hooks/useSpatialData";
+import { useMapStore } from "@/store/mapStore";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 
 export default function MapDashboard() {
   const spatialData = useSpatialData();
+  const store = useMapStore();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
@@ -30,11 +34,11 @@ export default function MapDashboard() {
         <SidebarControls spatialData={spatialData} />
       </div>
 
-      {/* Kontainer Peta Utama */}
-      <div className="flex-1 h-full relative p-0 md:p-4 flex flex-col">
+      {/* Kontainer Utama Full Screen Peta */}
+      <div className="flex-1 h-full relative overflow-hidden flex flex-col">
         {/* Mobile Header / Toggle Button */}
         {!isSidebarOpen && (
-          <div className="md:hidden absolute top-4 left-4 z-50">
+          <div className="md:hidden absolute top-4 left-4 z-40">
             <Button
               variant="secondary"
               size="icon"
@@ -46,9 +50,21 @@ export default function MapDashboard() {
           </div>
         )}
 
-        <div className="h-full w-full relative">
+        {/* Top Section: Kontainer Peta Interactive Full Screen */}
+        <div className="w-full h-full relative flex-1">
           <InteractiveMap spatialData={spatialData} />
         </div>
+
+        {/* Mode Komparasi Overlay */}
+        {store.isCompareMode && (
+          <CompareMapContainer
+            spatialData={spatialData}
+            onClose={() => store.setCompareMode(false)}
+          />
+        )}
+
+        {/* Bottom Section: Panel Statistik Melayang / Collapsible Drawer */}
+        <StatisticsPanel spatialData={spatialData} />
       </div>
     </div>
   );
