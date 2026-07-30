@@ -33,7 +33,6 @@ import {
   ShieldCheck,
   ChevronUp,
   ChevronDown,
-  Sparkles,
   BarChart3,
   CheckCircle2,
   Layers,

@@ -15,20 +15,17 @@ import { Button } from "@/components/ui/button";
 import {
   Eraser,
   LogOut,
-  BookOpen,
   ArrowLeftRight,
   Database,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 
 export function SidebarControls({ spatialData }: { spatialData: any }) {
   const store = useMapStore();
   const { profile, user } = useAuthStore();
   const { logout, isLoggingOut } = useAuth();
-  const navigate = useNavigate();
 
   const { wilayahManifest, assignments } = spatialData;
 
