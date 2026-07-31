@@ -10,6 +10,8 @@ import {
   convertTitikToGeoJson,
   calculateBbox,
   generateSyntheticBuildingForPoint,
+  isPointInPolygon,
+  getPolygonRings,
 } from "@/utils/dataProcessing";
 import { useMapStore } from "@/store/mapStore";
 import { useTheme } from "@/context/theme-provider";
@@ -40,7 +42,7 @@ const getPointsNearBuilding = (
   dataUsaha: any[],
   dataUsahaDigital: any[],
   dataRumahTangga: any[],
-  maxDistance = 0.00015,
+  maxDistance = 0.00025,
 ) => {
   if (!buildingCoords) return { usaha: [], rt: [], isMixed: false };
 
@@ -330,11 +332,14 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       return feature;
     });
 
-    // Generasi Bangunan Sintetis (6m x 6m) untuk titik berdiri sendiri (orphan points)
-    if (store.showSyntheticBuildings !== false) {
-      const existingCentroids: [number, number][] = geo.features
-        .map((f: any) => getGeometryCentroid(f.geometry))
-        .filter(Boolean) as [number, number][];
+    // Generasi Bangunan Sintetis (6m x 6m) HANYA jika diaktifkan secara eksplisit (default: OFF)
+    if (store.showSyntheticBuildings === true) {
+      const existingBuildings = geo.features
+        .map((f: any) => ({
+          centroid: getGeometryCentroid(f.geometry),
+          rings: getPolygonRings(f.geometry),
+        }))
+        .filter((b: any) => b.centroid || b.rings.length > 0);
 
       const activePertanian = filterDataByDesaAndSearch(
         dataUsahaPertanian,
@@ -348,29 +353,63 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         ...activeRt.map((p) => ({ ...p, _type: "Rumah Tangga" })),
       ];
 
-      const maxDistSq = 0.00015 * 0.00015; // ~15m threshold
+      // Threshold: 0.0015 derajat (~150-200 meter). Selama ada bangunan fisik di area (jarak <= 150-200m), TIDAK AKAN generate sintetis!
+      const maxDistSq = 0.0015 * 0.0015;
 
       allActivePoints.forEach((point: any, idx: number) => {
         const lat = parseFloat(
-          point["lat final"] || point.lat || point.latitude,
+          point["lat final"] ||
+            point.lat ||
+            point.latitude ||
+            point.lat_final ||
+            point.y,
         );
         const lng = parseFloat(
-          point["long final"] || point["long"] || point.lon || point.longitude,
+          point["long final"] ||
+            point["long"] ||
+            point.lon ||
+            point.longitude ||
+            point.long_final ||
+            point.x,
         );
 
         if (isNaN(lat) || isNaN(lng)) return;
 
-        let isNearBuilding = false;
-        for (const [bx, by] of existingCentroids) {
-          const dx = lng - bx;
-          const dy = lat - by;
-          if (dx * dx + dy * dy <= maxDistSq) {
-            isNearBuilding = true;
-            break;
+        let isNearBuildingArea = false;
+
+        for (const b of existingBuildings) {
+          // 1. Cek apakah titik berada DI DALAM polygon bangunan fisik
+          for (const ring of b.rings) {
+            if (isPointInPolygon([lng, lat], ring)) {
+              isNearBuildingArea = true;
+              break;
+            }
+            // 2. Cek jarak titik ke setiap simpul/vertex polygon bangunan
+            for (const [vx, vy] of ring) {
+              const dx = lng - vx;
+              const dy = lat - vy;
+              if (dx * dx + dy * dy <= maxDistSq) {
+                isNearBuildingArea = true;
+                break;
+              }
+            }
+            if (isNearBuildingArea) break;
+          }
+          if (isNearBuildingArea) break;
+
+          // 3. Cek jarak titik ke centroid bangunan (fallback)
+          if (b.centroid) {
+            const dx = lng - b.centroid[0];
+            const dy = lat - b.centroid[1];
+            if (dx * dx + dy * dy <= maxDistSq) {
+              isNearBuildingArea = true;
+              break;
+            }
           }
         }
 
-        if (!isNearBuilding) {
+        // HANYA jika BENAR-BENAR JAUH (>150-200m) dari semua bangunan fisik di area tersebut:
+        if (!isNearBuildingArea) {
           const synthGeom = generateSyntheticBuildingForPoint(lat, lng, 6);
           const synthFeature = {
             type: "Feature",
@@ -1570,7 +1609,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
 
       <div
         ref={tooltipRef}
-        className="absolute z-50 bg-popover/95 backdrop-blur-md text-popover-foreground border shadow-xl rounded-xl p-4 text-xs pointer-events-none w-[280px] hidden transition-all duration-75"
+        className="absolute z-50 bg-popover/95 backdrop-blur-md text-popover-foreground border shadow-xl rounded-xl p-4 text-xs pointer-events-none w-70 hidden transition-all duration-75"
         style={{ left: 0, top: 0, transform: "translate3d(0, 0, 0)" }}
       />
     </div>
