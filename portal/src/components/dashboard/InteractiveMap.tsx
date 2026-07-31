@@ -1342,7 +1342,14 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
                 </div>
                 <h3 style="margin: 0 0 6px 0; font-size: 14px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em;">${nama}</h3>
                 <div style="height: 1px; background: ${theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"}; margin: 8px 0;"></div>
-                
+                <div style="display: flex; flex-direction: column; gap: 4px; font-size: 10px; color: ${theme === "dark" ? "#94a3b8" : "#64748b"}">
+                  <p style="margin: 0; white-space: normal; word-break: break-word;">
+                    <span style="font-weight: 500; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};">Alamat:</span>
+                    ${alamat !== null ? `<span style="margin-left: 4px;">${alamat}</span>` : `<span style="margin-left: 4px; opacity: 0.5; font-style: italic;">Tidak tersedia</span>`}
+                  </p>
+                  ${extraInfo ? `<p style="margin: 0;"><span style="font-weight: 500; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};">Keterangan:</span> <span style="margin-left: 4px;">${extraInfo}</span></p>` : ""}
+                  ${slsInfo ? `<p style="margin: 0;"><span style="font-weight: 500; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};">ID SLS:</span> <span style="margin-left: 4px; font-family: monospace; font-size: 9px;">${slsInfo}</span></p>` : ""}
+                </div>
               </div>
             `;
 
