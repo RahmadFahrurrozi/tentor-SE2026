@@ -49,43 +49,43 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --radius: var(----radius);
   @keyframes box1 {
-  0%,
+    0%,
     50% {
-    transform: translate(100%, 0);
+      transform: translate(100%, 0);
     }
-  100% {
-    transform: translate(200%, 0);
+    100% {
+      transform: translate(200%, 0);
     }
   }
   @keyframes box2 {
-  0% {
-    transform: translate(0, 100%);
+    0% {
+      transform: translate(0, 100%);
     }
-  50% {
-    transform: translate(0, 0);
+    50% {
+      transform: translate(0, 0);
     }
-  100% {
-    transform: translate(100%, 0);
+    100% {
+      transform: translate(100%, 0);
     }
   }
   @keyframes box3 {
-  0%,
+    0%,
     50% {
-    transform: translate(100%, 100%);
+      transform: translate(100%, 100%);
     }
-  100% {
-    transform: translate(0, 100%);
+    100% {
+      transform: translate(0, 100%);
     }
   }
   @keyframes box4 {
-  0% {
-    transform: translate(200%, 0);
+    0% {
+      transform: translate(200%, 0);
     }
-  50% {
-    transform: translate(200%, 100%);
+    50% {
+      transform: translate(200%, 100%);
     }
-  100% {
-    transform: translate(100%, 100%);
+    100% {
+      transform: translate(100%, 100%);
     }
   }
 }
@@ -180,5 +180,44 @@
   }
   .maplibregl-popup-tip {
     @apply hidden!;
+  }
+
+  /* ─── Custom Scrollbar ─── */
+  /* Untuk semua elemen scroll (Chrome/Safari/Edge) */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.45 0 0 / 50%);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.6 0 0 / 70%);
+  }
+
+  /* Dark mode — scrollbar biru terang & elegan */
+  .dark ::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 9999px;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 9999px;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+  }
+
+  /* Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(37, 99, 235, 0.5) transparent;
+  }
+  .dark * {
+    scrollbar-color: rgba(59, 130, 246, 0.6) rgba(15, 23, 42, 0.5);
   }
 }

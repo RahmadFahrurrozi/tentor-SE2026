@@ -53,8 +53,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
   const store = useMapStore();
   const role = profile?.role ?? "ppl";
   const isAdmin = role === "admin";
-  const isPml = role === "pml";
-  const canExport = isAdmin || isPml;
+  const canExport = isAdmin;
   const roleName = role.toUpperCase();
 
   const {
@@ -505,7 +504,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
             ) : (
               <div className="text-[11px] text-muted-foreground flex items-center gap-1 bg-muted/60 px-2.5 py-1 rounded border ml-auto sm:ml-0">
                 <ShieldCheck className="w-3.5 h-3.5 text-blue-500" /> Export
-                (PML/Admin)
+                (Khusus Admin)
               </div>
             )}
 

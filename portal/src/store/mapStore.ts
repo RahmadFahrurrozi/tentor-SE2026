@@ -48,7 +48,7 @@ export const useMapStore = create<MapState>((set) => ({
   showUsahaPertanian: false,    
   showRt: false,
   showBuild: true,
-  showSyntheticBuildings: true,
+  showSyntheticBuildings: false,
   enable3d: false,
   showCounting: true,
 

@@ -12,12 +12,7 @@ import {
 } from "@/components/ui/select";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
-import {
-  Eraser,
-  LogOut,
-  ArrowLeftRight,
-  Database,
-} from "lucide-react";
+import { Eraser, LogOut, ArrowLeftRight, Database } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { useEffect } from "react";
@@ -243,13 +238,19 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
           </div>
 
           <div className="flex items-center justify-between">
-            <Label htmlFor="showSyntheticBuildings" className="text-sm text-muted-foreground">
+            <Label
+              htmlFor="showSyntheticBuildings"
+              className="text-sm text-muted-foreground"
+            >
               ↳ Bangunan Buatan Sintetis (6m×6m)
             </Label>
             <Switch
               id="showSyntheticBuildings"
               checked={store.showSyntheticBuildings !== false}
-              onCheckedChange={() => store.toggleLayer("showSyntheticBuildings")}
+              onCheckedChange={() =>
+                store.toggleLayer("showSyntheticBuildings")
+              }
+              disabled={true}
             />
           </div>
 

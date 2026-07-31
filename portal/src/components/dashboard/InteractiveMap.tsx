@@ -148,17 +148,35 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
 
   const filteredSls = useMemo(() => {
     if (!processedSls) return null;
-    if (store.filterDesa === "Semua") return processedSls;
+    // Ketika filterKecamatan "Semua", kembalikan empty FeatureCollection
+    // agar SLS layer bersih saat reset (bukan null, supaya source tetap di-update)
+    if (!store.filterKecamatan || store.filterKecamatan === "Semua") {
+      return { ...processedSls, features: [] };
+    }
+    // Filter berdasarkan kecamatan
+    const byKec = processedSls.features.filter((f: any) => {
+      const idslsStr = String(f.properties.idsls_str || "");
+      const iddesa = f.properties.iddesa || idslsStr.substring(0, 10);
+      const idkec =
+        f.properties.idkec ||
+        f.properties.id_kec ||
+        idslsStr.substring(0, 7) ||
+        String(iddesa).substring(0, 7);
+      return String(idkec) === String(store.filterKecamatan);
+    });
+    if (store.filterDesa === "Semua" || !store.filterDesa) {
+      return { ...processedSls, features: byKec };
+    }
     return {
       ...processedSls,
-      features: processedSls.features.filter((f: any) => {
+      features: byKec.filter((f: any) => {
         const iddesa =
           f.properties.iddesa ||
           String(f.properties.idsls_str || "").substring(0, 10);
         return String(iddesa) === store.filterDesa;
       }),
     };
-  }, [processedSls, store.filterDesa]);
+  }, [processedSls, store.filterKecamatan, store.filterDesa]);
 
   const geoJsonDesaBoundary = useMemo(() => {
     if (!dataDesa || store.filterKecamatan === "Semua") return null;
@@ -333,7 +351,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       const maxDistSq = 0.00015 * 0.00015; // ~15m threshold
 
       allActivePoints.forEach((point: any, idx: number) => {
-        const lat = parseFloat(point["lat final"] || point.lat || point.latitude);
+        const lat = parseFloat(
+          point["lat final"] || point.lat || point.latitude,
+        );
         const lng = parseFloat(
           point["long final"] || point["long"] || point.lon || point.longitude,
         );
@@ -605,10 +625,12 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         layerId === "usaha-pertanian-circle-layer"
           ? properties["deskripsi_project"] ||
             properties["alamat_project"] ||
+            properties["alamat_final"] ||
             properties["alamat final"] ||
             properties["alamat"] ||
             "-"
           : properties["deskripsi_project"] ||
+            properties["alamat_final"] ||
             properties["alamat final"] ||
             properties["alamat"] ||
             "-";
@@ -1232,9 +1254,27 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
               (type === "usaha-pertanian"
                 ? props["deskripsi_project"] || props["alamat_project"]
                 : null) ||
+              props["alamat_final"] ||
               props["alamat final"] ||
+              props["alamat_krt"] ||
               props["alamat"] ||
-              "-";
+              null;
+
+            // Info tambahan per tipe
+            const extraInfo =
+              type === "rt"
+                ? props["jenis_rt"] || props["status_rt"] || null
+                : type === "usaha" || type === "usaha-digital"
+                  ? props["kategori"] || props["jenis_usaha"] || null
+                  : type === "usaha-pertanian"
+                    ? props["komoditas"] || props["jenis_usaha"] || null
+                    : null;
+
+            const slsInfo =
+              props["idsls_final"] ||
+              props["idsls_str"] ||
+              props["idsls final"] ||
+              null;
 
             triggerRadarAnimation([e.lngLat.lng, e.lngLat.lat], type);
 
@@ -1262,8 +1302,8 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
                   <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 9999px; display: inline-flex; align-items: center; ${badgeColor}">${badgeLabel}</span>
                 </div>
                 <h3 style="margin: 0 0 6px 0; font-size: 14px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em;">${nama}</h3>
-                <div style="height: 1px; background: ${theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"}; margin: 10px 0;"></div>
-                <div style="font-size: 11px; line-height: 1.4; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};">${alamat}</div>
+                <div style="height: 1px; background: ${theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"}; margin: 8px 0;"></div>
+                
               </div>
             `;
 
@@ -1288,13 +1328,43 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         map.on("click", layerId, onClick);
         listeners.push({ type: "click", layer: layerId, listener: onClick });
       });
+
+      // Dismiss popup saat klik area kosong (bukan di atas layer manapun)
+      const onMapClick = (e: any) => {
+        const hitLayers = interactiveLayers.filter((l) => map.getLayer(l));
+        const features = map.queryRenderedFeatures(e.point, {
+          layers: hitLayers,
+        });
+        if (!features || features.length === 0) {
+          if (activePopupRef.current) {
+            activePopupRef.current.remove();
+            activePopupRef.current = null;
+          }
+          if (radarMarkerRef.current) {
+            radarMarkerRef.current.remove();
+            radarMarkerRef.current = null;
+          }
+        }
+      };
+      map.on("click", onMapClick);
+      listeners.push({
+        type: "click",
+        layer: "__map__" as any,
+        listener: onMapClick,
+      });
     };
 
     const listeners: Array<{ type: string; layer: string; listener: any }> = [];
 
     const cleanupListeners = () => {
       listeners.forEach(({ type, layer, listener }) => {
-        if (map && map.loaded()) map.off(type as any, layer, listener);
+        if (map && map.loaded()) {
+          if (layer === "__map__") {
+            map.off(type as any, listener);
+          } else {
+            map.off(type as any, layer, listener);
+          }
+        }
       });
       listeners.length = 0;
     };
@@ -1327,6 +1397,18 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     store.filterKecamatan,
     store.filterDesa,
   ]);
+
+  // Tutup popup & radar saat filter/reset berubah
+  useEffect(() => {
+    if (activePopupRef.current) {
+      activePopupRef.current.remove();
+      activePopupRef.current = null;
+    }
+    if (radarMarkerRef.current) {
+      radarMarkerRef.current.remove();
+      radarMarkerRef.current = null;
+    }
+  }, [store.filterKecamatan, store.filterDesa, store.filterNama]);
 
   useEffect(() => {
     const map = mapRef.current;

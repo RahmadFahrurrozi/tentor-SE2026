@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -138,61 +138,90 @@ export default function DocumentationPage() {
             </Badge>
           </div>
 
-          {/* Stepper Dot Progress Component */}
-          <div className="relative pt-2 pb-1">
-            {/* Connecting Bar Background */}
-            <div className="absolute top-1/2 left-4 right-4 -translate-y-1/2 h-1 bg-muted rounded-full z-0" />
-            {/* Connecting Bar Active Fill */}
-            <div
-              className="absolute top-1/2 left-4 -translate-y-1/2 h-1 bg-primary rounded-full z-0 transition-all duration-500 ease-in-out"
-              style={{
-                width: `${((currentStep - 1) / (STEPS.length - 1)) * 95}%`,
-              }}
-            />
 
-            {/* Step Dots Grid */}
-            <div className="relative z-10 flex items-center justify-between">
-              {STEPS.map((step) => {
+          {/* Stepper Dot Progress Component */}
+          <div className="pt-2 pb-1 space-y-2">
+            {/* Row 1: Dots + inline connectors — button hanya berisi dot (w-9 = 36px fixed) */}
+            <div className="flex items-center">
+              {STEPS.map((step, index) => {
                 const isCompleted = step.id < currentStep;
                 const isActive = step.id === currentStep;
+                const isLast = index === STEPS.length - 1;
 
                 return (
-                  <button
-                    key={step.id}
-                    onClick={() => setCurrentStep(step.id)}
-                    className="flex flex-col items-center gap-2 group focus:outline-none"
-                  >
-                    <div
-                      className={`h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-300 ${
-                        isActive
-                          ? "bg-primary text-primary-foreground ring-4 ring-primary/20 scale-110 shadow-md"
-                          : isCompleted
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-card text-muted-foreground border-2 border-border hover:border-primary/50"
-                      }`}
+                  <React.Fragment key={step.id}>
+                    <button
+                      onClick={() => setCurrentStep(step.id)}
+                      className="flex-shrink-0 focus:outline-none group"
                     >
-                      {isCompleted ? (
-                        <Check className="w-4 h-4" />
-                      ) : (
-                        <span>{step.id}</span>
-                      )}
+                      <div
+                        className={`h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-300 ${
+                          isActive
+                            ? "bg-primary text-primary-foreground ring-4 ring-primary/20 scale-110 shadow-md"
+                            : isCompleted
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-card text-muted-foreground border-2 border-border hover:border-primary/50"
+                        }`}
+                      >
+                        {isCompleted ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <span>{step.id}</span>
+                        )}
+                      </div>
+                    </button>
+
+                    {/* Connector flex-1 — tepat antara dua dot, tidak pernah overflow */}
+                    {!isLast && (
+                      <div className="flex-1 relative h-1">
+                        <div className="absolute inset-0 bg-muted rounded-full" />
+                        <div
+                          className="absolute inset-0 bg-primary rounded-full transition-all duration-500 ease-in-out"
+                          style={{ width: isCompleted ? "100%" : "0%" }}
+                        />
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            {/* Row 2: Labels — setiap label di-center tepat di bawah dot-nya */}
+            <div className="hidden md:flex items-start">
+              {STEPS.map((step, index) => {
+                const isCompleted = step.id < currentStep;
+                const isActive = step.id === currentStep;
+                const isLast = index === STEPS.length - 1;
+                return (
+                  <React.Fragment key={step.id}>
+                    {/* Label wrapper: lebar sama persis dengan dot (w-9), overflow visible ke kiri-kanan */}
+                    <div className="flex-shrink-0 w-9 flex justify-center">
+                      <button
+                        onClick={() => setCurrentStep(step.id)}
+                        className="focus:outline-none"
+                      >
+                        <span
+                          className={`text-[11px] font-medium transition-colors text-center leading-tight whitespace-nowrap ${
+                            isActive
+                              ? "text-primary font-bold"
+                              : isCompleted
+                                ? "text-foreground"
+                                : "text-muted-foreground"
+                          }`}
+                        >
+                          {step.shortTitle}
+                        </span>
+                      </button>
                     </div>
-                    <span
-                      className={`text-[11px] font-medium hidden md:inline transition-colors max-w-27.5 text-center truncate ${
-                        isActive
-                          ? "text-primary font-bold"
-                          : isCompleted
-                            ? "text-foreground"
-                            : "text-muted-foreground"
-                      }`}
-                    >
-                      {step.shortTitle}
-                    </span>
-                  </button>
+                    {/* Spacer yang sama panjang dengan connector di row 1 */}
+                    {!isLast && <div className="flex-1" />}
+                  </React.Fragment>
                 );
               })}
             </div>
           </div>
+
+
         </section>
 
         {/* Step Content Panels */}
@@ -422,7 +451,7 @@ export default function DocumentationPage() {
                         Export Excel & CSV
                       </h4>
                       <p className="text-xs text-muted-foreground">
-                        Role Admin dan PML dapat mengunduh laporan rekapitulasi
+                        Khusus Role Admin yang dapat mengunduh laporan rekapitulasi
                         data spasial ke format file <code>.xlsx</code> atau{" "}
                         <code>.csv</code>.
                       </p>
@@ -503,8 +532,8 @@ export default function DocumentationPage() {
                             <td className="p-3 text-emerald-500 font-semibold">
                               ✅ Akses Penuh
                             </td>
-                            <td className="p-3 text-emerald-500 font-semibold">
-                              ✅ Akses Wilayah Tugas
+                            <td className="p-3 text-muted-foreground">
+                              ❌ Khusus Admin
                             </td>
                           </tr>
                           <tr>
@@ -516,7 +545,7 @@ export default function DocumentationPage() {
                               ✅ Akses Penuh
                             </td>
                             <td className="p-3 text-muted-foreground">
-                              ❌ Khusus Admin/PML
+                              ❌ Khusus Admin
                             </td>
                           </tr>
                         </tbody>

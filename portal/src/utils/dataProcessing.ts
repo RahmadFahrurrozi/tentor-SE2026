@@ -150,7 +150,14 @@ export function convertTitikToGeoJson(data: any[]) {
           coordinates: [lng, lat]
         },
         properties: {
-          ...row
+          ...row,
+          // Normalize spaced-key fields menjadi underscore alias
+          // agar bisa diakses dari MapLibre GL properties tanpa masalah
+          alamat_final: row['alamat final'] || row['alamat'] || null,
+          nama_final: row['nama final'] || row['nama'] || null,
+          idsls_final: row['idsls final'] || row['idsls_str'] || null,
+          lat_final: row['lat final'] || row['lat'] || null,
+          long_final: row['long final'] || row['long'] || null,
         }
       });
     }
@@ -162,6 +169,7 @@ export function convertTitikToGeoJson(data: any[]) {
     features
   };
 }
+
 
 export function calculateBbox(geoJson: any): [number, number, number, number] | null {
   if (!geoJson || !geoJson.features || geoJson.features.length === 0) return null;
