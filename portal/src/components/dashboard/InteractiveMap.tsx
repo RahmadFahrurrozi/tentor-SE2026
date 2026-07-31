@@ -1565,18 +1565,20 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         @keyframes radar-pulse { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(4.5); opacity: 0; } }
       `}</style>
 
-      {/* FLOATING DOCUMENTATION BUTTON MELAYANG DI DALAM PETA */}
-      <div className="absolute top-4 right-4 z-40">
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => navigate("/documentation")}
-          className="h-9 px-3 text-xs font-semibold gap-1.5 shadow-lg bg-card/90 backdrop-blur-md border border-primary/20 text-foreground hover:text-primary transition-all rounded-xl hover:shadow-xl"
-        >
-          <BookOpen className="w-4 h-4 text-primary" />
-          <span className="hidden sm:inline">Panduan & Dokumentasi</span>
-        </Button>
-      </div>
+      {/* FLOATING DOCUMENTATION BUTTON MELAYANG DI DALAM PETA (Hilang saat Panel Statistik Terbuka) */}
+      {!store.isStatisticsOpen && (
+        <div className="absolute top-4 right-4 z-40">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => navigate("/documentation")}
+            className="h-9 px-3 text-xs font-semibold gap-1.5 shadow-lg bg-card/90 backdrop-blur-md border border-primary/20 text-foreground hover:text-primary transition-all rounded-xl hover:shadow-xl"
+          >
+            <BookOpen className="w-4 h-4 text-primary" />
+            <span className="hidden sm:inline">Panduan & Dokumentasi</span>
+          </Button>
+        </div>
+      )}
 
       {store.filterKecamatan === "Semua" && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-amber-500/95 text-white backdrop-blur-md px-4 py-2.5 rounded-xl shadow-xl border border-amber-400/50 flex items-center gap-2.5 text-xs font-semibold max-w-[90%] sm:max-w-xl text-center pointer-events-auto">

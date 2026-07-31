@@ -242,7 +242,10 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
               htmlFor="showSyntheticBuildings"
               className="text-sm text-muted-foreground"
             >
-              ↳ Bangunan Buatan Sintetis (6m×6m)
+              Bangunan Buatan Sintetis{" "}
+              <code className="text-[9px] text-muted-foreground">
+                (Under Development)
+              </code>
             </Label>
             <Switch
               id="showSyntheticBuildings"
