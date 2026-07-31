@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,9 +39,16 @@ import {
   MapPin,
   TrendingUp,
   Laptop2,
+  Maximize2,
+  Minimize2,
+  BookOpen,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/auth-store";
 import { useMapStore } from "@/store/mapStore";
+import { EntityDetailTable } from "./EntityDetailTable";
+import { SlsDetailTable } from "./SlsDetailTable";
+import { KecamatanComparisonView } from "./KecamatanComparisonView";
 import * as XLSX from "xlsx";
 
 interface StatisticsPanelProps {
@@ -49,12 +56,13 @@ interface StatisticsPanelProps {
 }
 
 export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
+  const navigate = useNavigate();
   const { profile } = useAuthStore();
   const store = useMapStore();
+  const [isExpanded, setIsExpanded] = useState(false);
   const role = profile?.role ?? "ppl";
   const isAdmin = role === "admin";
-  const isPml = role === "pml";
-  const canExport = isAdmin || isPml;
+  const canExport = isAdmin;
   const roleName = role.toUpperCase();
 
   const {
@@ -391,13 +399,17 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
         </Button>
       </div>
 
-      {/* EXPANDED FLOATING BOTTOM OVERLAY SHEET (Fully Responsive di Semua Device) */}
+      {/* EXPANDED FLOATING BOTTOM OVERLAY SHEET / FULL PANEL EXPAND */}
       <div
-        className={`absolute bottom-0 left-0 right-0 max-h-[75vh] sm:max-h-[60vh] md:max-h-[58vh] bg-card/95 backdrop-blur-md border-t shadow-2xl z-30 transition-all duration-300 ease-in-out transform ${
+        className={`absolute bottom-0 left-0 right-0 w-full bg-card/95 backdrop-blur-md border-t shadow-2xl z-30 transition-all duration-300 ease-in-out transform ${
+          isExpanded
+            ? "h-full max-h-full rounded-none"
+            : "h-[75vh] sm:h-[60vh] md:h-[58vh] max-h-[75vh] sm:max-h-[60vh] md:max-h-[58vh] rounded-t-2xl"
+        } ${
           store.isStatisticsOpen
             ? "translate-y-0 opacity-100 pointer-events-auto"
             : "translate-y-full opacity-0 pointer-events-none"
-        } flex flex-col rounded-t-2xl overflow-hidden`}
+        } flex flex-col overflow-hidden`}
       >
         {/* Header Bar dengan Selector Wilayah & Action Buttons */}
         <div className="px-3.5 py-3 sm:px-6 sm:py-3.5 border-b bg-card shrink-0 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -505,16 +517,50 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
             ) : (
               <div className="text-[11px] text-muted-foreground flex items-center gap-1 bg-muted/60 px-2.5 py-1 rounded border ml-auto sm:ml-0">
                 <ShieldCheck className="w-3.5 h-3.5 text-blue-500" /> Export
-                (PML/Admin)
+                (Khusus Admin)
               </div>
             )}
+
+            {/* Dokumentasi Navigation Button */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate("/documentation")}
+              className="h-8 text-xs gap-1.5 px-2.5 border-primary/20 text-foreground hover:text-primary shrink-0"
+              title="Buka Halaman Panduan & Dokumentasi"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-primary" />
+              <span className="hidden sm:inline">Dokumentasi</span>
+            </Button>
+
+            {/* Expand / Fullscreen Toggle Button */}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setIsExpanded((prev) => !prev)}
+              className="h-8 w-8 p-0 ml-1 text-muted-foreground hover:text-foreground rounded-full shrink-0"
+              title={
+                isExpanded
+                  ? "Kecilkan Tampilan (Restore)"
+                  : "Perluas Layar Penuh (Fullscreen)"
+              }
+            >
+              {isExpanded ? (
+                <Minimize2 className="w-4 h-4 text-primary" />
+              ) : (
+                <Maximize2 className="w-4 h-4" />
+              )}
+            </Button>
 
             {/* Collapse Button */}
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => store.setStatisticsOpen(false)}
-              className="h-8 w-8 p-0 ml-1 text-muted-foreground hover:text-foreground rounded-full shrink-0"
+              onClick={() => {
+                setIsExpanded(false);
+                store.setStatisticsOpen(false);
+              }}
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground rounded-full shrink-0"
               title="Sembunyikan Panel"
             >
               <ChevronDown className="w-4 h-4" />
@@ -685,16 +731,30 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
             </div>
           </div>
 
-          {/* Visual Charts & Table Tabs */}
+          {/* Visual Charts, Komparasi, & Table Tabs */}
           <Tabs defaultValue="visual" className="w-full">
-            <TabsList className="grid grid-cols-2 max-w-md mb-4">
+            <TabsList className="grid grid-cols-2 sm:grid-cols-4 max-w-2xl mb-4">
               <TabsTrigger value="visual" className="text-xs">
                 Visual Chart & Insight
               </TabsTrigger>
+              <TabsTrigger value="komparasi" className="text-xs">
+                Komparasi Kecamatan
+              </TabsTrigger>
+              <TabsTrigger value="sls" className="text-xs">
+                Tabel Data SLS
+              </TabsTrigger>
               <TabsTrigger value="table" className="text-xs">
-                Tabel Rincian Data
+                Rekap Indikator
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="komparasi">
+              <KecamatanComparisonView spatialData={spatialData} />
+            </TabsContent>
+
+            <TabsContent value="sls">
+              <SlsDetailTable spatialData={spatialData} />
+            </TabsContent>
 
             <TabsContent value="visual" className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
@@ -897,6 +957,9 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               </Card>
             </TabsContent>
           </Tabs>
+
+          {/* Rincian Tabel Entitas & Bangunan (Search & Filter per Entitas) */}
+          <EntityDetailTable spatialData={spatialData} />
         </div>
       </div>
     </>
