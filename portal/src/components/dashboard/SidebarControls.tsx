@@ -127,7 +127,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
           : role?.toUpperCase();
 
   return (
-    <Card className="h-full w-full max-w-[300px] flex flex-col rounded-none border-y-0 border-l-0">
+    <Card className="h-full w-full max-w-75 flex flex-col rounded-none border-y-0 border-l-0">
       <CardHeader className="pb-4 shrink-0 flex flex-row items-center justify-between space-y-0">
         <div className="flex items-center gap-3">
           <img

@@ -1529,7 +1529,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
 
       <div
         ref={tooltipRef}
-        className="absolute z-50 bg-popover/95 backdrop-blur-md text-popover-foreground border shadow-xl rounded-xl p-4 text-xs pointer-events-none w-[280px] hidden transition-all duration-75"
+        className="absolute z-50 bg-popover/95 backdrop-blur-md text-popover-foreground border shadow-xl rounded-xl p-4 text-xs pointer-events-none w-70 hidden transition-all duration-75"
         style={{ left: 0, top: 0, transform: "translate3d(0, 0, 0)" }}
       />
     </div>
