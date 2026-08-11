@@ -105,13 +105,39 @@ def write_chunk(data: list[dict], path: Path, label: str):
 
 # ─── Load helpers ─────────────────────────────────────────────────────────────
 
-def load_titik(filename: str, name: str) -> pd.DataFrame:
+def find_input_file(filename: str, name: str = "") -> Path | None:
+    """Cari file input di INPUT_DIR, ./data, atau ./data-parquet dengan fallback nama."""
+    candidates = [
+        INPUT_DIR / filename,
+        Path("data") / filename,
+        Path("data-parquet") / filename,
+    ]
+    if name:
+        candidates.extend([
+            INPUT_DIR / f"data-{name}-biasa-2.parquet",
+            INPUT_DIR / f"data-{name}-biasa.parquet",
+            INPUT_DIR / f"data-{name}.parquet",
+            Path("data") / f"data-{name}-biasa-2.parquet",
+            Path("data") / f"data-{name}-biasa.parquet",
+            Path("data") / f"data-{name}.parquet",
+        ])
+    for p in candidates:
+        if p.exists() and p.is_file() and p.stat().st_size > 0:
+            return p
+    return None
+
+
+def load_titik(filename: str, name: str, custom_file: Path | str = None) -> pd.DataFrame:
     """Load Parquet titik (usaha / RT), normalisasi kolom koordinat & idsls."""
-    path = INPUT_DIR / filename
-    if not path.exists():
-        print(f"  [WARN] {filename} tidak ditemukan, skip.")
+    if custom_file and Path(custom_file).exists():
+        path = Path(custom_file)
+    else:
+        path = find_input_file(filename, name)
+    if not path:
+        print(f"  [WARN] {filename} (atau variasi {name}) tidak ditemukan, skip.")
         return pd.DataFrame()
 
+    print(f"  Menggunakan file: {path}")
     df = pd.read_parquet(path)
     print(f"  Loaded {name}: {len(df):,} rows, kolom: {list(df.columns)[:8]}...")
 
@@ -146,11 +172,12 @@ def load_titik(filename: str, name: str) -> pd.DataFrame:
 
 def load_bangunan(filename: str) -> gpd.GeoDataFrame:
     """Load Parquet bangunan dengan geometry WKT."""
-    path = INPUT_DIR / filename
-    if not path.exists():
+    path = find_input_file(filename, "bangunan")
+    if not path:
         print(f"  [WARN] {filename} tidak ditemukan, skip.")
         return gpd.GeoDataFrame()
 
+    print(f"  Menggunakan file: {path}")
     df = pd.read_parquet(path)
     print(f"  Loaded bangunan: {len(df):,} rows, kolom: {list(df.columns)[:8]}...")
 
@@ -455,8 +482,8 @@ def split_sls_and_generate_manifest():
 
 # ─── Upload ke Supabase ───────────────────────────────────────────────────────
 
-def upload_to_supabase():
-    """Upload semua file JSON chunks ke Supabase Storage bucket 'spatial-chunks'."""
+def upload_to_supabase(dataset_filter: str = None):
+    """Upload file JSON chunks ke Supabase Storage bucket 'spatial-chunks'."""
     try:
         from supabase import create_client
     except ImportError:
@@ -479,8 +506,16 @@ def upload_to_supabase():
     except Exception:
         pass  # Sudah ada
 
-    # Upload semua file
-    all_files = list(OUTPUT_DIR.rglob("*.json"))
+    # Filter file berdasarkan dataset_filter jika ditentukan
+    if dataset_filter and dataset_filter != "all":
+        target_dir = OUTPUT_DIR / dataset_filter
+        if not target_dir.exists():
+            print(f"[WARN] Folder {target_dir} tidak ditemukan, tidak ada file yang di-upload.")
+            return
+        all_files = list(target_dir.rglob("*.json"))
+    else:
+        all_files = list(OUTPUT_DIR.rglob("*.json"))
+
     print(f"\nUpload {len(all_files)} file ke Supabase Storage bucket '{bucket}'...")
 
     for fpath in tqdm(all_files, desc="Upload"):
@@ -515,6 +550,12 @@ def main():
     parser = argparse.ArgumentParser(description="Split Parquet -> JSON chunks")
     parser.add_argument("--upload", action="store_true",
                         help="Upload hasil ke Supabase Storage setelah selesai")
+    parser.add_argument("--dataset", "-d", choices=["all", "usaha", "usaha_digital", "rumah_tangga", "bangunan", "sls"],
+                        default="all", help="Pilih dataset spesifik untuk diproses (default: all)")
+    parser.add_argument("--file", "-f", default=None,
+                        help="Path ke file parquet kustom (misal: data/data-usaha-biasa-2.parquet)")
+    parser.add_argument("--no-download", action="store_true",
+                        help="Jangan download raw data dari Supabase jika belum ada di lokal")
     parser.add_argument("--input-dir", default=str(INPUT_DIR),
                         help="Folder berisi file .parquet")
     parser.add_argument("--output-dir", default=str(OUTPUT_DIR),
@@ -525,44 +566,51 @@ def main():
     OUTPUT_DIR = Path(args.output_dir)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("=" * 60)
-    print("DOWNLOAD RAW DATA FROM SUPABASE")
-    print("=" * 60)
-    download_from_supabase_if_needed()
+    if not args.no_download and args.dataset == "all":
+        print("=" * 60)
+        print("DOWNLOAD RAW DATA FROM SUPABASE")
+        print("=" * 60)
+        download_from_supabase_if_needed()
 
     print("\n" + "=" * 60)
     print("SPLIT PARQUET -> JSON CHUNKS")
     print("=" * 60)
 
     # 1. Data usaha
-    print("\n[1/5] Data usaha biasa...")
-    df_usaha = load_titik(FILES["usaha"], "usaha")
-    split_titik_by_kec(df_usaha, "usaha")
+    if args.dataset in ("all", "usaha"):
+        print("\n[Data usaha] Processing...")
+        df_usaha = load_titik(FILES["usaha"], "usaha", custom_file=args.file)
+        split_titik_by_kec(df_usaha, "usaha")
 
     # 2. Data usaha digital
-    print("\n[2/5] Data usaha digital...")
-    df_usaha_dig = load_titik(FILES["usaha_digital"], "usaha_digital")
-    split_titik_by_kec(df_usaha_dig, "usaha_digital")
+    if args.dataset in ("all", "usaha_digital"):
+        print("\n[Data usaha digital] Processing...")
+        df_usaha_dig = load_titik(FILES["usaha_digital"], "usaha_digital", custom_file=args.file if args.dataset == "usaha_digital" else None)
+        split_titik_by_kec(df_usaha_dig, "usaha_digital")
 
     # 3. Data rumah tangga
-    print("\n[3/5] Data rumah tangga...")
-    df_rt = load_titik(FILES["rumah_tangga"], "rumah_tangga")
-    split_titik_by_kec(df_rt, "rumah_tangga")
+    if args.dataset in ("all", "rumah_tangga"):
+        print("\n[Data rumah tangga] Processing...")
+        df_rt = load_titik(FILES["rumah_tangga"], "rumah_tangga", custom_file=args.file if args.dataset == "rumah_tangga" else None)
+        split_titik_by_kec(df_rt, "rumah_tangga")
 
     # 4. Data bangunan
-    print("\n[4/5] Data bangunan (dengan geometry)...")
-    gdf_bangunan = load_bangunan(FILES["bangunan"])
-    split_bangunan_by_kec(gdf_bangunan)
+    if args.dataset in ("all", "bangunan"):
+        print("\n[Data bangunan] Processing...")
+        gdf_bangunan = load_bangunan(FILES["bangunan"])
+        split_bangunan_by_kec(gdf_bangunan)
 
     # 5. Data SLS & Manifest
-    print("\n[5/5] Data SLS & Manifest...")
-    split_sls_and_generate_manifest()
+    if args.dataset in ("all", "sls"):
+        print("\n[Data SLS & Manifest] Processing...")
+        split_sls_and_generate_manifest()
 
     # Summary ukuran file
     print("\n" + "=" * 60)
     print("SUMMARY UKURAN CHUNKS")
     print("=" * 60)
-    for dataset in ["usaha", "usaha_digital", "rumah_tangga", "bangunan", "sls"]:
+    datasets_to_check = [args.dataset] if args.dataset != "all" else ["usaha", "usaha_digital", "rumah_tangga", "bangunan", "sls"]
+    for dataset in datasets_to_check:
         folder = OUTPUT_DIR / dataset
         if not folder.exists():
             continue
@@ -575,16 +623,15 @@ def main():
               f"min={min(sizes):.0f}KB  max={max(sizes):.0f}KB  "
               f"total={total_mb:.1f}MB")
 
-    # Check manifest size too
     manifest_file = OUTPUT_DIR / "wilayah_manifest.json"
-    if manifest_file.exists():
+    if manifest_file.exists() and args.dataset in ("all", "sls"):
         print(f"  {'wilayah_manifest':20s}    1 file    size={manifest_file.stat().st_size / 1024:.1f}KB")
 
     if args.upload:
         print("\n" + "=" * 60)
         print("UPLOAD KE SUPABASE STORAGE")
         print("=" * 60)
-        upload_to_supabase()
+        upload_to_supabase(dataset_filter=args.dataset)
     else:
         print("\n[OK] Selesai! Jalankan dengan --upload untuk upload ke Supabase.")
         print(f"   Output ada di: {OUTPUT_DIR.resolve()}")
