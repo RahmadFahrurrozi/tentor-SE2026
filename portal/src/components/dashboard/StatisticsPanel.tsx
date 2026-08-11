@@ -42,6 +42,7 @@ import {
   Maximize2,
   Minimize2,
   BookOpen,
+  Globe,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/auth-store";
@@ -339,6 +340,155 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
     );
   };
 
+  const handleExportGeoJSON = () => {
+    if (!isAdmin) return;
+
+    const features: any[] = [];
+
+    // 1. Point Usaha Biasa
+    if (dataUsaha && Array.isArray(dataUsaha)) {
+      const filtered =
+        store.filterDesa !== "Semua"
+          ? dataUsaha.filter(
+              (row: any) =>
+                String(
+                  row["idsls_str"] || row["idsls final"] || "",
+                ).substring(0, 10) === store.filterDesa,
+            )
+          : dataUsaha;
+      filtered.forEach((row: any) => {
+        const lat = parseFloat(row["lat final"] || row.lat);
+        const lng = parseFloat(row["long final"] || row["long"] || row.lon);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          features.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [lng, lat] },
+            properties: {
+              tipe_entitas: "Usaha Biasa",
+              nama: row["nama final"] || row["nama"] || "",
+              alamat: row["alamat final"] || row["alamat"] || "",
+              idsls: row["idsls_str"] || row["idsls final"] || "",
+              ...row,
+            },
+          });
+        }
+      });
+    }
+
+    // 2. Point Usaha Digital
+    if (dataUsahaDigital && Array.isArray(dataUsahaDigital)) {
+      const filtered =
+        store.filterDesa !== "Semua"
+          ? dataUsahaDigital.filter(
+              (row: any) =>
+                String(
+                  row["idsls_str"] || row["idsls final"] || "",
+                ).substring(0, 10) === store.filterDesa,
+            )
+          : dataUsahaDigital;
+      filtered.forEach((row: any) => {
+        const lat = parseFloat(row["lat final"] || row.lat);
+        const lng = parseFloat(row["long final"] || row["long"] || row.lon);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          features.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [lng, lat] },
+            properties: {
+              tipe_entitas: "Usaha Digital",
+              nama: row["nama final"] || row["nama"] || "",
+              alamat: row["alamat final"] || row["alamat"] || "",
+              idsls: row["idsls_str"] || row["idsls final"] || "",
+              ...row,
+            },
+          });
+        }
+      });
+    }
+
+    // 3. Point Usaha Pertanian
+    if (dataUsahaPertanian && Array.isArray(dataUsahaPertanian)) {
+      const filtered =
+        store.filterDesa !== "Semua"
+          ? dataUsahaPertanian.filter(
+              (row: any) =>
+                String(row["iddesa"] || row["idsls_str"] || "").substring(
+                  0,
+                  10,
+                ) === store.filterDesa,
+            )
+          : dataUsahaPertanian;
+      filtered.forEach((row: any) => {
+        const lat = parseFloat(row["lat final"] || row.lat);
+        const lng = parseFloat(row["long final"] || row["long"] || row.lon);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          features.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [lng, lat] },
+            properties: {
+              tipe_entitas: "Usaha Pertanian",
+              nama:
+                row["nama_krt"] || row["nm_project"] || row["nama"] || "",
+              alamat: row["deskripsi_project"] || row["alamat"] || "",
+              idsls: row["idsls_str"] || row["iddesa"] || "",
+              ...row,
+            },
+          });
+        }
+      });
+    }
+
+    // 4. Point Rumah Tangga
+    if (dataRumahTangga && Array.isArray(dataRumahTangga)) {
+      const filtered =
+        store.filterDesa !== "Semua"
+          ? dataRumahTangga.filter(
+              (row: any) =>
+                String(
+                  row["idsls_str"] || row["idsls final"] || "",
+                ).substring(0, 10) === store.filterDesa,
+            )
+          : dataRumahTangga;
+      filtered.forEach((row: any) => {
+        const lat = parseFloat(row["lat final"] || row.lat);
+        const lng = parseFloat(row["long final"] || row["long"] || row.lon);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          features.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [lng, lat] },
+            properties: {
+              tipe_entitas: "Rumah Tangga",
+              nama:
+                row["nama final"] || row["nama_krt"] || row["nama"] || "",
+              alamat: row["alamat final"] || row["alamat"] || "",
+              idsls: row["idsls_str"] || row["idsls final"] || "",
+              ...row,
+            },
+          });
+        }
+      });
+    }
+
+    const geoJsonOutput = {
+      type: "FeatureCollection",
+      properties: {
+        wilayah: regionLabel,
+        total_features: features.length,
+        exported_at: new Date().toISOString(),
+      },
+      features,
+    };
+
+    const blob = new Blob([JSON.stringify(geoJsonOutput, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Spasial_SE2026_${regionLabel.replace(/[^a-zA-Z0-9]/g, "_")}.geojson`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <>
       {/* FLOATING MINI SUMMARY BAR (Posisi Bottom-Left agar TIDAK Menutupi Map Controls di Kanan Bawah) */}
@@ -360,7 +510,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               </span>
               <Badge
                 variant="outline"
-                className="text-[9px] sm:text-[10px] py-0 px-1.5 font-semibold text-emerald-500 border-emerald-500/30 bg-emerald-500/10 shrink-0"
+                className="text-[9px] sm:text-[10px] font-semibold text-emerald-500 border-emerald-500/30 bg-emerald-500/10 shrink-0"
               >
                 {stats.progressPct}% Terdata
               </Badge>
@@ -513,6 +663,17 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
                 </Button>
+                {isAdmin && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={handleExportGeoJSON}
+                    className="h-8 text-xs gap-1 px-2.5 shadow-md font-semibold"
+                    title="Export data spasial ter-filter ke format GeoJSON (Khusus Admin)"
+                  >
+                    <Globe className="w-3.5 h-3.5" /> GeoJSON
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="text-[11px] text-muted-foreground flex items-center gap-1 bg-muted/60 px-2.5 py-1 rounded border ml-auto sm:ml-0">

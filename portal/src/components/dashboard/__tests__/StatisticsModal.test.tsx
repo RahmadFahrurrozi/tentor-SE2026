@@ -5,6 +5,7 @@ import { render, screen, cleanup } from "@testing-library/react";
 import * as matchers from "@testing-library/jest-dom/matchers";
 expect.extend(matchers);
 
+import { MemoryRouter } from "react-router-dom";
 import { StatisticsPanel } from "../StatisticsPanel";
 
 let currentRole = "admin";
@@ -49,25 +50,31 @@ describe("StatisticsPanel integration & role protection", () => {
     currentRole = "admin";
 
     render(
-      <StatisticsPanel
-        spatialData={mockSpatialData}
-      />
+      <MemoryRouter>
+        <StatisticsPanel
+          spatialData={mockSpatialData}
+        />
+      </MemoryRouter>
     );
 
-    expect(screen.getByText("Excel")).toBeInTheDocument();
-    expect(screen.getByText("CSV")).toBeInTheDocument();
+    expect(screen.getAllByText("Excel").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("CSV").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("GeoJSON").length).toBeGreaterThan(0);
   });
 
   it("should hide export buttons when user is non-admin (PPL)", () => {
     currentRole = "ppl";
 
     render(
-      <StatisticsPanel
-        spatialData={mockSpatialData}
-      />
+      <MemoryRouter>
+        <StatisticsPanel
+          spatialData={mockSpatialData}
+        />
+      </MemoryRouter>
     );
 
     expect(screen.queryByText("Excel")).not.toBeInTheDocument();
-    expect(screen.getByText(/Export \(PML\/Admin\)/i)).toBeInTheDocument();
+    expect(screen.queryByText("GeoJSON")).not.toBeInTheDocument();
+    expect(screen.getByText(/Export \(Khusus Admin\)/i)).toBeInTheDocument();
   });
 });

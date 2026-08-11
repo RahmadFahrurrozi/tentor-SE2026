@@ -1582,11 +1582,10 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
 
       {store.filterKecamatan === "Semua" && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-amber-500/95 text-white backdrop-blur-md px-4 py-2.5 rounded-xl shadow-xl border border-amber-400/50 flex items-center gap-2.5 text-xs font-semibold max-w-[90%] sm:max-w-xl text-center pointer-events-auto">
-          <AlertTriangle className="w-4 h-4 shrink-0 text-amber-100" />
-          <span>
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-100" />
             <strong>Perhatian:</strong> Silakan pilih Kecamatan di filter
-            wilayah terlebih dahulu untuk memuat data statistik & sebaran titik
-            lokasi di peta.
+            wilayah terlebih dahulu.
           </span>
         </div>
       )}
