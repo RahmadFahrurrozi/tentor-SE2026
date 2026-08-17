@@ -33,10 +33,11 @@ OUTPUT_DIR = Path("./data-chunks")    # output JSON chunks
 
 # Nama file parquet input
 FILES = {
-    "usaha":         "data-usaha.parquet",
-    "usaha_digital": "data-usaha-digital.parquet",
-    "rumah_tangga":  "data-rumah-tangga.parquet",
-    "bangunan":      "data-bangunan.parquet",
+    "usaha":            "data-usaha.parquet",
+    "usaha_digital":    "data-usaha-digital.parquet",
+    "usaha_pertanian":  "titik-usaha-pertanian.parquet",
+    "rumah_tangga":     "data-rumah-tangga.parquet",
+    "bangunan":         "data-bangunan.parquet",
 }
 
 # Kolom kecamatan dan desa — sesuaikan jika nama kolom berbeda
@@ -159,6 +160,15 @@ def load_titik(filename: str, name: str, custom_file: Path | str = None) -> pd.D
         dropped = before - len(df)
         if dropped:
             print(f"    Dropped {dropped:,} baris koordinat invalid")
+
+    # Normalisasi kolom nama & alamat
+    nama_col = find_col(df, ["nama final", "Nama usaha", "Nama Usaha", "nama_usaha", "nama_usaha_edit", "nama_komersial", "nama", "Nama"])
+    if nama_col and nama_col != "nama final":
+        df["nama final"] = df[nama_col]
+
+    alamat_col = find_col(df, ["alamat final", "Alamat", "alamat", "Alamat final"])
+    if alamat_col and alamat_col != "alamat final":
+        df["alamat final"] = df[alamat_col]
 
     # Normalisasi idsls
     idsls_col = find_col(df, ["idsls_str", "idsls final", "idsls", "id_sls", "IDSLS"])
@@ -482,10 +492,12 @@ def split_sls_and_generate_manifest():
 
 # ─── Upload ke Supabase ───────────────────────────────────────────────────────
 
-def upload_to_supabase(dataset_filter: str = None):
-    """Upload file JSON chunks ke Supabase Storage bucket 'spatial-chunks'."""
+import time
+
+def upload_to_supabase(dataset_filter: str = None, bucket_name: str = "spatial-chunks"):
+    """Upload file JSON chunks ke Supabase Storage bucket."""
     try:
-        from supabase import create_client
+        from supabase import create_client, ClientOptions
     except ImportError:
         print("[ERROR] Install dulu: pip install supabase")
         sys.exit(1)
@@ -496,8 +508,9 @@ def upload_to_supabase(dataset_filter: str = None):
         print("[ERROR] Set SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY di .env")
         sys.exit(1)
 
-    sb = create_client(url, key)
-    bucket = "spatial-chunks"
+    options = ClientOptions(storage_client_timeout=300)
+    sb = create_client(url, key, options=options)
+    bucket = bucket_name
 
     # Pastikan bucket ada (buat jika belum)
     try:
@@ -518,6 +531,9 @@ def upload_to_supabase(dataset_filter: str = None):
 
     print(f"\nUpload {len(all_files)} file ke Supabase Storage bucket '{bucket}'...")
 
+    success_count = 0
+    fail_count = 0
+
     for fpath in tqdm(all_files, desc="Upload"):
         # Storage path: "usaha/kec_1234.json"
         storage_path = str(fpath.relative_to(OUTPUT_DIR)).replace("\\", "/")
@@ -525,21 +541,33 @@ def upload_to_supabase(dataset_filter: str = None):
         with open(fpath, "rb") as f:
             content = f.read()
 
-        try:
-            # Upsert (overwrite jika sudah ada)
-            sb.storage.from_(bucket).upload(
-                path=storage_path,
-                file=content,
-                file_options={
-                    "content-type": "application/json",
-                    "cache-control": "public, max-age=86400",  # 24 jam cache
-                    "upsert": "true",
-                }
-            )
-        except Exception as e:
-            print(f"  [ERROR] Gagal upload {storage_path}: {e}")
+        uploaded = False
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Upsert (overwrite jika sudah ada)
+                sb.storage.from_(bucket).upload(
+                    path=storage_path,
+                    file=content,
+                    file_options={
+                        "content-type": "application/json",
+                        "cache-control": "public, max-age=86400",  # 24 jam cache
+                        "upsert": "true",
+                    }
+                )
+                uploaded = True
+                success_count += 1
+                break
+            except Exception as e:
+                if attempt < max_retries:
+                    time.sleep(2 * attempt)
+                else:
+                    print(f"  [ERROR] Gagal upload {storage_path} setelah {max_retries} percobaaan: {e}")
+                    fail_count += 1
 
-    print(f"\n[OK] Upload selesai. {len(all_files)} file di bucket '{bucket}'")
+    print(f"\n[OK] Upload selesai. Berhasil: {success_count}/{len(all_files)} file di bucket '{bucket}'")
+    if fail_count > 0:
+        print(f"   [WARN] Gagal: {fail_count} file")
     print(f"   Public URL: {url}/storage/v1/object/public/{bucket}/")
 
 
@@ -550,7 +578,7 @@ def main():
     parser = argparse.ArgumentParser(description="Split Parquet -> JSON chunks")
     parser.add_argument("--upload", action="store_true",
                         help="Upload hasil ke Supabase Storage setelah selesai")
-    parser.add_argument("--dataset", "-d", choices=["all", "usaha", "usaha_digital", "rumah_tangga", "bangunan", "sls"],
+    parser.add_argument("--dataset", "-d", choices=["all", "usaha", "usaha_digital", "usaha_pertanian", "rumah_tangga", "bangunan", "sls"],
                         default="all", help="Pilih dataset spesifik untuk diproses (default: all)")
     parser.add_argument("--file", "-f", default=None,
                         help="Path ke file parquet kustom (misal: data/data-usaha-biasa-2.parquet)")
@@ -560,11 +588,19 @@ def main():
                         help="Folder berisi file .parquet")
     parser.add_argument("--output-dir", default=str(OUTPUT_DIR),
                         help="Folder output JSON chunks")
+    parser.add_argument("--dataset-version", choices=["prelist", "se2026"], default="prelist",
+                        help="Pilih versi dataset untuk menentukan bucket storage (prelist -> spatial-chunks, se2026 -> spatial-chunks-se2026)")
+    parser.add_argument("--bucket", default=None,
+                        help="Nama bucket Supabase Storage kustom (misal: spatial-chunks-se2026)")
     args = parser.parse_args()
 
     INPUT_DIR  = Path(args.input_dir)
     OUTPUT_DIR = Path(args.output_dir)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    target_bucket = args.bucket
+    if not target_bucket:
+        target_bucket = "spatial-chunks-se2026" if args.dataset_version == "se2026" else "spatial-chunks"
 
     if not args.no_download and args.dataset == "all":
         print("=" * 60)
@@ -579,7 +615,7 @@ def main():
     # 1. Data usaha
     if args.dataset in ("all", "usaha"):
         print("\n[Data usaha] Processing...")
-        df_usaha = load_titik(FILES["usaha"], "usaha", custom_file=args.file)
+        df_usaha = load_titik(FILES["usaha"], "usaha", custom_file=args.file if args.dataset == "usaha" else None)
         split_titik_by_kec(df_usaha, "usaha")
 
     # 2. Data usaha digital
@@ -587,6 +623,12 @@ def main():
         print("\n[Data usaha digital] Processing...")
         df_usaha_dig = load_titik(FILES["usaha_digital"], "usaha_digital", custom_file=args.file if args.dataset == "usaha_digital" else None)
         split_titik_by_kec(df_usaha_dig, "usaha_digital")
+
+    # 2b. Data usaha pertanian
+    if args.dataset in ("all", "usaha_pertanian"):
+        print("\n[Data usaha pertanian] Processing...")
+        df_usaha_pert = load_titik(FILES["usaha_pertanian"], "usaha_pertanian", custom_file=args.file if args.dataset == "usaha_pertanian" else None)
+        split_titik_by_kec(df_usaha_pert, "usaha_pertanian")
 
     # 3. Data rumah tangga
     if args.dataset in ("all", "rumah_tangga"):
@@ -609,7 +651,7 @@ def main():
     print("\n" + "=" * 60)
     print("SUMMARY UKURAN CHUNKS")
     print("=" * 60)
-    datasets_to_check = [args.dataset] if args.dataset != "all" else ["usaha", "usaha_digital", "rumah_tangga", "bangunan", "sls"]
+    datasets_to_check = [args.dataset] if args.dataset != "all" else ["usaha", "usaha_digital", "usaha_pertanian", "rumah_tangga", "bangunan", "sls"]
     for dataset in datasets_to_check:
         folder = OUTPUT_DIR / dataset
         if not folder.exists():
@@ -629,9 +671,9 @@ def main():
 
     if args.upload:
         print("\n" + "=" * 60)
-        print("UPLOAD KE SUPABASE STORAGE")
+        print(f"UPLOAD KE SUPABASE STORAGE (BUCKET: '{target_bucket}')")
         print("=" * 60)
-        upload_to_supabase(dataset_filter=args.dataset)
+        upload_to_supabase(dataset_filter=args.dataset, bucket_name=target_bucket)
     else:
         print("\n[OK] Selesai! Jalankan dengan --upload untuk upload ke Supabase.")
         print(f"   Output ada di: {OUTPUT_DIR.resolve()}")

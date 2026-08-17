@@ -1,8 +1,12 @@
 import { create } from 'zustand';
 
 export type DatasetVersion = 'prelist' | 'se2026';
+export type KabupatenId = '3510' | '3515';
 
 interface MapState {
+  // Region Selection
+  selectedKabupaten: KabupatenId;
+
   // Layer Visibility
   showKab: boolean;
   showSls: boolean;
@@ -30,6 +34,7 @@ interface MapState {
   isStatisticsOpen: boolean;
 
   // Actions
+  setKabupaten: (kabId: KabupatenId) => void;
   toggleLayer: (layer: keyof MapState) => void;
   setFilter: (key: keyof MapState, value: any) => void;
   resetFilter: (role?: string, assignedDesas?: string[], allKecamatans?: any[]) => void;
@@ -41,6 +46,8 @@ interface MapState {
 
 export const useMapStore = create<MapState>((set) => ({
   // Default values
+  selectedKabupaten: '3510', // Default Banyuwangi
+
   showKab: false,
   showSls: true,
   showUsaha: false,
@@ -59,9 +66,23 @@ export const useMapStore = create<MapState>((set) => ({
   slsOpacity: 0.3,
   buildOpacity: 0.6,
 
-  activeDatasetVersion: 'prelist',
+  activeDatasetVersion: 'se2026',
   isCompareMode: false,
   isStatisticsOpen: true,
+
+  setKabupaten: (kabId: KabupatenId) => {
+    set({
+      selectedKabupaten: kabId,
+      filterKecamatan: "Semua",
+      filterDesa: "Semua",
+      filterNama: "",
+      // Jika Sidoarjo (3515), otomatis matikan compare mode & kunci ke se2026
+      ...(kabId === '3515' ? {
+        activeDatasetVersion: 'se2026',
+        isCompareMode: false,
+      } : {})
+    });
+  },
 
   toggleLayer: (layer) => set((state) => ({ [layer]: !state[layer as keyof MapState] })),
 

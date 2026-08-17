@@ -122,11 +122,27 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
   } = spatialData;
 
   const [viewState, setViewState] = useState({
-    center: [114.3692, -8.2192] as [number, number],
-    zoom: 10,
+    center: (store.selectedKabupaten === "3515" ? [112.7183, -7.4478] : [114.3692, -8.2192]) as [number, number],
+    zoom: store.selectedKabupaten === "3515" ? 11 : 10,
     pitch: 45,
     bearing: 0,
   });
+
+  useEffect(() => {
+    if (store.selectedKabupaten === "3515") {
+      setViewState((prev) => ({
+        ...prev,
+        center: [112.7183, -7.4478],
+        zoom: 11,
+      }));
+    } else {
+      setViewState((prev) => ({
+        ...prev,
+        center: [114.3692, -8.2192],
+        zoom: 10,
+      }));
+    }
+  }, [store.selectedKabupaten]);
 
   const processedSls = useMemo(() => {
     if (!dataSls || isLoading) return null;
@@ -181,26 +197,65 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
   }, [processedSls, store.filterKecamatan, store.filterDesa]);
 
   const geoJsonDesaBoundary = useMemo(() => {
-    if (!dataDesa || store.filterKecamatan === "Semua") return null;
-    const features = dataDesa.features.filter((f: any) => {
-      const idkec =
-        f.properties.idkec ||
-        f.properties.id_kec ||
-        String(f.properties.iddesa || "").substring(0, 7);
-      return String(idkec) === store.filterKecamatan;
-    });
-    return { type: "FeatureCollection", features };
-  }, [dataDesa, store.filterKecamatan]);
+    if (store.filterKecamatan === "Semua" || !store.filterKecamatan) return null;
+
+    // 1. Coba dari dataDesa (/data/regions.json)
+    if (dataDesa?.features?.length) {
+      const features = dataDesa.features.filter((f: any) => {
+        const idkec =
+          f.properties.idkec ||
+          f.properties.id_kec ||
+          String(f.properties.iddesa || "").substring(0, 7);
+        return String(idkec) === String(store.filterKecamatan);
+      });
+      if (features.length > 0) {
+        return { type: "FeatureCollection", features };
+      }
+    }
+
+    // 2. Fallback untuk Sidoarjo / data tanpa regions.json: Gunakan polygon dari dataSls!
+    if (dataSls?.features?.length) {
+      const features = dataSls.features.filter((f: any) => {
+        const idkec =
+          f.properties.idkec ||
+          f.properties.id_kec ||
+          String(f.properties.idsls_str || "").substring(0, 7);
+        return String(idkec) === String(store.filterKecamatan);
+      });
+      return { type: "FeatureCollection", features };
+    }
+
+    return null;
+  }, [dataDesa, dataSls, store.filterKecamatan]);
 
   const geoJsonDesaSelected = useMemo(() => {
-    if (!dataDesa || store.filterDesa === "Semua") return null;
-    const features = dataDesa.features.filter((f: any) => {
-      const iddesa =
-        f.properties.iddesa || f.properties.id_desa || f.properties.id;
-      return String(iddesa) === store.filterDesa;
-    });
-    return { type: "FeatureCollection", features };
-  }, [dataDesa, store.filterDesa]);
+    if (store.filterDesa === "Semua" || !store.filterDesa) return null;
+
+    // 1. Coba dari dataDesa
+    if (dataDesa?.features?.length) {
+      const features = dataDesa.features.filter((f: any) => {
+        const iddesa =
+          f.properties.iddesa || f.properties.id_desa || f.properties.id;
+        return String(iddesa) === String(store.filterDesa);
+      });
+      if (features.length > 0) {
+        return { type: "FeatureCollection", features };
+      }
+    }
+
+    // 2. Fallback untuk Sidoarjo: Gunakan polygon dari dataSls!
+    if (dataSls?.features?.length) {
+      const features = dataSls.features.filter((f: any) => {
+        const iddesa =
+          f.properties.iddesa ||
+          String(f.properties.idsls_str || "").substring(0, 10);
+        return String(iddesa) === String(store.filterDesa);
+      });
+      return { type: "FeatureCollection", features };
+    }
+
+    return null;
+  }, [dataDesa, dataSls, store.filterDesa]);
 
   const filterDataByDesaAndSearch = (data: any[], dataType?: string) => {
     if (!data || !data.length) return [];
@@ -647,32 +702,29 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
 
       // FIX: prioritaskan field pertanian untuk hover tooltip juga
       const nama =
-        layerId === "usaha-pertanian-circle-layer"
-          ? properties["nama_krt"] ||
-            properties["nm_project"] ||
-            properties["nama final"] ||
-            properties["nama"] ||
-            "Titik Usaha Pertanian"
-          : properties["nama_kk"] ||
-            properties["nama_krt"] ||
-            properties["nama final"] ||
-            properties["nama_kpl"] ||
-            properties["nama"] ||
-            "Titik Lokasi";
+        properties["nama_final"] ||
+        properties["nama final"] ||
+        properties["Nama usaha"] ||
+        properties["Nama Usaha"] ||
+        properties["nama_usaha_edit"] ||
+        properties["nama_komersial"] ||
+        properties["nama_kk"] ||
+        properties["nama_krt"] ||
+        properties["nama_kpl"] ||
+        properties["nama"] ||
+        properties["Nama"] ||
+        properties["nm_project"] ||
+        "Titik Lokasi";
 
       const alamat =
-        layerId === "usaha-pertanian-circle-layer"
-          ? properties["deskripsi_project"] ||
-            properties["alamat_project"] ||
-            properties["alamat_final"] ||
-            properties["alamat final"] ||
-            properties["alamat"] ||
-            "-"
-          : properties["deskripsi_project"] ||
-            properties["alamat_final"] ||
-            properties["alamat final"] ||
-            properties["alamat"] ||
-            "-";
+        properties["alamat_final"] ||
+        properties["alamat final"] ||
+        properties["Alamat"] ||
+        properties["Alamat final"] ||
+        properties["alamat"] ||
+        properties["deskripsi_project"] ||
+        properties["alamat_project"] ||
+        "-";
 
       html = `
         <div style="font-family: 'Outfit', 'Inter', sans-serif;">
@@ -751,9 +803,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     } else {
       usahaListHtml = usahaList
         .map((u) => {
-          const name = u["nama final"] || u["nama"] || "Titik Usaha";
+          const name = u["nama_final"] || u["nama final"] || u["Nama usaha"] || u["Nama Usaha"] || u["nama_usaha_edit"] || u["nama_komersial"] || u["nama"] || "Titik Usaha";
           const cat = u["kategori"] || "-";
-          const addr = u["alamat final"] || u["alamat"] || "-";
+          const addr = u["alamat_final"] || u["alamat final"] || u["Alamat"] || u["alamat"] || "-";
           return `
           <div style="padding: 8px; border-radius: 8px; background: ${theme === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"}; margin-bottom: 6px; border: 1px solid ${theme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"};">
             <p style="margin: 0; font-weight: 700; font-size: 12px;">${name}</p>
@@ -972,8 +1024,8 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
               "sls-line-layer",
               "line-color",
               theme === "dark"
-                ? "rgba(255, 255, 255, 0.45)"
-                : "rgba(15, 23, 42, 0.25)",
+                ? "rgba(255, 255, 255, 0.35)"
+                : "rgba(30, 41, 59, 0.35)",
             );
           }
           if (map.getLayer("sls-hover-line-layer")) {
@@ -1007,9 +1059,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             paint: {
               "line-color":
                 theme === "dark"
-                  ? "rgba(255, 255, 255, 0.45)"
-                  : "rgba(15, 23, 42, 0.25)",
-              "line-width": 1.2,
+                  ? "rgba(255, 255, 255, 0.35)"
+                  : "rgba(30, 41, 59, 0.35)",
+              "line-width": 1.0,
             },
           });
           map.addLayer({
@@ -1496,9 +1548,13 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       ) {
         bbox = calculateBbox(geoJsonDesaBoundary);
       }
-      // 3. Prioritas terakhir: Balik ke Kabupaten
-      else if (dataKab?.features?.length > 0) {
+      // 3. Prioritas terakhir: Balik ke BBox Kabupaten terpilih
+      else if (store.selectedKabupaten === "3515") {
+        bbox = [112.45, -7.60, 112.88, -7.30]; // Bounding Box Sidoarjo
+      } else if (dataKab?.features?.length > 0) {
         bbox = calculateBbox(dataKab);
+      } else {
+        bbox = [113.80, -8.80, 114.60, -8.00]; // Bounding Box Banyuwangi
       }
 
       // Kalau koordinat bbox dapet, lakuin efek "Woozz"

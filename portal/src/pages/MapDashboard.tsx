@@ -58,7 +58,6 @@ export default function MapDashboard() {
         {/* Mode Komparasi Overlay */}
         {store.isCompareMode && (
           <CompareMapContainer
-            spatialData={spatialData}
             onClose={() => store.setCompareMode(false)}
           />
         )}
