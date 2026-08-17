@@ -87,12 +87,18 @@ export function EntityDetailTable({ spatialData }: EntityDetailTableProps) {
         nama:
           u["nama final"] ||
           u.nama_final ||
+          u["Nama usaha"] ||
+          u["Nama Usaha"] ||
+          u.nama_usaha_edit ||
+          u.nama_komersial ||
+          u.nama_usaha ||
           u.nama ||
           u.nm_project ||
           "Usaha Biasa",
         alamat:
           u["alamat final"] ||
           u.alamat_final ||
+          u["Alamat"] ||
           u.alamat ||
           u.deskripsi_project ||
           "-",
@@ -114,12 +120,18 @@ export function EntityDetailTable({ spatialData }: EntityDetailTableProps) {
         nama:
           ud["nama final"] ||
           ud.nama_final ||
+          ud["Nama usaha"] ||
+          ud["Nama Usaha"] ||
+          ud.nama_usaha_edit ||
+          ud.nama_komersial ||
+          ud.nama_usaha ||
           ud.nama ||
           ud.nm_project ||
           "Usaha Digital",
         alamat:
           ud["alamat final"] ||
           ud.alamat_final ||
+          ud["Alamat"] ||
           ud.alamat ||
           ud.deskripsi_project ||
           "-",

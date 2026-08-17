@@ -10,79 +10,91 @@ export function processSlsData(
 ) {
   if (!slsGeoJson || !slsGeoJson.features) return null;
 
-  // 1. Hitung jumlah usaha biasa per SLS
-  const usahaCount = dataUsaha.reduce((acc, curr) => {
-    const idsls = curr['idsls_str'] || curr['idsls final'];
-    if (idsls) {
-      acc[idsls] = (acc[idsls] || 0) + 1;
+  const getSlsKey = (rawId: any): string => {
+    if (!rawId) return '';
+    let str = String(rawId).trim();
+    if (str.endsWith('.0')) str = str.slice(0, -2);
+    return str;
+  };
+
+  const registerCount = (acc: Record<string, number>, rawId: any) => {
+    const key = getSlsKey(rawId);
+    if (!key) return;
+    acc[key] = (acc[key] || 0) + 1;
+    if (key.length >= 14) {
+      const key14 = key.substring(0, 14);
+      if (key14 !== key) {
+        acc[key14] = (acc[key14] || 0) + 1;
+      }
     }
-    return acc;
-  }, {} as Record<string, number>);
+  };
+
+  // 1. Hitung jumlah usaha biasa per SLS
+  const usahaCount: Record<string, number> = {};
+  dataUsaha.forEach((curr) => {
+    registerCount(usahaCount, curr['idsls_str'] || curr['idsls final'] || curr['idsls']);
+  });
 
   // 2. Hitung jumlah usaha digital per SLS
-  const usahaDigitalCount = dataUsahaDigital.reduce((acc, curr) => {
-    const idsls = curr['idsls_str'] || curr['idsls final'];
-    if (idsls) {
-      acc[idsls] = (acc[idsls] || 0) + 1;
-    }
-    return acc;
-  }, {} as Record<string, number>);
+  const usahaDigitalCount: Record<string, number> = {};
+  dataUsahaDigital.forEach((curr) => {
+    registerCount(usahaDigitalCount, curr['idsls_str'] || curr['idsls final'] || curr['idsls']);
+  });
 
-  // 3. Hitung jumlah usaha pertanian per SLS (idsls_str)
+  // 3. Hitung jumlah usaha pertanian per SLS
   const usahaPertanianCount: Record<string, number> = {};
   if (dataUsahaPertanian) {
     dataUsahaPertanian.forEach((curr) => {
-      const idsls = curr['idsls_str'] || curr['idsls final'] || curr['idsls'];
-      if (idsls) {
-        usahaPertanianCount[idsls] = (usahaPertanianCount[idsls] || 0) + 1;
-      }
+      registerCount(usahaPertanianCount, curr['idsls_str'] || curr['idsls final'] || curr['idsls']);
     });
   }
 
   // 4. Hitung jumlah keluarga per SLS
-  const keluargaCount = dataRumahTangga.reduce((acc, curr) => {
-    const idsls = curr['idsls_str'] || curr['idsls final'];
-    if (idsls) {
-      acc[idsls] = (acc[idsls] || 0) + 1;
-    }
-    return acc;
-  }, {} as Record<string, number>);
+  const keluargaCount: Record<string, number> = {};
+  dataRumahTangga.forEach((curr) => {
+    registerCount(keluargaCount, curr['idsls_str'] || curr['idsls final'] || curr['idsls']);
+  });
 
   // 5. Hitung statistik bangunan per SLS
-  const bangunanStats = dataBangunan.reduce((acc, curr) => {
-    const idsls = curr['idsls_str'] || curr['idsls final'];
+  const bangunanStats: Record<string, Record<string, number>> = {};
+  dataBangunan.forEach((curr) => {
+    const rawId = curr['idsls_str'] || curr['idsls final'] || curr['idsls'];
     const status = curr['status_bangunan'];
-    
-    if (idsls) {
-      if (!acc[idsls]) {
-        acc[idsls] = { 
-          'Bangunan Usaha': 0, 
-          'Rumah Tangga': 0, 
-          'Belum Terdata': 0 
-        };
+    const key = getSlsKey(rawId);
+    if (!key) return;
+
+    const addStat = (k: string) => {
+      if (!bangunanStats[k]) {
+        bangunanStats[k] = { 'Bangunan Usaha': 0, 'Rumah Tangga': 0, 'Belum Terdata': 0 };
       }
       if (status === 'Bangunan Usaha' || status === 'Rumah Tangga' || status === 'Belum Terdata') {
-        acc[idsls][status]++;
+        bangunanStats[k][status]++;
       }
+    };
+
+    addStat(key);
+    if (key.length >= 14) {
+      const key14 = key.substring(0, 14);
+      if (key14 !== key) addStat(key14);
     }
-    return acc;
-  }, {} as Record<string, Record<string, number>>);
+  });
 
   const features = slsGeoJson.features.map((feature: any) => {
     const idslsRaw = feature.properties.idsls || feature.properties.id_sls || feature.properties.IDSLS || feature.properties.kode_sls;
     
-    let idslsStr = String(idslsRaw).trim();
-    if (idslsStr.endsWith('.0')) {
-      idslsStr = idslsStr.slice(0, -2);
-    }
-
-    // FIX: ekstrak iddesa (10 digit) dari idsls_str untuk lookup pertanian
+    const idslsStr = getSlsKey(idslsRaw);
+    const idsls14 = idslsStr.length >= 14 ? idslsStr.substring(0, 14) : idslsStr;
     const iddesa = idslsStr.substring(0, 10);
 
-    const bStats = bangunanStats[idslsStr] || { 'Bangunan Usaha': 0, 'Rumah Tangga': 0, 'Belum Terdata': 0 };
-    const sudahTerdata = bStats['Bangunan Usaha'] + bStats['Rumah Tangga'];
-    const belumTerdata = bStats['Belum Terdata'];
+    const bStats = bangunanStats[idslsStr] || bangunanStats[idsls14] || { 'Bangunan Usaha': 0, 'Rumah Tangga': 0, 'Belum Terdata': 0 };
+    const sudahTerdata = (bStats['Bangunan Usaha'] || 0) + (bStats['Rumah Tangga'] || 0);
+    const belumTerdata = bStats['Belum Terdata'] || 0;
     const totalBangunan = sudahTerdata + belumTerdata;
+
+    const uCount = (usahaCount[idslsStr] !== undefined ? usahaCount[idslsStr] : usahaCount[idsls14]) || 0;
+    const udCount = (usahaDigitalCount[idslsStr] !== undefined ? usahaDigitalCount[idslsStr] : usahaDigitalCount[idsls14]) || 0;
+    const upCount = (usahaPertanianCount[idslsStr] !== undefined ? usahaPertanianCount[idslsStr] : usahaPertanianCount[idsls14]) || 0;
+    const kCount = (keluargaCount[idslsStr] !== undefined ? keluargaCount[idslsStr] : keluargaCount[idsls14]) || 0;
 
     return {
       ...feature,
@@ -90,10 +102,10 @@ export function processSlsData(
         ...feature.properties,
         idsls_str: idslsStr,
         iddesa: iddesa,
-        jumlah_usaha: usahaCount[idslsStr] || 0,
-        jumlah_usaha_digital: usahaDigitalCount[idslsStr] || 0,
-        jumlah_usaha_pertanian: usahaPertanianCount[idslsStr] || 0,
-        jumlah_keluarga: keluargaCount[idslsStr] || 0,
+        jumlah_usaha: uCount,
+        jumlah_usaha_digital: udCount,
+        jumlah_usaha_pertanian: upCount,
+        jumlah_keluarga: kCount,
         sudah_terdata: sudahTerdata,
         belum_terdata: belumTerdata,
         total_bangunan: totalBangunan
@@ -139,10 +151,36 @@ export function convertBangunanToGeoJson(dataBangunan: any[]) {
 
 export function convertTitikToGeoJson(data: any[]) {
   const features = data.reduce((acc, row) => {
-    const lat = parseFloat(row['lat final'] || row.lat);
-    const lng = parseFloat(row['long final'] || row['long'] || row.lon);
+    const lat = parseFloat(row['lat final'] || row.lat || row.LAT || row.latitude);
+    const lng = parseFloat(row['long final'] || row['long'] || row.lon || row.LON || row.longitude);
     
     if (!isNaN(lat) && !isNaN(lng)) {
+      const namaVal =
+        row['nama final'] ||
+        row['nama_final'] ||
+        row['Nama usaha'] ||
+        row['Nama Usaha'] ||
+        row['nama_usaha'] ||
+        row['nama_usaha_edit'] ||
+        row['nama_komersial'] ||
+        row['nama'] ||
+        row['Nama'] ||
+        row['nama_krt'] ||
+        row['nama_kk'] ||
+        row['nama_kpl'] ||
+        row['nm_project'] ||
+        null;
+
+      const alamatVal =
+        row['alamat final'] ||
+        row['alamat_final'] ||
+        row['Alamat'] ||
+        row['alamat'] ||
+        row['Alamat final'] ||
+        row['deskripsi_project'] ||
+        row['alamat_project'] ||
+        null;
+
       acc.push({
         type: "Feature",
         geometry: {
@@ -153,11 +191,11 @@ export function convertTitikToGeoJson(data: any[]) {
           ...row,
           // Normalize spaced-key fields menjadi underscore alias
           // agar bisa diakses dari MapLibre GL properties tanpa masalah
-          alamat_final: row['alamat final'] || row['alamat'] || null,
-          nama_final: row['nama final'] || row['nama'] || null,
-          idsls_final: row['idsls final'] || row['idsls_str'] || null,
-          lat_final: row['lat final'] || row['lat'] || null,
-          long_final: row['long final'] || row['long'] || null,
+          alamat_final: alamatVal,
+          nama_final: namaVal,
+          idsls_final: row['idsls final'] || row['idsls_str'] || row['idsls'] || null,
+          lat_final: lat,
+          long_final: lng,
         }
       });
     }

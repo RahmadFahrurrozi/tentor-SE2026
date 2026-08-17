@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useMapStore } from '@/store/mapStore';
+import { useMapStore, type DatasetVersion } from '@/store/mapStore';
 import { useAuthStore } from '@/store/auth-store';
 import { assignSlsToPoints } from '@/utils/dataProcessing';
+import { REGIONS } from '@/config/regionConfig';
 
-export function useSpatialData() {
+export function useSpatialData(versionOverride?: DatasetVersion) {
   const [dataUsaha, setDataUsaha] = useState<any[]>([]);
   const [dataUsahaDigital, setDataUsahaDigital] = useState<any[]>([]);
   const [dataUsahaPertanian, setDataUsahaPertanian] = useState<any[]>([]);
@@ -24,8 +25,10 @@ export function useSpatialData() {
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(true);
 
   const { profile } = useAuthStore();
+  const selectedKabupaten = useMapStore((state) => state.selectedKabupaten);
   const filterKecamatan = useMapStore((state) => state.filterKecamatan);
-  const activeDatasetVersion = useMapStore((state) => state.activeDatasetVersion);
+  const storeActiveDatasetVersion = useMapStore((state) => state.activeDatasetVersion);
+  const activeDatasetVersion = versionOverride ?? storeActiveDatasetVersion;
   const setFilter = useMapStore((state) => state.setFilter);
 
   const cache = useRef<Record<string, {
@@ -37,8 +40,8 @@ export function useSpatialData() {
     sls: any;
   }>>({});
 
-  const getChunksPublicUrl = (path: string) => {
-    const { data } = supabase.storage.from('spatial-chunks').getPublicUrl(path);
+  const getChunksPublicUrl = (path: string, bucketName: string = 'spatial-chunks') => {
+    const { data } = supabase.storage.from(bucketName).getPublicUrl(path);
     return data.publicUrl;
   };
 
@@ -52,24 +55,42 @@ export function useSpatialData() {
     async function loadManifest() {
       try {
         setIsLoadingManifest(true);
-        const manifestUrl = getChunksPublicUrl('wilayah_manifest.json');
-        const response = await fetch(manifestUrl);
-        if (!response.ok) throw new Error("Gagal mengambil manifest wilayah");
+        const region = REGIONS[selectedKabupaten] || REGIONS["3510"];
+        let targetBucket = selectedKabupaten === '3515'
+          ? 'spatial-chunks-sidoarjo'
+          : (activeDatasetVersion === 'se2026' ? 'spatial-chunks-se2026' : 'spatial-chunks');
+
+        console.log(`[SpatialData] Loading manifest for ${region.name} (${selectedKabupaten}, Version: ${activeDatasetVersion}) from bucket: '${targetBucket}'...`);
+        let response = await fetch(getChunksPublicUrl('wilayah_manifest.json', targetBucket));
+        if (!response.ok && selectedKabupaten === '3510') {
+          console.log(`[SpatialData] Fallback manifest Banyuwangi to 'spatial-chunks'...`);
+          response = await fetch(getChunksPublicUrl('wilayah_manifest.json', 'spatial-chunks'));
+        }
+        if (!response.ok) throw new Error(`Gagal mengambil manifest wilayah untuk ${region.name}`);
         const data = await response.json();
+        console.log(`[SpatialData] Manifest loaded for ${region.name}:`, data);
         setWilayahManifest(data);
       } catch (err: any) {
-        console.error("Gagal load wilayah manifest:", err);
+        console.error("[SpatialData] Gagal load wilayah manifest:", err);
       } finally {
         setIsLoadingManifest(false);
       }
     }
     loadManifest();
-  }, []);
+  }, [selectedKabupaten, activeDatasetVersion]);
 
   // 2. Outline kabupaten
   useEffect(() => {
     async function loadKab() {
       try {
+        if (selectedKabupaten === '3515') {
+          const res = await fetch('/data/peta-kabupaten-sidoarjo.geojson');
+          if (res.ok) {
+            const geojson = await res.json();
+            setDataKab(geojson);
+            return;
+          }
+        }
         const kabUrl = getDataPublicUrl('peta-kabupaten-banyuwangi.geojson');
         const response = await fetch(kabUrl);
         if (response.ok) {
@@ -81,13 +102,14 @@ export function useSpatialData() {
       }
     }
     loadKab();
-  }, []);
+  }, [selectedKabupaten]);
 
   // 2b. Outline desa
   useEffect(() => {
     async function loadDesa() {
       try {
-        const response = await fetch('/data/regions.json');
+        const regionFile = selectedKabupaten === '3515' ? '/data/sidoarjo-regions.json' : '/data/regions.json';
+        const response = await fetch(regionFile);
         if (response.ok) {
           const geojson = await response.json();
           setDataDesa(geojson);
@@ -97,7 +119,7 @@ export function useSpatialData() {
       }
     }
     loadDesa();
-  }, []);
+  }, [selectedKabupaten]);
 
   // 3. Penugasan user
   useEffect(() => {
@@ -151,7 +173,7 @@ export function useSpatialData() {
 
     async function loadKecamatanData() {
       const kecId = filterKecamatan as string;
-      const cacheKey = `${activeDatasetVersion}_${kecId}`;
+      const cacheKey = `${selectedKabupaten}_${activeDatasetVersion}_${kecId}`;
       setIsLoading(true);
 
       if (cache.current[cacheKey]) {
@@ -169,17 +191,19 @@ export function useSpatialData() {
       try {
         setError(null);
 
+        const region = REGIONS[selectedKabupaten] || REGIONS["3510"];
+        const primaryBucket = selectedKabupaten === '3515'
+          ? 'spatial-chunks-sidoarjo'
+          : (activeDatasetVersion === 'se2026' ? 'spatial-chunks-se2026' : 'spatial-chunks');
+
         const fetchChunkSafe = async (dataset: string) => {
           try {
-            let path = `${dataset}/kec_${kecId}.json`;
-            if (activeDatasetVersion === 'se2026') {
-              path = `se2026/${dataset}/kec_${kecId}.json`;
-            }
+            const path = `${dataset}/kec_${kecId}.json`;
+            let res = await fetch(getChunksPublicUrl(path, primaryBucket));
 
-            let res = await fetch(getChunksPublicUrl(path));
-
-            if (!res.ok && activeDatasetVersion === 'se2026') {
-              res = await fetch(getChunksPublicUrl(`${dataset}/kec_${kecId}.json`));
+            // Fallback khusus Banyuwangi jika belum ada di se2026
+            if (!res.ok && selectedKabupaten === '3510' && activeDatasetVersion === 'se2026' && dataset === 'bangunan') {
+              res = await fetch(getChunksPublicUrl(path, 'spatial-chunks'));
             }
 
             if (!res.ok) return [];
@@ -193,14 +217,11 @@ export function useSpatialData() {
 
         const fetchSlsChunkSafe = async () => {
           try {
-            let path = `sls/kec_${kecId}.json`;
-            if (activeDatasetVersion === 'se2026') {
-              path = `se2026/sls/kec_${kecId}.json`;
-            }
+            const path = `sls/kec_${kecId}.json`;
+            let res = await fetch(getChunksPublicUrl(path, primaryBucket));
 
-            let res = await fetch(getChunksPublicUrl(path));
-            if (!res.ok && activeDatasetVersion === 'se2026') {
-              res = await fetch(getChunksPublicUrl(`sls/kec_${kecId}.json`));
+            if (!res.ok && selectedKabupaten === '3510' && activeDatasetVersion === 'se2026') {
+              res = await fetch(getChunksPublicUrl(path, 'spatial-chunks'));
             }
 
             if (!res.ok) return null;
@@ -224,6 +245,11 @@ export function useSpatialData() {
 
         // Spatial join — assign idsls_str ke setiap titik pertanian
         const usahaPertanian = assignSlsToPoints(usahaPertanianRaw, sls);
+
+        console.log(
+          `[SpatialData] Loaded kec ${kecId} for ${region.name} from bucket '${primaryBucket}': ` +
+          `Usaha=${usaha.length}, Pertanian=${usahaPertanian.length}, SLS Polygons=${sls?.features?.length || 0}`
+        );
 
         // Simpan ke cache
         cache.current[cacheKey] = {
@@ -251,7 +277,7 @@ export function useSpatialData() {
     }
 
     loadKecamatanData();
-  }, [filterKecamatan, activeDatasetVersion]);
+  }, [filterKecamatan, activeDatasetVersion, selectedKabupaten]);
 
   return {
     dataUsaha,

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
-import { Eraser, LogOut, ArrowLeftRight, Database } from "lucide-react";
+import { Eraser, LogOut, ArrowLeftRight, Database, MapPin } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { useEffect } from "react";
@@ -34,7 +34,9 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
     new Set(assignments.map((a: any) => a.iddesa).filter(Boolean)),
   ) as string[];
 
-  const allKecamatans = wilayahManifest?.kecamatan || [];
+  const allKecamatans = Array.isArray(wilayahManifest)
+    ? wilayahManifest
+    : (wilayahManifest?.kecamatan || []);
   const kecOptions = allKecamatans.filter((k: any) => {
     if (role === "admin") return true;
     return assignedKecs.includes(k.idkec);
@@ -166,6 +168,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
               }
               className="text-[11px] h-7 px-1"
               onClick={() => store.setDatasetVersion("prelist")}
+              disabled={store.selectedKabupaten === "3515"}
             >
               Baseline Prelist
             </Button>
@@ -181,12 +184,20 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
             </Button>
           </div>
 
+          {store.selectedKabupaten === "3515" && (
+            <p className="text-[10px] text-amber-500 font-medium italic">
+              * Halaman Sidoarjo hanya menyediakan data SE 2026 terbaru (tanpa
+              Prelist).
+            </p>
+          )}
+
           <div className="pt-1">
             <Button
               size="sm"
               variant="outline"
               className="w-full text-xs h-8 gap-1.5 border-primary/40 text-primary"
               onClick={() => store.setCompareMode(!store.isCompareMode)}
+              disabled={store.selectedKabupaten === "3515"}
             >
               <ArrowLeftRight className="w-3.5 h-3.5" />
               {store.isCompareMode ? "Tutup Komparasi" : "Mode Komparasi"}
@@ -309,6 +320,26 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
         {/* Filter Wilayah */}
         <div className="space-y-4">
           <h4 className="font-semibold text-sm">Filter Wilayah</h4>
+
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold flex items-center gap-1">
+              <MapPin className="w-3.5 h-3.5 text-primary" /> Kabupaten / Kota
+            </Label>
+            <Select
+              value={store.selectedKabupaten}
+              onValueChange={(val) =>
+                store.setKabupaten(val as "3510" | "3515")
+              }
+            >
+              <SelectTrigger className="w-full font-medium">
+                <SelectValue placeholder="Pilih Kabupaten" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="3510">Kab. Banyuwangi (3510)</SelectItem>
+                <SelectItem value="3515">Kab. Sidoarjo (3515)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className="space-y-2">
             <Label className="text-xs">Kecamatan</Label>

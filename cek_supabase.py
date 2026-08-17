@@ -3,8 +3,19 @@ import argparse
 import json
 import requests
 
-BASE_URL = "https://xecqftjhqonemrrtcjzp.supabase.co/storage/v1/object/public/spatial-chunks"
-DATASETS = ["usaha", "usaha_digital", "rumah_tangga", "bangunan", "sls"]
+BUCKET_NAME = "spatial-chunks"
+BASE_URL = f"https://xecqftjhqonemrrtcjzp.supabase.co/storage/v1/object/public/{BUCKET_NAME}"
+DATASETS = ["usaha", "usaha_digital", "usaha_pertanian", "rumah_tangga", "bangunan", "sls"]
+
+def set_bucket(bucket_or_version):
+    global BUCKET_NAME, BASE_URL
+    if bucket_or_version == "se2026":
+        BUCKET_NAME = "spatial-chunks-se2026"
+    elif bucket_or_version == "prelist":
+        BUCKET_NAME = "spatial-chunks"
+    elif bucket_or_version:
+        BUCKET_NAME = bucket_or_version
+    BASE_URL = f"https://xecqftjhqonemrrtcjzp.supabase.co/storage/v1/object/public/{BUCKET_NAME}"
 
 def get_manifest(dataset="usaha"):
     url = f"{BASE_URL}/{dataset}/_manifest.json"
@@ -15,7 +26,7 @@ def get_manifest(dataset="usaha"):
         if r.status_code == 200:
             return r.json()
     except Exception as e:
-        print(f"[ERROR] Gagal koneksi ke manifest: {e}")
+        print(f"[ERROR] Gagal koneksi ke manifest ({url}): {e}")
     return None
 
 def fetch_chunk(dataset, kec_id):
@@ -248,7 +259,12 @@ def main():
     parser.add_argument("-o", "--offset", type=int, default=0, help="Offset awal baris (default 0)")
     parser.add_argument("-i", "--interactive", action="store_true", help="Paginasi interaktif per 10 baris")
     parser.add_argument("-a", "--all-samples", action="store_true", help="Tampilkan sampel dari semua kecamatan")
+    parser.add_argument("--dataset-version", choices=["prelist", "se2026"], default="prelist", help="Versi dataset (prelist -> spatial-chunks, se2026 -> spatial-chunks-se2026)")
+    parser.add_argument("--bucket", help="Nama bucket kustom")
     args = parser.parse_args()
+
+    bucket_target = args.bucket if args.bucket else args.dataset_version
+    set_bucket(bucket_target)
 
     if len(sys.argv) == 1:
         interactive_menu()

@@ -2,16 +2,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { X, ArrowLeftRight } from "lucide-react";
 import { InteractiveMap } from "./InteractiveMap";
+import { useSpatialData } from "@/hooks/useSpatialData";
 
 interface CompareMapContainerProps {
-  spatialData: any;
   onClose: () => void;
 }
 
 export function CompareMapContainer({
-  spatialData,
   onClose,
 }: CompareMapContainerProps) {
+  const prelistSpatialData = useSpatialData('prelist');
+  const se2026SpatialData = useSpatialData('se2026');
+
   return (
     <div className="absolute inset-0 bg-background z-40 flex flex-col">
       {/* Header Bar */}
@@ -48,7 +50,7 @@ export function CompareMapContainer({
               Data Prelist ( Baseline )
             </p>
           </div>
-          <InteractiveMap spatialData={spatialData} />
+          <InteractiveMap spatialData={prelistSpatialData} />
         </div>
 
         {/* Right Map: Data SE2026 Progressive */}
@@ -58,7 +60,7 @@ export function CompareMapContainer({
               Data Sensus Ekonomi 2026 ( Progressive )
             </p>
           </div>
-          <InteractiveMap spatialData={spatialData} />
+          <InteractiveMap spatialData={se2026SpatialData} />
         </div>
       </div>
     </div>
