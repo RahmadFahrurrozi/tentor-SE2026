@@ -37,7 +37,6 @@ export function useUsersQuery(page: number = 0, pageSize: number = 25) {
   const createUserMutation = useMutation({
     mutationFn: (data: CreateUserPayload) => userService.createUser(data),
     onSuccess: (newUser) => {
-      console.log("User created successfully:", newUser);
       toast.success(`Pengguna ${newUser.full_name} berhasil ditambahkan`);
       // Invalidate and refetch users list
       queryClient.invalidateQueries({ queryKey: USER_QUERY_KEYS.lists() });
@@ -58,8 +57,6 @@ export function useUsersQuery(page: number = 0, pageSize: number = 25) {
       onProgress?: (processed: number, total: number) => void;
     }) => userService.bulkCreateUsers(users, { onProgress }),
     onSuccess: (result: BulkUploadResult) => {
-      console.log("Bulk upload completed:", result);
-
       if (result.succeeded.length > 0) {
         toast.success(`${result.succeeded.length} pengguna berhasil diimport`);
       }
@@ -82,8 +79,7 @@ export function useUsersQuery(page: number = 0, pageSize: number = 25) {
   // Mutation for deleting user
   const deleteUserMutation = useMutation({
     mutationFn: (id: string) => userService.deleteUser(id),
-    onSuccess: (_, deletedId) => {
-      console.log("User deleted successfully:", deletedId);
+    onSuccess: () => {
       toast.success("Pengguna berhasil dihapus");
       // Invalidate and refetch
       queryClient.invalidateQueries({ queryKey: USER_QUERY_KEYS.lists() });
@@ -99,7 +95,6 @@ export function useUsersQuery(page: number = 0, pageSize: number = 25) {
     mutationFn: ({ id, data }: { id: string; data: CreateUserPayload }) =>
       userService.updateUser(id, data),
     onSuccess: (updatedUser) => {
-      console.log("User updated successfully:", updatedUser);
       toast.success(`Pengguna ${updatedUser.full_name} berhasil diperbarui`);
       // Invalidate and refetch
       queryClient.invalidateQueries({ queryKey: USER_QUERY_KEYS.lists() });

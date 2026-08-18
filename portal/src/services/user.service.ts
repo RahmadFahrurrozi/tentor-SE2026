@@ -40,7 +40,7 @@ export interface BulkUploadResult {
 }
 
 // ─── Debug Logger ────────────────────────────────────────────────────────────
-const DEBUG = true;
+const DEBUG = false;
 
 function logDebug(action: string, data: unknown, error?: unknown) {
   if (!DEBUG) return;

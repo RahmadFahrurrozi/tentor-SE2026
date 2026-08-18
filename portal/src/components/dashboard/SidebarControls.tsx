@@ -1,4 +1,3 @@
-import { useMapStore } from "@/store/mapStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -10,123 +9,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
-import { Eraser, LogOut, ArrowLeftRight, Database, MapPin } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
+import { Eraser, LogOut, ArrowLeftRight, Database } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
-import { useEffect } from "react";
+import { useSidebarControls } from "@/hooks/use-sidebar-controls";
 
 export function SidebarControls({ spatialData }: { spatialData: any }) {
-  const store = useMapStore();
-  const { profile, user } = useAuthStore();
-  const { logout, isLoggingOut } = useAuth();
-
-  const { wilayahManifest, assignments } = spatialData;
-
-  const role = profile?.role ?? "ppl";
-
-  const assignedKecs = Array.from(
-    new Set(assignments.map((a: any) => a.idkec).filter(Boolean)),
-  ) as string[];
-
-  const assignedDesas = Array.from(
-    new Set(assignments.map((a: any) => a.iddesa).filter(Boolean)),
-  ) as string[];
-
-  const allKecamatans = Array.isArray(wilayahManifest)
-    ? wilayahManifest
-    : (wilayahManifest?.kecamatan || []);
-  const kecOptions = allKecamatans.filter((k: any) => {
-    if (role === "admin") return true;
-    return assignedKecs.includes(k.idkec);
-  });
-
-  const selectedKecObj = allKecamatans.find(
-    (k: any) => String(k.idkec) === String(store.filterKecamatan),
-  );
-  const rawDesaOptions = selectedKecObj?.desa || [];
-  const desaOptions = rawDesaOptions.filter((d: any) => {
-    if (role !== "ppl") return true;
-    return assignedDesas.includes(d.iddesa);
-  });
-
-  useEffect(() => {
-    if (
-      role === "ppl" &&
-      store.filterKecamatan &&
-      store.filterKecamatan !== "Semua"
-    ) {
-      const kecamatan = allKecamatans.find(
-        (k: any) => String(k.idkec) === String(store.filterKecamatan),
-      );
-      if (kecamatan && kecamatan.desa) {
-        const firstAssignedDesa = kecamatan.desa.find((d: any) =>
-          assignedDesas.includes(d.iddesa),
-        );
-        if (
-          firstAssignedDesa &&
-          store.filterDesa !== firstAssignedDesa.iddesa
-        ) {
-          store.setFilter("filterDesa", firstAssignedDesa.iddesa);
-        }
-      }
-    }
-  }, [store.filterKecamatan, role, allKecamatans, assignedDesas]);
-
-  const handleResetFilter = () => {
-    if (role === "ppl") {
-      if (assignedDesas.length > 0 && allKecamatans.length > 0) {
-        let firstKecamatan = null;
-        let firstDesa = null;
-        for (const kec of allKecamatans) {
-          const desaTugas = kec.desa?.find((d: any) =>
-            assignedDesas.includes(d.iddesa),
-          );
-          if (desaTugas) {
-            firstKecamatan = kec.idkec;
-            firstDesa = desaTugas.iddesa;
-            break;
-          }
-        }
-        store.setFilter("filterKecamatan", firstKecamatan);
-        store.setFilter("filterDesa", firstDesa);
-        store.setFilter("filterNama", "");
-      } else {
-        store.resetFilter(role, assignedDesas, allKecamatans);
-      }
-    } else if (role === "pml") {
-      if (kecOptions.length > 0) {
-        store.setFilter("filterKecamatan", kecOptions[0].idkec);
-        store.setFilter("filterDesa", "Semua");
-        store.setFilter("filterNama", "");
-      } else {
-        store.resetFilter(role, assignedDesas, allKecamatans);
-      }
-    } else {
-      store.resetFilter(role, assignedDesas, allKecamatans);
-    }
-  };
-
-  const userEmail = profile?.email || user?.email || "";
-  const userFullName = profile?.full_name || "PML User";
-  const userInitials =
-    userFullName
-      .split(" ")
-      .filter(Boolean)
-      .map((n: string) => n[0])
-      .join("")
-      .substring(0, 2)
-      .toUpperCase() || "U";
-
-  const displayRole =
-    role === "admin"
-      ? "Admin"
-      : role === "pml"
-        ? "PML"
-        : role === "ppl"
-          ? "PPL"
-          : role?.toUpperCase();
+  const {
+    store,
+    role,
+    desaOptions,
+    kecOptions,
+    handleResetFilter,
+    logout,
+    isLoggingOut,
+    userEmail,
+    userFullName,
+    userInitials,
+    displayRole,
+  } = useSidebarControls(spatialData);
 
   return (
     <Card className="h-full w-full max-w-75 flex flex-col rounded-none border-y-0 border-l-0">
@@ -186,7 +87,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
 
           {store.selectedKabupaten === "3515" && (
             <p className="text-[10px] text-amber-500 font-medium italic">
-              * Halaman Sidoarjo hanya menyediakan data SE 2026 terbaru (tanpa
+              * Kabupaten Sidoarjo hanya menyediakan data SE 2026 terbaru (tanpa
               Prelist).
             </p>
           )}
@@ -323,7 +224,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
 
           <div className="space-y-2">
             <Label className="text-xs font-semibold flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5 text-primary" /> Kabupaten / Kota
+              Kabupaten / Kota
             </Label>
             <Select
               value={store.selectedKabupaten}
