@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assignSlsToPoints, calculateBbox, generateSyntheticBuildingForPoint } from "../dataProcessing";
+import { assignSlsToPoints, calculateBbox, generateSyntheticBuildingForPoint } from "@/utils/dataProcessing";
 
 describe("dataProcessing utils", () => {
   it("should calculate bounding box of geojson correctly", () => {

@@ -700,21 +700,23 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
               ? "#10B981"
               : "#3B82F6";
 
-      // FIX: prioritaskan field pertanian untuk hover tooltip juga
-      const nama =
-        properties["nama_final"] ||
-        properties["nama final"] ||
-        properties["Nama usaha"] ||
-        properties["Nama Usaha"] ||
-        properties["nama_usaha_edit"] ||
-        properties["nama_komersial"] ||
-        properties["nama_kk"] ||
-        properties["nama_krt"] ||
-        properties["nama_kpl"] ||
-        properties["nama"] ||
-        properties["Nama"] ||
-        properties["nm_project"] ||
-        "Titik Lokasi";
+      const candidates = [
+        properties["nama_krt"],
+        properties["nama_kpl"],
+        properties["nama_kk"],
+        properties["nama_final"],
+        properties["nama final"],
+        properties["Nama usaha"],
+        properties["Nama Usaha"],
+        properties["nama_usaha_edit"],
+        properties["nama_komersial"],
+        properties["nm_project"],
+        properties["nama"],
+        properties["Nama"],
+      ].filter(Boolean);
+
+      const nonNumeric = candidates.find((c) => isNaN(Number(c)));
+      const nama = nonNumeric || candidates[0] || "Titik Lokasi";
 
       const alamat =
         properties["alamat_final"] ||

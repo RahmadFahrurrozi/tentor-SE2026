@@ -6,7 +6,7 @@ import * as matchers from "@testing-library/jest-dom/matchers";
 expect.extend(matchers);
 
 import { MemoryRouter } from "react-router-dom";
-import { StatisticsPanel } from "../StatisticsPanel";
+import { StatisticsPanel } from "@/components/dashboard/StatisticsPanel";
 
 let currentRole = "admin";
 

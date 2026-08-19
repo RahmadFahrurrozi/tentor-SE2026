@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useMapStore } from "../mapStore";
+import { useMapStore } from "@/store/mapStore";
 
 describe("mapStore state & actions", () => {
   beforeEach(() => {

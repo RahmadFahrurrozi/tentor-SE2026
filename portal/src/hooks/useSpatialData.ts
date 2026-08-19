@@ -60,15 +60,12 @@ export function useSpatialData(versionOverride?: DatasetVersion) {
           ? 'spatial-chunks-sidoarjo'
           : (activeDatasetVersion === 'se2026' ? 'spatial-chunks-se2026' : 'spatial-chunks');
 
-        console.log(`[SpatialData] Loading manifest for ${region.name} (${selectedKabupaten}, Version: ${activeDatasetVersion}) from bucket: '${targetBucket}'...`);
         let response = await fetch(getChunksPublicUrl('wilayah_manifest.json', targetBucket));
         if (!response.ok && selectedKabupaten === '3510') {
-          console.log(`[SpatialData] Fallback manifest Banyuwangi to 'spatial-chunks'...`);
           response = await fetch(getChunksPublicUrl('wilayah_manifest.json', 'spatial-chunks'));
         }
         if (!response.ok) throw new Error(`Gagal mengambil manifest wilayah untuk ${region.name}`);
         const data = await response.json();
-        console.log(`[SpatialData] Manifest loaded for ${region.name}:`, data);
         setWilayahManifest(data);
       } catch (err: any) {
         console.error("[SpatialData] Gagal load wilayah manifest:", err);
@@ -191,7 +188,6 @@ export function useSpatialData(versionOverride?: DatasetVersion) {
       try {
         setError(null);
 
-        const region = REGIONS[selectedKabupaten] || REGIONS["3510"];
         const primaryBucket = selectedKabupaten === '3515'
           ? 'spatial-chunks-sidoarjo'
           : (activeDatasetVersion === 'se2026' ? 'spatial-chunks-se2026' : 'spatial-chunks');
@@ -246,10 +242,7 @@ export function useSpatialData(versionOverride?: DatasetVersion) {
         // Spatial join — assign idsls_str ke setiap titik pertanian
         const usahaPertanian = assignSlsToPoints(usahaPertanianRaw, sls);
 
-        console.log(
-          `[SpatialData] Loaded kec ${kecId} for ${region.name} from bucket '${primaryBucket}': ` +
-          `Usaha=${usaha.length}, Pertanian=${usahaPertanian.length}, SLS Polygons=${sls?.features?.length || 0}`
-        );
+
 
         // Simpan ke cache
         cache.current[cacheKey] = {

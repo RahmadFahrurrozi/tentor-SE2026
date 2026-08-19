@@ -155,21 +155,25 @@ export function convertTitikToGeoJson(data: any[]) {
     const lng = parseFloat(row['long final'] || row['long'] || row.lon || row.LON || row.longitude);
     
     if (!isNaN(lat) && !isNaN(lng)) {
-      const namaVal =
-        row['nama final'] ||
-        row['nama_final'] ||
-        row['Nama usaha'] ||
-        row['Nama Usaha'] ||
-        row['nama_usaha'] ||
-        row['nama_usaha_edit'] ||
-        row['nama_komersial'] ||
-        row['nama'] ||
-        row['Nama'] ||
-        row['nama_krt'] ||
-        row['nama_kk'] ||
-        row['nama_kpl'] ||
-        row['nm_project'] ||
-        null;
+      const candidates = [
+        row['nama_krt'],
+        row['nama_kpl'],
+        row['nama_kk'],
+        row['nama_usaha'],
+        row['Nama usaha'],
+        row['Nama Usaha'],
+        row['nama_usaha_edit'],
+        row['nama_komersial'],
+        row['nama final'],
+        row['nama_final'],
+        row['nm_project'],
+        row['nama'],
+        row['Nama'],
+      ].filter(Boolean);
+
+      // Prefer non-purely-numeric name string if available
+      const nonNumericCandidate = candidates.find((c) => isNaN(Number(c)));
+      const namaVal = nonNumericCandidate || candidates[0] || null;
 
       const alamatVal =
         row['alamat final'] ||

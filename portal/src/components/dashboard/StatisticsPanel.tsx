@@ -1,4 +1,3 @@
-import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,454 +43,53 @@ import {
   BookOpen,
   Globe,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { useAuthStore } from "@/store/auth-store";
-import { useMapStore } from "@/store/mapStore";
 import { EntityDetailTable } from "./EntityDetailTable";
 import { SlsDetailTable } from "./SlsDetailTable";
 import { KecamatanComparisonView } from "./KecamatanComparisonView";
-import * as XLSX from "xlsx";
+import { useStatisticsPanel } from "@/hooks/use-statistics-panel";
 
+/**
+ * Interface Props untuk komponen StatisticsPanel
+ */
 interface StatisticsPanelProps {
+  /** Objek data spasial yang berisi layer GeoJSON, data tabular, dan manifest wilayah */
   spatialData: any;
 }
 
+/**
+ * Komponen Dashboard: StatisticsPanel
+ *
+ * Menampilkan panel overlay statistik spasial interaktif di atas peta dashboard:
+ * 1. Floating Mini Summary Bar (Bottom-Left summary ketika panel terlipat)
+ * 2. Header Control Bar (Inline Filter Kecamatan & Desa, Tombol Ekspor CSV/Excel/GeoJSON, Toggle Fullscreen)
+ * 3. Ringkasan Kartu KPI (Bangunan, Usaha Biasa, Usaha Digital, Pertanian, Rumah Tangga, Total Entitas)
+ * 4. Highlight Insight Cards (Rasio Adopsi Usaha Digital, Kepadatan Entitas per Bangunan, Jumlah SLS)
+ * 5. Tabbed Insights (Visual Chart Status Visit & Sebaran Entitas, Komparasi Kecamatan, Tabel SLS, Rekap Indikator)
+ * 6. Tabel Rincian Entitas Spasial (EntityDetailTable dengan fitur pencarian & penyaringan)
+ */
 export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
-  const navigate = useNavigate();
-  const { profile } = useAuthStore();
-  const store = useMapStore();
-  const [isExpanded, setIsExpanded] = useState(false);
-  const role = profile?.role ?? "ppl";
-  const isAdmin = role === "admin";
-  const canExport = isAdmin;
-  const roleName = role.toUpperCase();
-
   const {
-    dataBangunan,
-    dataUsaha,
-    dataUsahaDigital,
-    dataUsahaPertanian,
-    dataRumahTangga,
-    dataSls,
-    wilayahManifest,
-    assignments,
-  } = spatialData;
-
-  // Compute user assignments & available options for inline selectors
-  const assignedKecs = useMemo(
-    () =>
-      Array.from(
-        new Set((assignments || []).map((a: any) => a.idkec).filter(Boolean)),
-      ) as string[],
-    [assignments],
-  );
-
-  const assignedDesas = useMemo(
-    () =>
-      Array.from(
-        new Set((assignments || []).map((a: any) => a.iddesa).filter(Boolean)),
-      ) as string[],
-    [assignments],
-  );
-
-  const allKecamatans = useMemo(
-    () => wilayahManifest?.kecamatan || [],
-    [wilayahManifest],
-  );
-
-  const kecOptions = useMemo(
-    () =>
-      allKecamatans.filter((k: any) => {
-        if (isAdmin) return true;
-        return assignedKecs.includes(k.idkec);
-      }),
-    [allKecamatans, isAdmin, assignedKecs],
-  );
-
-  const selectedKecObj = useMemo(
-    () =>
-      allKecamatans.find(
-        (k: any) => String(k.idkec) === String(store.filterKecamatan),
-      ),
-    [allKecamatans, store.filterKecamatan],
-  );
-
-  const rawDesaOptions = useMemo(
-    () => selectedKecObj?.desa || [],
-    [selectedKecObj],
-  );
-
-  const desaOptions = useMemo(
-    () =>
-      rawDesaOptions.filter((d: any) => {
-        if (role !== "ppl") return true;
-        return assignedDesas.includes(d.iddesa);
-      }),
-    [rawDesaOptions, role, assignedDesas],
-  );
-
-  // Dynamic Label untuk wilayah yang dipilih
-  const regionLabel = useMemo(() => {
-    const kec = store.filterKecamatan;
-    const desa = store.filterDesa;
-    if (kec === "Semua" || !kec) return "Seluruh Kabupaten Banyuwangi";
-    const kecName =
-      selectedKecObj?.nmkec || selectedKecObj?.nama || `Kec. ${kec}`;
-    if (desa === "Semua" || !desa) return `${kecName} (Semua Desa)`;
-    const desaObj = rawDesaOptions.find(
-      (d: any) => String(d.iddesa) === String(desa),
-    );
-    const desaName = desaObj?.nmdesa || desaObj?.nama || `Desa ${desa}`;
-    return `${desaName}, ${kecName}`;
-  }, [store.filterKecamatan, store.filterDesa, selectedKecObj, rawDesaOptions]);
-
-  // Filtering dataset berdasarkan filterDesa yang dipilih
-  const filteredData = useMemo(() => {
-    const desa = store.filterDesa;
-    if (!desa || desa === "Semua") {
-      return {
-        bangunan: dataBangunan || [],
-        usaha: dataUsaha || [],
-        usahaDigital: dataUsahaDigital || [],
-        usahaPertanian: dataUsahaPertanian || [],
-        rt: dataRumahTangga || [],
-        sls: dataSls?.features || [],
-      };
-    }
-
-    const checkDesa = (item: any) => {
-      if (!item) return false;
-      const d =
-        item.iddesa ||
-        item.id_desa ||
-        item.properties?.iddesa ||
-        item.properties?.id_desa;
-      if (d && String(d).trim() === String(desa).trim()) return true;
-      const str = item.idsls_str || item.properties?.idsls_str;
-      if (str && String(str).substring(0, 10) === String(desa).trim())
-        return true;
-      return false;
-    };
-
-    return {
-      bangunan: (dataBangunan || []).filter(checkDesa),
-      usaha: (dataUsaha || []).filter(checkDesa),
-      usahaDigital: (dataUsahaDigital || []).filter(checkDesa),
-      usahaPertanian: (dataUsahaPertanian || []).filter(checkDesa),
-      rt: (dataRumahTangga || []).filter(checkDesa),
-      sls: (dataSls?.features || []).filter((f: any) => {
-        const d = f.properties?.iddesa || f.properties?.id_desa;
-        if (d && String(d).trim() === String(desa).trim()) return true;
-        const str = f.properties?.idsls_str || f.properties?.idsls;
-        if (str && String(str).substring(0, 10) === String(desa).trim())
-          return true;
-        return false;
-      }),
-    };
-  }, [
-    store.filterDesa,
-    dataBangunan,
-    dataUsaha,
-    dataUsahaDigital,
-    dataUsahaPertanian,
-    dataRumahTangga,
-    dataSls,
-  ]);
-
-  // Kalkulasi Metrik Agregat Spasial & Insight Monitoring
-  const stats = useMemo(() => {
-    const totalBangunan = filteredData.bangunan.length;
-    const totalUsaha = filteredData.usaha.length;
-    const totalUsahaDigital = filteredData.usahaDigital.length;
-    const totalUsahaPertanian = filteredData.usahaPertanian.length;
-    const totalRt = filteredData.rt.length;
-
-    let sudahKunjung = 0;
-    let belumKunjung = 0;
-
-    if (filteredData.sls && filteredData.sls.length > 0) {
-      filteredData.sls.forEach((f: any) => {
-        sudahKunjung += f.properties?.sudah_terdata || 0;
-        belumKunjung += f.properties?.belum_terdata || 0;
-      });
-    }
-
-    // Hitung riil dari data bangunan jika sudahKunjung & belumKunjung di SLS masih 0
-    if (sudahKunjung === 0 && belumKunjung === 0 && totalBangunan > 0) {
-      sudahKunjung = filteredData.bangunan.filter(
-        (b: any) => b.status_bangunan && b.status_bangunan !== "Belum Terdata",
-      ).length;
-      belumKunjung = Math.max(0, totalBangunan - sudahKunjung);
-    }
-
-    const totalEntitas =
-      totalUsaha + totalUsahaDigital + totalUsahaPertanian + totalRt;
-    const totalEntitasUsaha =
-      totalUsaha + totalUsahaDigital + totalUsahaPertanian;
-    const rasioDigital =
-      totalEntitasUsaha > 0
-        ? Math.round((totalUsahaDigital / totalEntitasUsaha) * 100)
-        : 0;
-    const rasioKepadatan =
-      totalBangunan > 0 ? (totalEntitas / totalBangunan).toFixed(1) : "0.0";
-
-    return {
-      totalBangunan,
-      totalUsaha,
-      totalUsahaDigital,
-      totalUsahaPertanian,
-      totalRt,
-      totalEntitas,
-      totalEntitasUsaha,
-      sudahKunjung,
-      belumKunjung,
-      rasioDigital,
-      rasioKepadatan,
-      slsCount: filteredData.sls.length,
-      progressPct:
-        totalBangunan > 0
-          ? Math.min(100, Math.round((sudahKunjung / totalBangunan) * 100))
-          : 0,
-    };
-  }, [filteredData]);
-
-  const pieData = useMemo(
-    () => [
-      { name: "Sudah Dikunjungi", value: stats.sudahKunjung, color: "#10B981" },
-      { name: "Belum Dikunjungi", value: stats.belumKunjung, color: "#EF4444" },
-    ],
-    [stats],
-  );
-
-  const barData = useMemo(
-    () => [
-      { name: "Usaha Biasa", jumlah: stats.totalUsaha, color: "#F59E0B" },
-      {
-        name: "Usaha Digital",
-        jumlah: stats.totalUsahaDigital,
-        color: "#EC4899",
-      },
-      {
-        name: "Usaha Pertanian",
-        jumlah: stats.totalUsahaPertanian,
-        color: "#10B981",
-      },
-      { name: "Rumah Tangga", jumlah: stats.totalRt, color: "#3B82F6" },
-    ],
-    [stats],
-  );
-
-  const handleExportCSV = () => {
-    if (!canExport) return;
-
-    const exportRows = [
-      {
-        Wilayah: regionLabel,
-        "Total Bangunan": stats.totalBangunan,
-        "Sudah Dikunjungi": stats.sudahKunjung,
-        "Belum Dikunjungi": stats.belumKunjung,
-        "Progress (%)": `${stats.progressPct}%`,
-        "Usaha Biasa": stats.totalUsaha,
-        "Usaha Digital": stats.totalUsahaDigital,
-        "Usaha Pertanian": stats.totalUsahaPertanian,
-        "Rumah Tangga": stats.totalRt,
-        "Total Entitas": stats.totalEntitas,
-        "Rasio Usaha Digital (%)": `${stats.rasioDigital}%`,
-      },
-    ];
-
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
-    const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
-
-    const blob = new Blob([csvOutput], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Statistik_SE2026_${regionLabel.replace(/[^a-zA-Z0-9]/g, "_")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExportExcel = () => {
-    if (!canExport) return;
-
-    const exportRows = [
-      {
-        Wilayah: regionLabel,
-        "Total Bangunan": stats.totalBangunan,
-        "Sudah Dikunjungi": stats.sudahKunjung,
-        "Belum Dikunjungi": stats.belumKunjung,
-        "Progress (%)": `${stats.progressPct}%`,
-        "Usaha Biasa": stats.totalUsaha,
-        "Usaha Digital": stats.totalUsahaDigital,
-        "Usaha Pertanian": stats.totalUsahaPertanian,
-        "Rumah Tangga": stats.totalRt,
-        "Total Entitas": stats.totalEntitas,
-        "Rasio Usaha Digital (%)": `${stats.rasioDigital}%`,
-      },
-    ];
-
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Statistik Spasial");
-    XLSX.writeFile(
-      workbook,
-      `Statistik_SE2026_${regionLabel.replace(/[^a-zA-Z0-9]/g, "_")}.xlsx`,
-    );
-  };
-
-  const handleExportGeoJSON = () => {
-    if (!isAdmin) return;
-
-    const features: any[] = [];
-
-    // 1. Point Usaha Biasa
-    if (dataUsaha && Array.isArray(dataUsaha)) {
-      const filtered =
-        store.filterDesa !== "Semua"
-          ? dataUsaha.filter(
-              (row: any) =>
-                String(
-                  row["idsls_str"] || row["idsls final"] || "",
-                ).substring(0, 10) === store.filterDesa,
-            )
-          : dataUsaha;
-      filtered.forEach((row: any) => {
-        const lat = parseFloat(row["lat final"] || row.lat);
-        const lng = parseFloat(row["long final"] || row["long"] || row.lon);
-        if (!isNaN(lat) && !isNaN(lng)) {
-          features.push({
-            type: "Feature",
-            geometry: { type: "Point", coordinates: [lng, lat] },
-            properties: {
-              tipe_entitas: "Usaha Biasa",
-              nama: row["nama final"] || row["nama"] || "",
-              alamat: row["alamat final"] || row["alamat"] || "",
-              idsls: row["idsls_str"] || row["idsls final"] || "",
-              ...row,
-            },
-          });
-        }
-      });
-    }
-
-    // 2. Point Usaha Digital
-    if (dataUsahaDigital && Array.isArray(dataUsahaDigital)) {
-      const filtered =
-        store.filterDesa !== "Semua"
-          ? dataUsahaDigital.filter(
-              (row: any) =>
-                String(
-                  row["idsls_str"] || row["idsls final"] || "",
-                ).substring(0, 10) === store.filterDesa,
-            )
-          : dataUsahaDigital;
-      filtered.forEach((row: any) => {
-        const lat = parseFloat(row["lat final"] || row.lat);
-        const lng = parseFloat(row["long final"] || row["long"] || row.lon);
-        if (!isNaN(lat) && !isNaN(lng)) {
-          features.push({
-            type: "Feature",
-            geometry: { type: "Point", coordinates: [lng, lat] },
-            properties: {
-              tipe_entitas: "Usaha Digital",
-              nama: row["nama final"] || row["nama"] || "",
-              alamat: row["alamat final"] || row["alamat"] || "",
-              idsls: row["idsls_str"] || row["idsls final"] || "",
-              ...row,
-            },
-          });
-        }
-      });
-    }
-
-    // 3. Point Usaha Pertanian
-    if (dataUsahaPertanian && Array.isArray(dataUsahaPertanian)) {
-      const filtered =
-        store.filterDesa !== "Semua"
-          ? dataUsahaPertanian.filter(
-              (row: any) =>
-                String(row["iddesa"] || row["idsls_str"] || "").substring(
-                  0,
-                  10,
-                ) === store.filterDesa,
-            )
-          : dataUsahaPertanian;
-      filtered.forEach((row: any) => {
-        const lat = parseFloat(row["lat final"] || row.lat);
-        const lng = parseFloat(row["long final"] || row["long"] || row.lon);
-        if (!isNaN(lat) && !isNaN(lng)) {
-          features.push({
-            type: "Feature",
-            geometry: { type: "Point", coordinates: [lng, lat] },
-            properties: {
-              tipe_entitas: "Usaha Pertanian",
-              nama:
-                row["nama_krt"] || row["nm_project"] || row["nama"] || "",
-              alamat: row["deskripsi_project"] || row["alamat"] || "",
-              idsls: row["idsls_str"] || row["iddesa"] || "",
-              ...row,
-            },
-          });
-        }
-      });
-    }
-
-    // 4. Point Rumah Tangga
-    if (dataRumahTangga && Array.isArray(dataRumahTangga)) {
-      const filtered =
-        store.filterDesa !== "Semua"
-          ? dataRumahTangga.filter(
-              (row: any) =>
-                String(
-                  row["idsls_str"] || row["idsls final"] || "",
-                ).substring(0, 10) === store.filterDesa,
-            )
-          : dataRumahTangga;
-      filtered.forEach((row: any) => {
-        const lat = parseFloat(row["lat final"] || row.lat);
-        const lng = parseFloat(row["long final"] || row["long"] || row.lon);
-        if (!isNaN(lat) && !isNaN(lng)) {
-          features.push({
-            type: "Feature",
-            geometry: { type: "Point", coordinates: [lng, lat] },
-            properties: {
-              tipe_entitas: "Rumah Tangga",
-              nama:
-                row["nama final"] || row["nama_krt"] || row["nama"] || "",
-              alamat: row["alamat final"] || row["alamat"] || "",
-              idsls: row["idsls_str"] || row["idsls final"] || "",
-              ...row,
-            },
-          });
-        }
-      });
-    }
-
-    const geoJsonOutput = {
-      type: "FeatureCollection",
-      properties: {
-        wilayah: regionLabel,
-        total_features: features.length,
-        exported_at: new Date().toISOString(),
-      },
-      features,
-    };
-
-    const blob = new Blob([JSON.stringify(geoJsonOutput, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Spasial_SE2026_${regionLabel.replace(/[^a-zA-Z0-9]/g, "_")}.geojson`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+    navigate,
+    store,
+    isAdmin,
+    canExport,
+    roleName,
+    isExpanded,
+    setIsExpanded,
+    kecOptions,
+    desaOptions,
+    regionLabel,
+    stats,
+    pieData,
+    barData,
+    handleExportCSV,
+    handleExportExcel,
+    handleExportGeoJSON,
+  } = useStatisticsPanel(spatialData);
 
   return (
     <>
-      {/* FLOATING MINI SUMMARY BAR (Posisi Bottom-Left agar TIDAK Menutupi Map Controls di Kanan Bawah) */}
+      {/* ── 1. FLOATING MINI SUMMARY BAR (Bottom-Left saat Panel Terlipat) ── */}
       <div
         className={`absolute bottom-3 left-3 right-16 sm:bottom-4 sm:right-auto sm:left-6 sm:max-w-lg md:max-w-xl bg-card/95 backdrop-blur-md border rounded-xl p-2.5 sm:p-3 shadow-2xl z-30 transition-all duration-300 ease-in-out transform ${
           !store.isStatisticsOpen
@@ -549,7 +147,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
         </Button>
       </div>
 
-      {/* EXPANDED FLOATING BOTTOM OVERLAY SHEET / FULL PANEL EXPAND */}
+      {/* ── 2. EXPANDED FLOATING BOTTOM OVERLAY SHEET (Panel Terbuka) ──────── */}
       <div
         className={`absolute bottom-0 left-0 right-0 w-full bg-card/95 backdrop-blur-md border-t shadow-2xl z-30 transition-all duration-300 ease-in-out transform ${
           isExpanded
@@ -561,7 +159,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
             : "translate-y-full opacity-0 pointer-events-none"
         } flex flex-col overflow-hidden`}
       >
-        {/* Header Bar dengan Selector Wilayah & Action Buttons */}
+        {/* ── Header Control Bar: Title, Selectors, Export & Actions ──────── */}
         <div className="px-3.5 py-3 sm:px-6 sm:py-3.5 border-b bg-card shrink-0 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center justify-between lg:justify-start gap-2">
             <div>
@@ -643,7 +241,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               </Select>
             </div>
 
-            {/* Export Buttons */}
+            {/* Tombol Ekspor (CSV, Excel, GeoJSON) */}
             {canExport ? (
               <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
                 <Button
@@ -682,7 +280,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               </div>
             )}
 
-            {/* Dokumentasi Navigation Button */}
+            {/* Tombol Dokumentasi */}
             <Button
               size="sm"
               variant="outline"
@@ -694,7 +292,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               <span className="hidden sm:inline">Dokumentasi</span>
             </Button>
 
-            {/* Expand / Fullscreen Toggle Button */}
+            {/* Tombol Toggle Fullscreen / Layar Penuh */}
             <Button
               size="sm"
               variant="ghost"
@@ -713,7 +311,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               )}
             </Button>
 
-            {/* Collapse Button */}
+            {/* Tombol Tutup / Collapse Panel */}
             <Button
               size="sm"
               variant="ghost"
@@ -729,10 +327,11 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
           </div>
         </div>
 
-        {/* Content Body Scrollable */}
+        {/* ── 3. CONTENT BODY SCROLLABLE ─────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-6 space-y-4 sm:space-y-6">
           {/* KPI Cards Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+            {/* KPI: Total Bangunan */}
             <Card className="bg-card/60 border-primary/20">
               <CardHeader className="p-2.5 sm:p-3 pb-1 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-[10px] sm:text-[11px] font-medium text-muted-foreground truncate">
@@ -751,6 +350,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               </CardContent>
             </Card>
 
+            {/* KPI: Usaha Biasa */}
             <Card className="bg-card/60">
               <CardHeader className="p-2.5 sm:p-3 pb-1 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-[10px] sm:text-[11px] font-medium text-muted-foreground truncate">
@@ -768,6 +368,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               </CardContent>
             </Card>
 
+            {/* KPI: Usaha Digital */}
             <Card className="bg-card/60">
               <CardHeader className="p-2.5 sm:p-3 pb-1 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-[10px] sm:text-[11px] font-medium text-muted-foreground truncate">
@@ -785,6 +386,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               </CardContent>
             </Card>
 
+            {/* KPI: Usaha Pertanian */}
             <Card className="bg-card/60">
               <CardHeader className="p-2.5 sm:p-3 pb-1 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-[10px] sm:text-[11px] font-medium text-muted-foreground truncate">
@@ -802,6 +404,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               </CardContent>
             </Card>
 
+            {/* KPI: Rumah Tangga */}
             <Card className="bg-card/60">
               <CardHeader className="p-2.5 sm:p-3 pb-1 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-[10px] sm:text-[11px] font-medium text-muted-foreground truncate">
@@ -819,6 +422,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               </CardContent>
             </Card>
 
+            {/* KPI: Total Entitas */}
             <Card className="bg-primary/5 border-primary/30">
               <CardHeader className="p-2.5 sm:p-3 pb-1 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-[10px] sm:text-[11px] font-medium text-primary truncate">
@@ -837,8 +441,9 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
             </Card>
           </div>
 
-          {/* Highlight Insights Bar (Monitoring Insights Kunci) */}
+          {/* ── 4. Highlight Insight Cards Bar ────────────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+            {/* Insight 1: Adopsi Usaha Digital */}
             <div className="p-3 sm:p-3.5 bg-muted/40 rounded-xl border flex items-center gap-3">
               <div className="p-2 sm:p-2.5 rounded-lg bg-pink-500/10 text-pink-500 shrink-0">
                 <Laptop2 className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -857,6 +462,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               </div>
             </div>
 
+            {/* Insight 2: Kepadatan Spasial Entitas */}
             <div className="p-3 sm:p-3.5 bg-muted/40 rounded-xl border flex items-center gap-3">
               <div className="p-2 sm:p-2.5 rounded-lg bg-blue-500/10 text-blue-500 shrink-0">
                 <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -874,6 +480,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               </div>
             </div>
 
+            {/* Insight 3: Cakupan SLS Spasial */}
             <div className="p-3 sm:p-3.5 bg-muted/40 rounded-xl border flex items-center gap-3">
               <div className="p-2 sm:p-2.5 rounded-lg bg-emerald-500/10 text-emerald-500 shrink-0">
                 <MapPin className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -892,7 +499,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
             </div>
           </div>
 
-          {/* Visual Charts, Komparasi, & Table Tabs */}
+          {/* ── 5. Visual Charts, Komparasi, & Table Tabs ─────────────────── */}
           <Tabs defaultValue="visual" className="w-full">
             <TabsList className="grid grid-cols-2 sm:grid-cols-4 max-w-2xl mb-4">
               <TabsTrigger value="visual" className="text-xs">
@@ -1119,7 +726,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
             </TabsContent>
           </Tabs>
 
-          {/* Rincian Tabel Entitas & Bangunan (Search & Filter per Entitas) */}
+          {/* ── 6. TABEL RINCIAN ENTITAS SPASIAL (Search & Filter) ───────────── */}
           <EntityDetailTable spatialData={spatialData} />
         </div>
       </div>
