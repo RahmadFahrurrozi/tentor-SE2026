@@ -57,9 +57,7 @@ export default function MapDashboard() {
 
         {/* Mode Komparasi Overlay */}
         {store.isCompareMode && (
-          <CompareMapContainer
-            onClose={() => store.setCompareMode(false)}
-          />
+          <CompareMapContainer onClose={() => store.setCompareMode(false)} />
         )}
 
         {/* Bottom Section: Panel Statistik Melayang / Collapsible Drawer */}

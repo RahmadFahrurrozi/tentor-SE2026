@@ -151,9 +151,26 @@ export function convertBangunanToGeoJson(dataBangunan: any[]) {
 
 export function convertTitikToGeoJson(data: any[]) {
   const features = data.reduce((acc, row) => {
-    const lat = parseFloat(row['lat final'] || row.lat || row.LAT || row.latitude);
-    const lng = parseFloat(row['long final'] || row['long'] || row.lon || row.LON || row.longitude);
-    
+    const lat = parseFloat(
+      row['lat final'] ||
+        row['lat_final'] ||
+        row.lat ||
+        row.LAT ||
+        row.latitude ||
+        row.y ||
+        ''
+    );
+    const lng = parseFloat(
+      row['long final'] ||
+        row['long_final'] ||
+        row['long'] ||
+        row['lon'] ||
+        row.LON ||
+        row.longitude ||
+        row.x ||
+        ''
+    );
+
     if (!isNaN(lat) && !isNaN(lng)) {
       const candidates = [
         row['nama_krt'],
@@ -171,7 +188,6 @@ export function convertTitikToGeoJson(data: any[]) {
         row['Nama'],
       ].filter(Boolean);
 
-      // Prefer non-purely-numeric name string if available
       const nonNumericCandidate = candidates.find((c) => isNaN(Number(c)));
       const namaVal = nonNumericCandidate || candidates[0] || null;
 
@@ -193,8 +209,6 @@ export function convertTitikToGeoJson(data: any[]) {
         },
         properties: {
           ...row,
-          // Normalize spaced-key fields menjadi underscore alias
-          // agar bisa diakses dari MapLibre GL properties tanpa masalah
           alamat_final: alamatVal,
           nama_final: namaVal,
           idsls_final: row['idsls final'] || row['idsls_str'] || row['idsls'] || null,
