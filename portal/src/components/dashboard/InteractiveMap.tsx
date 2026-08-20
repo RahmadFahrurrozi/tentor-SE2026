@@ -387,7 +387,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       return feature;
     });
 
-    // Generasi Bangunan Sintetis (6m x 6m) HANYA jika diaktifkan secara eksplisit (default: OFF)
+    // Generasi Bangunan Sintetis (6m x 6m) HANYA jika diaktifkan secara eksplisit
     if (store.showSyntheticBuildings === true) {
       const existingBuildings = geo.features
         .map((f: any) => ({
@@ -396,74 +396,135 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         }))
         .filter((b: any) => b.centroid || b.rings.length > 0);
 
+      // --- OPTIMASI SPATIAL HASH GRID ---
+      // Pembagian grid sel ~100m (0.001 derajat) untuk mencegah lag O(N*M)
+      const CELL_SIZE = 0.001;
+      const getCellKey = (lngVal: number, latVal: number) =>
+        `${Math.floor(lngVal / CELL_SIZE)}_${Math.floor(latVal / CELL_SIZE)}`;
+
+      const spatialGrid: Record<string, typeof existingBuildings> = {};
+
+      const addToGrid = (b: (typeof existingBuildings)[0]) => {
+        if (!b.centroid) return;
+        const key = getCellKey(b.centroid[0], b.centroid[1]);
+        if (!spatialGrid[key]) spatialGrid[key] = [];
+        spatialGrid[key].push(b);
+      };
+
+      existingBuildings.forEach(addToGrid);
+
       const activePertanian = filterDataByDesaAndSearch(
         dataUsahaPertanian,
         "pertanian",
       );
 
-      const allActivePoints = [
-        ...activeUsaha.map((p) => ({ ...p, _type: "Usaha Biasa" })),
-        ...activeUsahaDigital.map((p) => ({ ...p, _type: "Usaha Digital" })),
-        ...activePertanian.map((p) => ({ ...p, _type: "Usaha Pertanian" })),
-        ...activeRt.map((p) => ({ ...p, _type: "Rumah Tangga" })),
-      ];
+      const allActivePoints: any[] = [];
+      if (store.showUsaha) {
+        allActivePoints.push(
+          ...activeUsaha.map((p) => ({ ...p, _type: "Usaha Biasa" })),
+        );
+      }
+      if (store.showUsahaDigital) {
+        allActivePoints.push(
+          ...activeUsahaDigital.map((p) => ({ ...p, _type: "Usaha Digital" })),
+        );
+      }
+      if (store.showUsahaPertanian) {
+        allActivePoints.push(
+          ...activePertanian.map((p) => ({
+            ...p,
+            _type: "Usaha Pertanian",
+          })),
+        );
+      }
+      if (store.showRt) {
+        allActivePoints.push(
+          ...activeRt.map((p) => ({ ...p, _type: "Rumah Tangga" })),
+        );
+      }
 
-      // Threshold: 0.0015 derajat (~150-200 meter). Selama ada bangunan fisik di area (jarak <= 150-200m), TIDAK AKAN generate sintetis!
-      const maxDistSq = 0.0015 * 0.0015;
+      if (allActivePoints.length === 0) {
+        allActivePoints.push(
+          ...activeUsaha.map((p) => ({ ...p, _type: "Usaha Biasa" })),
+          ...activeUsahaDigital.map((p) => ({ ...p, _type: "Usaha Digital" })),
+          ...activePertanian.map((p) => ({ ...p, _type: "Usaha Pertanian" })),
+          ...activeRt.map((p) => ({ ...p, _type: "Rumah Tangga" })),
+        );
+      }
+
+      // Threshold toleransi: 0.00007 derajat (~7-8 meter).
+      // Titik di bahu jalan/halaman (<7-8m dari bangunan fisik) akan otomatis diasosiasikan ke bangunan fisik terdekat.
+      // Hal ini mencegah munculnya bangunan sintetis buatan di atas jalan raya!
+      const maxDistDegree = 0.00007;
+      const maxDistSq = maxDistDegree * maxDistDegree;
 
       allActivePoints.forEach((point: any, idx: number) => {
         const lat = parseFloat(
           point["lat final"] ||
+            point["lat_final"] ||
             point.lat ||
+            point.LAT ||
             point.latitude ||
-            point.lat_final ||
-            point.y,
+            point.y ||
+            "",
         );
         const lng = parseFloat(
           point["long final"] ||
+            point["long_final"] ||
             point["long"] ||
-            point.lon ||
+            point["lon"] ||
+            point.LON ||
             point.longitude ||
-            point.long_final ||
-            point.x,
+            point.x ||
+            "",
         );
 
         if (isNaN(lat) || isNaN(lng)) return;
 
         let isNearBuildingArea = false;
 
-        for (const b of existingBuildings) {
-          // 1. Cek apakah titik berada DI DALAM polygon bangunan fisik
-          for (const ring of b.rings) {
-            if (isPointInPolygon([lng, lat], ring)) {
-              isNearBuildingArea = true;
-              break;
-            }
-            // 2. Cek jarak titik ke setiap simpul/vertex polygon bangunan
-            for (const [vx, vy] of ring) {
-              const dx = lng - vx;
-              const dy = lat - vy;
-              if (dx * dx + dy * dy <= maxDistSq) {
-                isNearBuildingArea = true;
-                break;
-              }
-            }
-            if (isNearBuildingArea) break;
-          }
-          if (isNearBuildingArea) break;
+        const px = Math.floor(lng / CELL_SIZE);
+        const py = Math.floor(lat / CELL_SIZE);
 
-          // 3. Cek jarak titik ke centroid bangunan (fallback)
-          if (b.centroid) {
-            const dx = lng - b.centroid[0];
-            const dy = lat - b.centroid[1];
-            if (dx * dx + dy * dy <= maxDistSq) {
-              isNearBuildingArea = true;
-              break;
+        for (let dx = -1; dx <= 1 && !isNearBuildingArea; dx++) {
+          for (let dy = -1; dy <= 1 && !isNearBuildingArea; dy++) {
+            const key = `${px + dx}_${py + dy}`;
+            const candidateBuildings = spatialGrid[key];
+            if (!candidateBuildings) continue;
+
+            for (const b of candidateBuildings) {
+              // 1. Cek apakah titik berada DI DALAM polygon bangunan
+              for (const ring of b.rings) {
+                if (isPointInPolygon([lng, lat], ring)) {
+                  isNearBuildingArea = true;
+                  break;
+                }
+                // 2. Cek jarak titik ke setiap simpul/vertex polygon bangunan
+                for (const [vx, vy] of ring) {
+                  const d2 = (lng - vx) ** 2 + (lat - vy) ** 2;
+                  if (d2 <= maxDistSq) {
+                    isNearBuildingArea = true;
+                    break;
+                  }
+                }
+                if (isNearBuildingArea) break;
+              }
+              if (isNearBuildingArea) break;
+
+              // 3. Cek jarak titik ke centroid bangunan (fallback)
+              if (b.centroid) {
+                const d2 =
+                  (lng - b.centroid[0]) ** 2 + (lat - b.centroid[1]) ** 2;
+                if (d2 <= maxDistSq) {
+                  isNearBuildingArea = true;
+                  break;
+                }
+              }
             }
           }
         }
 
-        // HANYA jika BENAR-BENAR JAUH (>150-200m) dari semua bangunan fisik di area tersebut:
+        // HANYA jika BENAR-BENAR JAUH (>3m) dari semua bangunan fisik & sintetis yang ada:
         if (!isNearBuildingArea) {
           const synthGeom = generateSyntheticBuildingForPoint(lat, lng, 6);
           const synthFeature = {
@@ -476,13 +537,19 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
                 point._type === "Rumah Tangga"
                   ? "Rumah Tangga"
                   : "Bangunan Usaha",
-              nama_bangunan: `Bangunan Sintetis (${point._type} 6m x 6m)`,
+              nama_bangunan: `Bangunan Sintetis (${point._type} 6m × 6m)`,
               is_synthetic: true,
-              tinggi_bangunan: 1.8,
+              tinggi_bangunan: point._type === "Rumah Tangga" ? 3.0 : 3.8,
               ...point,
             },
           };
           geo.features.push(synthFeature);
+
+          const newBuilding = {
+            centroid: [lng, lat] as [number, number],
+            rings: getPolygonRings(synthGeom),
+          };
+          addToGrid(newBuilding);
         }
       });
     }
@@ -498,6 +565,10 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     store.filterDesa,
     store.filterNama,
     store.showSyntheticBuildings,
+    store.showUsaha,
+    store.showUsahaDigital,
+    store.showUsahaPertanian,
+    store.showRt,
   ]);
 
   const geoJsonUsaha = useMemo(() => {
@@ -1082,6 +1153,13 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
 
       // 3. Bangunan 3D
       if (geoJsonBangunan) {
+        const buildExtrusionColor: any = [
+          "case",
+          ["boolean", ["get", "is_synthetic"], false],
+          theme === "dark" ? "#6366F1" : "#818CF8",
+          theme === "dark" ? "#334155" : "#cbd5e1",
+        ];
+
         if (map.getSource("bangunan-source")) {
           (
             map.getSource("bangunan-source") as maplibregl.GeoJSONSource
@@ -1090,7 +1168,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             map.setPaintProperty(
               "bangunan-3d-layer",
               "fill-extrusion-color",
-              theme === "dark" ? "#334155" : "#cbd5e1",
+              buildExtrusionColor,
             );
           }
         } else {
@@ -1103,7 +1181,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             type: "fill-extrusion",
             source: "bangunan-source",
             paint: {
-              "fill-extrusion-color": theme === "dark" ? "#334155" : "#cbd5e1",
+              "fill-extrusion-color": buildExtrusionColor,
               "fill-extrusion-height": [
                 "coalesce",
                 ["get", "tinggi_bangunan"],

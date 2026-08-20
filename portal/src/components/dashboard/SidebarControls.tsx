@@ -152,20 +152,16 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
           <div className="flex items-center justify-between">
             <Label
               htmlFor="showSyntheticBuildings"
-              className="text-sm text-muted-foreground"
+              className="text-sm font-medium cursor-pointer"
             >
-              Bangunan Buatan Sintetis{" "}
-              <code className="text-[9px] text-muted-foreground">
-                (Under Development)
-              </code>
+              Bangunan Sintetis
             </Label>
             <Switch
               id="showSyntheticBuildings"
-              checked={store.showSyntheticBuildings !== false}
+              checked={store.showSyntheticBuildings}
               onCheckedChange={() =>
                 store.toggleLayer("showSyntheticBuildings")
               }
-              disabled={true}
             />
           </div>
 
