@@ -2,6 +2,12 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/auth-store";
 import { useMapStore } from "@/store/mapStore";
+import {
+  extractDusunAndSlsList,
+  getSlsId,
+  isSlsMatch,
+  normalizeSlsId,
+} from "@/utils/slsHelper";
 import * as XLSX from "xlsx";
 
 /**
@@ -121,11 +127,21 @@ export function useStatisticsPanel(spatialData: any) {
   );
 
   /**
-   * Label deskriptif wilayah terpilih (e.g. "Desa X, Kec. Y" atau "Seluruh Kabupaten Banyuwangi")
+   * Ekstraksi opsi Dusun dan opsi RT/RW (SLS) dari layer GeoJSON `dataSls`
+   */
+  const { dusunOptions, slsOptions, parsedSlsMap } = useMemo(() => {
+    return extractDusunAndSlsList(dataSls, store.filterDesa, store.filterDusun);
+  }, [dataSls, store.filterDesa, store.filterDusun]);
+
+  /**
+   * Label deskriptif wilayah terpilih (e.g. "RT 01 / RW 02 (Dusun Krajan), Desa X, Kec. Y")
    */
   const regionLabel = useMemo(() => {
     const kec = store.filterKecamatan;
     const desa = store.filterDesa;
+    const dusun = store.filterDusun;
+    const sls = store.filterSls;
+
     if (kec === "Semua" || !kec) return "Seluruh Kabupaten Banyuwangi";
     const kecName =
       selectedKecObj?.nmkec || selectedKecObj?.nama || `Kec. ${kec}`;
@@ -134,63 +150,86 @@ export function useStatisticsPanel(spatialData: any) {
       (d: any) => String(d.iddesa) === String(desa),
     );
     const desaName = desaObj?.nmdesa || desaObj?.nama || `Desa ${desa}`;
-    return `${desaName}, ${kecName}`;
-  }, [store.filterKecamatan, store.filterDesa, selectedKecObj, rawDesaOptions]);
 
-  // ── 3. Spatial Data Filtering By Active Village ───────────────────────────
+    if (sls && sls !== "Semua") {
+      const parsed = parsedSlsMap.get(sls);
+      return `${parsed?.rtRw || "SLS"} (${parsed?.dusun || "Dusun"}), ${desaName}, ${kecName}`;
+    }
+
+    if (dusun && dusun !== "Semua") {
+      return `${dusun}, ${desaName}, ${kecName}`;
+    }
+
+    return `${desaName}, ${kecName}`;
+  }, [
+    store.filterKecamatan,
+    store.filterDesa,
+    store.filterDusun,
+    store.filterSls,
+    selectedKecObj,
+    rawDesaOptions,
+    parsedSlsMap,
+  ]);
+
+  // ── 3. Spatial Data Filtering By Active Village, Dusun, and RT/RW ─────────
   /**
-   * Dataset ter-filter berdasarkan desa yang sedang dipilih pada store
+   * Dataset ter-filter berdasarkan desa, dusun, dan SLS yang sedang dipilih pada store
    */
   const filteredData = useMemo(() => {
     const desa = store.filterDesa;
-    if (!desa || desa === "Semua") {
-      return {
-        bangunan: dataBangunan || [],
-        usaha: dataUsaha || [],
-        usahaDigital: dataUsahaDigital || [],
-        usahaPertanian: dataUsahaPertanian || [],
-        rt: dataRumahTangga || [],
-        sls: dataSls?.features || [],
-      };
-    }
+    const dusun = store.filterDusun;
+    const sls = store.filterSls;
 
-    const checkDesa = (item: any) => {
+    const checkItem = (item: any) => {
       if (!item) return false;
+      const str = getSlsId(item);
       const d =
         item.iddesa ||
         item.id_desa ||
         item.properties?.iddesa ||
-        item.properties?.id_desa;
-      if (d && String(d).trim() === String(desa).trim()) return true;
-      const str = item.idsls_str || item.properties?.idsls_str;
-      if (str && String(str).substring(0, 10) === String(desa).trim())
-        return true;
-      return false;
+        item.properties?.id_desa ||
+        (str.length >= 10 ? str.substring(0, 10) : "");
+
+      // Filter Desa
+      if (desa && desa !== "Semua") {
+        if (normalizeSlsId(d) !== normalizeSlsId(desa)) return false;
+      }
+
+      // Filter RT / RW (SLS)
+      if (sls && sls !== "Semua") {
+        if (!isSlsMatch(str, sls)) return false;
+      }
+
+      // Filter Dusun
+      if (dusun && dusun !== "Semua") {
+        const parsed =
+          parsedSlsMap.get(str) ||
+          (str.length >= 14 ? parsedSlsMap.get(str.substring(0, 14)) : undefined);
+        if (!parsed || parsed.dusun !== dusun) return false;
+      }
+
+      return true;
     };
 
     return {
-      bangunan: (dataBangunan || []).filter(checkDesa),
-      usaha: (dataUsaha || []).filter(checkDesa),
-      usahaDigital: (dataUsahaDigital || []).filter(checkDesa),
-      usahaPertanian: (dataUsahaPertanian || []).filter(checkDesa),
-      rt: (dataRumahTangga || []).filter(checkDesa),
-      sls: (dataSls?.features || []).filter((f: any) => {
-        const d = f.properties?.iddesa || f.properties?.id_desa;
-        if (d && String(d).trim() === String(desa).trim()) return true;
-        const str = f.properties?.idsls_str || f.properties?.idsls;
-        if (str && String(str).substring(0, 10) === String(desa).trim())
-          return true;
-        return false;
-      }),
+      bangunan: (dataBangunan || []).filter(checkItem),
+      usaha: (dataUsaha || []).filter(checkItem),
+      usahaDigital: (dataUsahaDigital || []).filter(checkItem),
+      usahaPertanian: (dataUsahaPertanian || []).filter(checkItem),
+      rt: (dataRumahTangga || []).filter(checkItem),
+      sls: (dataSls?.features || []).filter(checkItem),
     };
   }, [
     store.filterDesa,
+    store.filterDusun,
+    store.filterSls,
     dataBangunan,
     dataUsaha,
     dataUsahaDigital,
     dataUsahaPertanian,
     dataRumahTangga,
     dataSls,
+    parsedSlsMap,
   ]);
 
   // ── 4. Aggregate Metrics Calculation ──────────────────────────────────────
@@ -514,6 +553,8 @@ export function useStatisticsPanel(spatialData: any) {
     setIsExpanded,
     kecOptions,
     desaOptions,
+    dusunOptions,
+    slsOptions,
     regionLabel,
     stats,
     pieData,

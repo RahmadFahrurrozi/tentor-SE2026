@@ -3,6 +3,13 @@ import { create } from 'zustand';
 export type DatasetVersion = 'prelist' | 'se2026';
 export type KabupatenId = '3510' | '3515';
 
+export const DATASET_VERSION = {
+  PRELIST: 'prelist',
+  SE2026: 'se2026',
+} as const;
+
+export type DatasetType = (typeof DATASET_VERSION)[keyof typeof DATASET_VERSION];
+
 interface MapState {
   // Region Selection
   selectedKabupaten: KabupatenId;
@@ -22,6 +29,8 @@ interface MapState {
   // Filter Wilayah
   filterKecamatan: string | null;
   filterDesa: string | null;
+  filterDusun: string | null;
+  filterSls: string | null;
   filterNama: string;
 
   // Opacity
@@ -61,6 +70,8 @@ export const useMapStore = create<MapState>((set) => ({
 
   filterKecamatan: "Semua",
   filterDesa: "Semua",
+  filterDusun: "Semua",
+  filterSls: "Semua",
   filterNama: "",
 
   slsOpacity: 0.3,
@@ -75,6 +86,8 @@ export const useMapStore = create<MapState>((set) => ({
       selectedKabupaten: kabId,
       filterKecamatan: "Semua",
       filterDesa: "Semua",
+      filterDusun: "Semua",
+      filterSls: "Semua",
       filterNama: "",
       // Jika Sidoarjo (3515), otomatis matikan compare mode & kunci ke se2026
       ...(kabId === '3515' ? {
@@ -92,6 +105,8 @@ export const useMapStore = create<MapState>((set) => ({
     set({
       filterKecamatan: "Semua",
       filterDesa: "Semua",
+      filterDusun: "Semua",
+      filterSls: "Semua",
       filterNama: "",
     });
 

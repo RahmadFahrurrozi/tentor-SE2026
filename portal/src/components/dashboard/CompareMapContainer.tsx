@@ -3,16 +3,15 @@ import { Badge } from "@/components/ui/badge";
 import { X, ArrowLeftRight } from "lucide-react";
 import { InteractiveMap } from "./InteractiveMap";
 import { useSpatialData } from "@/hooks/useSpatialData";
+import { DATASET_VERSION } from "@/store/mapStore";
 
 interface CompareMapContainerProps {
   onClose: () => void;
 }
 
-export function CompareMapContainer({
-  onClose,
-}: CompareMapContainerProps) {
-  const prelistSpatialData = useSpatialData('prelist');
-  const se2026SpatialData = useSpatialData('se2026');
+export function CompareMapContainer({ onClose }: CompareMapContainerProps) {
+  const prelistSpatialData = useSpatialData(DATASET_VERSION.PRELIST);
+  const se2026SpatialData = useSpatialData(DATASET_VERSION.SE2026);
 
   return (
     <div className="absolute inset-0 bg-background z-40 flex flex-col">

@@ -5,11 +5,6 @@ import { Button } from "@/components/ui/button";
 import {
   Search,
   Building2,
-  Store,
-  Laptop,
-  Sprout,
-  Home,
-  Layers,
   ChevronLeft,
   ChevronRight,
   X,
@@ -21,6 +16,7 @@ import {
   useEntityDetailTable,
   type EntityItem,
 } from "@/hooks/use-entity-detail-table";
+import { ENTITY_TABS } from "@/constants/entity-tabs";
 
 export type { EntityItem };
 
@@ -110,77 +106,30 @@ export function EntityDetailTable({ spatialData }: EntityDetailTableProps) {
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           {/* Entity Type Filter Tabs/Pills */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-            <button
-              onClick={() => handleTabChange("all")}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all shrink-0 flex items-center gap-1.5 ${
-                activeTab === "all"
-                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                  : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              Semua ({counts.all})
-            </button>
-
-            <button
-              onClick={() => handleTabChange("usaha")}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all shrink-0 flex items-center gap-1.5 ${
-                activeTab === "usaha"
-                  ? "bg-amber-500 text-white border-amber-500 shadow-xs"
-                  : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
-              }`}
-            >
-              <Store className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-500" />
-              Usaha Biasa ({counts.usaha})
-            </button>
-
-            <button
-              onClick={() => handleTabChange("usaha-digital")}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all shrink-0 flex items-center gap-1.5 ${
-                activeTab === "usaha-digital"
-                  ? "bg-pink-500 text-white border-pink-500 shadow-xs"
-                  : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
-              }`}
-            >
-              <Laptop className="w-3.5 h-3.5 text-pink-500" />
-              Digital ({counts["usaha-digital"]})
-            </button>
-
-            <button
-              onClick={() => handleTabChange("usaha-pertanian")}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all shrink-0 flex items-center gap-1.5 ${
-                activeTab === "usaha-pertanian"
-                  ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                  : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
-              }`}
-            >
-              <Sprout className="w-3.5 h-3.5 text-emerald-500" />
-              Pertanian ({counts["usaha-pertanian"]})
-            </button>
-
-            <button
-              onClick={() => handleTabChange("rt")}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all shrink-0 flex items-center gap-1.5 ${
-                activeTab === "rt"
-                  ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                  : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
-              }`}
-            >
-              <Home className="w-3.5 h-3.5 text-blue-500" />
-              Rumah Tangga ({counts.rt})
-            </button>
-
-            <button
-              onClick={() => handleTabChange("bangunan")}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all shrink-0 flex items-center gap-1.5 ${
-                activeTab === "bangunan"
-                  ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
-                  : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
-              }`}
-            >
-              <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-              Bangunan ({counts.bangunan})
-            </button>
+            {ENTITY_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.key;
+              const count = counts[tab.key];
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => handleTabChange(tab.key)}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all shrink-0 flex items-center gap-1.5 ${
+                    isActive
+                      ? tab.activeColorClass
+                      : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
+                  }`}
+                >
+                  <Icon
+                    className={`w-3.5 h-3.5 ${
+                      isActive ? "text-inherit" : tab.iconColorClass
+                    }`}
+                  />
+                  {tab.label} ({count})
+                </button>
+              );
+            })}
           </div>
 
           {/* Live Search Input */}
