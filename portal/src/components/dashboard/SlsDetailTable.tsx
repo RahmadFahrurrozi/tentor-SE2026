@@ -41,7 +41,7 @@ export interface SlsDetailTableProps {
 
 /**
  * Komponen Tabel Data Spasial Per SLS (Satuan Lingkungan Setempat).
- * 
+ *
  * Menampilkan rekapitulasi data entitas per SLS beserta progress pendataan.
  * Memungkinkan pengklik baris SLS untuk membuka Pop-Up Dialog Modal rincian entitas objek di dalamnya.
  */
@@ -155,8 +155,8 @@ export function SlsDetailTable({ spatialData }: SlsDetailTableProps) {
             <thead className="bg-muted/60 text-muted-foreground font-bold border-b">
               <tr>
                 <th className="p-2.5 w-10 text-center">#</th>
-                <th className="p-2.5 min-w-[170px]">Nama / Kode SLS</th>
-                <th className="p-2.5 min-w-[130px]">Desa / Kelurahan</th>
+                <th className="p-2.5 min-w-45">Nama / Kode SLS</th>
+                <th className="p-2.5 min-w-45">Desa / Kelurahan</th>
                 <th className="p-2.5 text-center text-amber-500">
                   Usaha Biasa
                 </th>
@@ -168,7 +168,7 @@ export function SlsDetailTable({ spatialData }: SlsDetailTableProps) {
                   Rumah Tangga
                 </th>
                 <th className="p-2.5 text-center">Total Bangunan</th>
-                <th className="p-2.5 text-center min-w-[110px]">
+                <th className="p-2.5 text-center min-w-27.5">
                   Progress Kunjungan
                 </th>
                 <th className="p-2.5 text-center w-12">Aksi</th>
@@ -372,7 +372,7 @@ export function SlsDetailTable({ spatialData }: SlsDetailTableProps) {
                 </div>
                 <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2 mt-1">
                   <Building2 className="w-5 h-5 text-primary" />
-                  Rincian Entitas & Usaha — {selectedSls.namaSls}
+                  Rincian Entitas & Usaha {selectedSls.namaSls}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
                   Daftar nama usaha, rumah tangga, dan objek terdata di SLS ini
@@ -501,12 +501,10 @@ export function SlsDetailTable({ spatialData }: SlsDetailTableProps) {
                   <thead className="bg-muted/60 text-muted-foreground font-bold sticky top-0 border-b z-10 backdrop-blur-xs">
                     <tr>
                       <th className="p-2.5 w-10 text-center">#</th>
-                      <th className="p-2.5 min-w-[150px]">
-                        Nama Entitas / KRT
-                      </th>
-                      <th className="p-2.5 min-w-[180px]">Alamat Lengkap</th>
-                      <th className="p-2.5 min-w-[120px]">Kategori / Detail</th>
-                      <th className="p-2.5 min-w-[100px]">Tipe Entitas</th>
+                      <th className="p-2.5 min-w-45">Nama Entitas / KRT</th>
+                      <th className="p-2.5 min-w-45">Alamat Lengkap</th>
+                      <th className="p-2.5 min-w-30">Kategori / Detail</th>
+                      <th className="p-2.5 min-w-30">Tipe Entitas</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y text-foreground">

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -9,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Button } from "@/components/ui/button";
 import { Eraser, LogOut, ArrowLeftRight, Database } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
@@ -20,6 +22,8 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
     role,
     desaOptions,
     kecOptions,
+    dusunOptions,
+    slsOptions,
     handleResetFilter,
     logout,
     isLoggingOut,
@@ -28,6 +32,22 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
     userInitials,
     displayRole,
   } = useSidebarControls(spatialData);
+
+  const kecamatanOptions = useMemo(() => [
+    ...(role === "admin" ? [{ value: "Semua", label: "Semua Kecamatan" }] : []),
+    ...kecOptions.map((k: any) => ({
+      value: k.idkec,
+      label: k.nmkec || k.nama || k.name || k.idkec,
+    })),
+  ], [role, kecOptions]);
+
+  const desaListOptions = useMemo(() => [
+    { value: "Semua", label: "Semua Desa" },
+    ...desaOptions.map((d: any) => ({
+      value: d.iddesa,
+      label: d.nmdesa || d.nama || d.name || d.iddesa,
+    })),
+  ], [desaOptions]);
 
   return (
     <Card className="h-full w-full max-w-75 flex flex-col rounded-none border-y-0 border-l-0">
@@ -240,52 +260,73 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
 
           <div className="space-y-2">
             <Label className="text-xs">Kecamatan</Label>
-            <Select
+            <SearchableCombobox
+              options={kecamatanOptions}
               value={store.filterKecamatan || undefined}
+              placeholder="Pilih Kecamatan..."
+              emptyText="Kecamatan tidak ditemukan."
               onValueChange={(val) => {
                 store.setFilter("filterKecamatan", val);
                 store.setFilter("filterDesa", "Semua");
+                store.setFilter("filterDusun", "Semua");
+                store.setFilter("filterSls", "Semua");
               }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Pilih Kecamatan" />
-              </SelectTrigger>
-              <SelectContent>
-                {role === "admin" && (
-                  <SelectItem value="Semua">Semua Kecamatan</SelectItem>
-                )}
-                {kecOptions.map((k: any) => (
-                  <SelectItem key={k.idkec} value={k.idkec}>
-                    {k.nmkec || k.nama || k.name || k.idkec}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           <div className="space-y-2">
             <Label className="text-xs">Desa / Kelurahan</Label>
-            <Select
+            <SearchableCombobox
+              options={desaListOptions}
               value={store.filterDesa || undefined}
-              onValueChange={(val) => store.setFilter("filterDesa", val)}
+              placeholder="Pilih Desa..."
+              emptyText="Desa tidak ditemukan."
               disabled={
                 !store.filterKecamatan ||
                 store.filterKecamatan === "Semua" ||
                 desaOptions.length === 0
               }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Pilih Desa" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Semua">Semua Desa</SelectItem>
-                {desaOptions.map((d: any) => (
-                  <SelectItem key={d.iddesa} value={d.iddesa}>
-                    {d.nmdesa || d.nama || d.name || d.iddesa}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onValueChange={(val) => {
+                store.setFilter("filterDesa", val);
+                store.setFilter("filterDusun", "Semua");
+                store.setFilter("filterSls", "Semua");
+              }}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs">Dusun / Lingkungan</Label>
+            <SearchableCombobox
+              options={dusunOptions}
+              value={store.filterDusun || undefined}
+              placeholder="Pilih Dusun..."
+              emptyText="Dusun tidak ditemukan."
+              disabled={
+                !store.filterDesa ||
+                store.filterDesa === "Semua" ||
+                dusunOptions.length <= 1
+              }
+              onValueChange={(val) => {
+                store.setFilter("filterDusun", val);
+                store.setFilter("filterSls", "Semua");
+              }}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs">RT / RW (SLS)</Label>
+            <SearchableCombobox
+              options={slsOptions}
+              value={store.filterSls || undefined}
+              placeholder="Pilih RT / RW..."
+              emptyText="RT / RW tidak ditemukan."
+              disabled={
+                !store.filterDesa ||
+                store.filterDesa === "Semua" ||
+                slsOptions.length <= 1
+              }
+              onValueChange={(val) => store.setFilter("filterSls", val)}
+            />
           </div>
         </div>
 

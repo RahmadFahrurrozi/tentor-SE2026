@@ -1,14 +1,9 @@
+import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import {
   BarChart,
   Bar,
@@ -42,7 +37,15 @@ import {
   Minimize2,
   BookOpen,
   Globe,
+  Filter,
+  SlidersHorizontal,
+  Eraser,
 } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { EntityDetailTable } from "./EntityDetailTable";
 import { SlsDetailTable } from "./SlsDetailTable";
 import { KecamatanComparisonView } from "./KecamatanComparisonView";
@@ -78,6 +81,8 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
     setIsExpanded,
     kecOptions,
     desaOptions,
+    dusunOptions,
+    slsOptions,
     regionLabel,
     stats,
     pieData,
@@ -86,6 +91,22 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
     handleExportExcel,
     handleExportGeoJSON,
   } = useStatisticsPanel(spatialData);
+
+  const kecamatanOptions = useMemo(() => [
+    ...(isAdmin ? [{ value: "Semua", label: "Semua Kecamatan" }] : []),
+    ...kecOptions.map((k: any) => ({
+      value: k.idkec,
+      label: k.nmkec || k.nama || k.name || k.idkec,
+    })),
+  ], [isAdmin, kecOptions]);
+
+  const desaListOptions = useMemo(() => [
+    { value: "Semua", label: "Semua Desa" },
+    ...desaOptions.map((d: any) => ({
+      value: d.iddesa,
+      label: d.nmdesa || d.nama || d.name || d.iddesa,
+    })),
+  ], [desaOptions]);
 
   return (
     <>
@@ -183,63 +204,179 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
             </div>
           </div>
 
-          {/* Dynamic Inline Wilayah Selectors (Kecamatan & Desa) */}
+          {/* Actions & Filters Bar */}
           <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-            {/* Select Kecamatan */}
-            <div className="flex items-center gap-1.5 flex-1 sm:flex-none">
-              <span className="text-[11px] text-muted-foreground hidden sm:inline">
-                Kec:
-              </span>
-              <Select
-                value={store.filterKecamatan || undefined}
-                onValueChange={(val) => {
-                  store.setFilter("filterKecamatan", val);
-                  store.setFilter("filterDesa", "Semua");
-                }}
-              >
-                <SelectTrigger className="h-8 text-xs w-full sm:w-[140px] md:w-[160px] bg-background">
-                  <SelectValue placeholder="Pilih Kecamatan" />
-                </SelectTrigger>
-                <SelectContent>
-                  {isAdmin && (
-                    <SelectItem value="Semua">Semua Kecamatan</SelectItem>
+            {/* Popover Filter Wilayah 4-Level */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-2 px-3 border-dashed hover:border-primary/50 text-xs shadow-xs"
+                >
+                  <Filter className="w-3.5 h-3.5 text-primary" />
+                  <span className="font-medium">Filter Wilayah</span>
+                  {store.filterKecamatan !== "Semua" && store.filterKecamatan && (
+                    <Badge
+                      variant="secondary"
+                      className="px-1.5 py-0 text-[10px] h-4 font-semibold bg-primary/15 text-primary border-0"
+                    >
+                      {store.filterSls !== "Semua"
+                        ? "Level RT/RW"
+                        : store.filterDusun !== "Semua"
+                          ? "Level Dusun"
+                          : store.filterDesa !== "Semua"
+                            ? "Level Desa"
+                            : "Level Kec"}
+                    </Badge>
                   )}
-                  {kecOptions.map((k: any) => (
-                    <SelectItem key={k.idkec} value={k.idkec}>
-                      {k.nmkec || k.nama || k.name || k.idkec}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Select Desa */}
-            <div className="flex items-center gap-1.5 flex-1 sm:flex-none">
-              <span className="text-[11px] text-muted-foreground hidden sm:inline">
-                Desa:
-              </span>
-              <Select
-                value={store.filterDesa || undefined}
-                onValueChange={(val) => store.setFilter("filterDesa", val)}
-                disabled={
-                  !store.filterKecamatan ||
-                  store.filterKecamatan === "Semua" ||
-                  desaOptions.length === 0
-                }
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-80 sm:w-96 p-4 shadow-2xl border bg-card/98 backdrop-blur-md rounded-xl space-y-3.5 z-50"
+                align="end"
               >
-                <SelectTrigger className="h-8 text-xs w-full sm:w-[130px] md:w-[150px] bg-background">
-                  <SelectValue placeholder="Pilih Desa" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Semua">Semua Desa</SelectItem>
-                  {desaOptions.map((d: any) => (
-                    <SelectItem key={d.iddesa} value={d.iddesa}>
-                      {d.nmdesa || d.nama || d.name || d.iddesa}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="flex items-center justify-between pb-2 border-b">
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="w-4 h-4 text-primary" />
+                    <div>
+                      <h4 className="text-xs font-bold leading-none">
+                        Filter Wilayah 4-Level
+                      </h4>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Kecamatan ➔ Desa ➔ Dusun ➔ RT/RW
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      store.setFilter("filterKecamatan", "Semua");
+                      store.setFilter("filterDesa", "Semua");
+                      store.setFilter("filterDusun", "Semua");
+                      store.setFilter("filterSls", "Semua");
+                    }}
+                  >
+                    <Eraser className="w-3 h-3 mr-1" />
+                    Reset
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  {/* Level 1: Kecamatan */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-muted-foreground flex items-center justify-between">
+                      <span>1. Kecamatan</span>
+                      {store.filterKecamatan !== "Semua" &&
+                        store.filterKecamatan && (
+                          <span className="text-[10px] text-primary font-normal">
+                            Terpilih
+                          </span>
+                        )}
+                    </label>
+                    <SearchableCombobox
+                      options={kecamatanOptions}
+                      value={store.filterKecamatan || undefined}
+                      placeholder="Pilih Kecamatan..."
+                      emptyText="Kecamatan tidak ditemukan."
+                      onValueChange={(val) => {
+                        store.setFilter("filterKecamatan", val);
+                        store.setFilter("filterDesa", "Semua");
+                        store.setFilter("filterDusun", "Semua");
+                        store.setFilter("filterSls", "Semua");
+                      }}
+                    />
+                  </div>
+
+                  {/* Level 2: Desa / Kelurahan */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-muted-foreground flex items-center justify-between">
+                      <span>2. Desa / Kelurahan</span>
+                      {store.filterDesa !== "Semua" && store.filterDesa && (
+                        <span className="text-[10px] text-primary font-normal">
+                          Terpilih
+                        </span>
+                      )}
+                    </label>
+                    <SearchableCombobox
+                      options={desaListOptions}
+                      value={store.filterDesa || undefined}
+                      placeholder="Pilih Desa..."
+                      emptyText="Desa tidak ditemukan."
+                      disabled={
+                        !store.filterKecamatan ||
+                        store.filterKecamatan === "Semua" ||
+                        desaOptions.length === 0
+                      }
+                      onValueChange={(val) => {
+                        store.setFilter("filterDesa", val);
+                        store.setFilter("filterDusun", "Semua");
+                        store.setFilter("filterSls", "Semua");
+                      }}
+                    />
+                  </div>
+
+                  {/* Level 3: Dusun / Lingkungan */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-muted-foreground flex items-center justify-between">
+                      <span>3. Dusun / Lingkungan</span>
+                      {store.filterDusun !== "Semua" && store.filterDusun && (
+                        <span className="text-[10px] text-primary font-normal">
+                          Terpilih
+                        </span>
+                      )}
+                    </label>
+                    <SearchableCombobox
+                      options={dusunOptions}
+                      value={store.filterDusun || undefined}
+                      placeholder="Pilih Dusun..."
+                      emptyText="Dusun tidak ditemukan."
+                      disabled={
+                        !store.filterDesa ||
+                        store.filterDesa === "Semua" ||
+                        dusunOptions.length <= 1
+                      }
+                      onValueChange={(val) => {
+                        store.setFilter("filterDusun", val);
+                        store.setFilter("filterSls", "Semua");
+                      }}
+                    />
+                  </div>
+
+                  {/* Level 4: RT / RW (SLS) */}
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-muted-foreground flex items-center justify-between">
+                      <span>4. RT / RW (Unit SLS)</span>
+                      {store.filterSls !== "Semua" && store.filterSls && (
+                        <span className="text-[10px] text-primary font-normal">
+                          Terpilih
+                        </span>
+                      )}
+                    </label>
+                    <SearchableCombobox
+                      options={slsOptions}
+                      value={store.filterSls || undefined}
+                      placeholder="Pilih RT / RW..."
+                      emptyText="RT / RW tidak ditemukan."
+                      disabled={
+                        !store.filterDesa ||
+                        store.filterDesa === "Semua" ||
+                        slsOptions.length <= 1
+                      }
+                      onValueChange={(val) => store.setFilter("filterSls", val)}
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t text-[11px] text-muted-foreground flex items-center justify-between">
+                  <span className="truncate max-w-[280px]">
+                    <span className="font-semibold text-foreground">Aktif:</span> {regionLabel}
+                  </span>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             {/* Tombol Ekspor (CSV, Excel, GeoJSON) */}
             {canExport ? (

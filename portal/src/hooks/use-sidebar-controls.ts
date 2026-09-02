@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useMapStore } from "@/store/mapStore";
 import { useAuthStore } from "@/store/auth-store";
 import { useAuth } from "@/hooks/use-auth";
+import { extractDusunAndSlsList } from "@/utils/slsHelper";
 
 /**
  * Custom Hook: useSidebarControls
@@ -14,7 +15,7 @@ export function useSidebarControls(spatialData: any) {
   
   /**
    * Hook Zustand MapStore:
-   * Menyimpan dan memperbarui filter aktif (filterKecamatan, filterDesa, filterNama),
+   * Menyimpan dan memperbarui filter aktif (filterKecamatan, filterDesa, filterDusun, filterSls, filterNama),
    * toggle layer peta, versi dataset (prelist/se2026), dan mode komparasi.
    */
   const store = useMapStore();
@@ -33,7 +34,7 @@ export function useSidebarControls(spatialData: any) {
 
   // ── 2. Data Spatial & Role Extraction ───────────────────────────────────────
   
-  const { wilayahManifest, assignments = [] } = spatialData || {};
+  const { dataSls, wilayahManifest, assignments = [] } = spatialData || {};
   const role = profile?.role ?? "ppl";
 
   // ── 3. Filter & Option Calculations (Memoized) ──────────────────────────────
@@ -96,6 +97,13 @@ export function useSidebarControls(spatialData: any) {
     });
   }, [rawDesaOptions, role, assignedDesas]);
 
+  /**
+   * Hook useMemo: Ekstraksi opsi Dusun dan opsi RT/RW (SLS) dari layer GeoJSON `dataSls`
+   */
+  const { dusunOptions, slsOptions } = useMemo(() => {
+    return extractDusunAndSlsList(dataSls, store.filterDesa, store.filterDusun);
+  }, [dataSls, store.filterDesa, store.filterDusun]);
+
   // ── 4. React Effects ────────────────────────────────────────────────────────
   
   /**
@@ -149,6 +157,8 @@ export function useSidebarControls(spatialData: any) {
         }
         store.setFilter("filterKecamatan", firstKecamatan);
         store.setFilter("filterDesa", firstDesa);
+        store.setFilter("filterDusun", "Semua");
+        store.setFilter("filterSls", "Semua");
         store.setFilter("filterNama", "");
       } else {
         store.resetFilter(role, assignedDesas, allKecamatans);
@@ -157,6 +167,8 @@ export function useSidebarControls(spatialData: any) {
       if (kecOptions.length > 0) {
         store.setFilter("filterKecamatan", kecOptions[0].idkec);
         store.setFilter("filterDesa", "Semua");
+        store.setFilter("filterDusun", "Semua");
+        store.setFilter("filterSls", "Semua");
         store.setFilter("filterNama", "");
       } else {
         store.resetFilter(role, assignedDesas, allKecamatans);
@@ -193,6 +205,8 @@ export function useSidebarControls(spatialData: any) {
     role,
     kecOptions,
     desaOptions,
+    dusunOptions,
+    slsOptions,
     handleResetFilter,
     logout,
     isLoggingOut,

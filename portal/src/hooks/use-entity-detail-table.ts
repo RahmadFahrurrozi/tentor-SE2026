@@ -1,6 +1,12 @@
 import { useState, useMemo } from "react";
 import { useMapStore } from "@/store/mapStore";
 import { useAuthStore } from "@/store/auth-store";
+import {
+  extractDusunAndSlsList,
+  getSlsId,
+  isSlsMatch,
+  normalizeSlsId,
+} from "@/utils/slsHelper";
 import * as XLSX from "xlsx";
 
 /**
@@ -63,7 +69,7 @@ export interface UseEntityDetailTableReturn {
   /** Jumlah entitas per kategori tipe */
   counts: EntityCounts;
   /** Tab kategori yang sedang aktif saat ini */
-  activeTab: string;
+  activeTab: EntityType;
   /** Kata kunci pencarian saat ini */
   searchQuery: string;
   /** Halaman aktif saat ini (1-indexed) */
@@ -75,7 +81,7 @@ export interface UseEntityDetailTableReturn {
   /** Apakah pengguna saat ini memiliki hak akses Admin */
   isAdmin: boolean;
   /** Handler untuk mengubah tab kategori dan mereset halaman ke 1 */
-  handleTabChange: (tab: string) => void;
+  handleTabChange: (tab: EntityType) => void;
   /** Handler untuk mengubah input pencarian dan mereset halaman ke 1 */
   handleSearchChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   /** Function untuk langsung memperbarui kata kunci pencarian */
@@ -107,7 +113,7 @@ export function useEntityDetailTable(spatialData: any): UseEntityDetailTableRetu
   const { profile } = useAuthStore();
   const isAdmin = profile?.role === "admin";
 
-  const [activeTab, setActiveTab] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState<EntityType>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
@@ -118,25 +124,45 @@ export function useEntityDetailTable(spatialData: any): UseEntityDetailTableRetu
     dataUsahaPertanian,
     dataRumahTangga,
     dataBangunan,
+    dataSls,
   } = spatialData || {};
 
   /**
-   * Helper internal untuk memfilter item berdasarkan filter Kecamatan & Desa dari `mapStore`.
+   * Ekstraksi map parsed SLS untuk pengecekan nama Dusun
+   */
+  const { parsedSlsMap } = useMemo(() => {
+    return extractDusunAndSlsList(dataSls, store.filterDesa, store.filterDusun);
+  }, [dataSls, store.filterDesa, store.filterDusun]);
+
+  /**
+   * Helper internal untuk memfilter item berdasarkan filter Kecamatan, Desa, Dusun & RT/RW dari `mapStore`.
    */
   const filterByRegion = (item: any): boolean => {
-    const idslsStr = String(item.idsls_str || item.idsls_final || "");
-    const iddesa = item.iddesa || item.id_desa || idslsStr.substring(0, 10);
+    const idslsStr = getSlsId(item);
+    const iddesa =
+      item.iddesa ||
+      item.id_desa ||
+      (idslsStr.length >= 10 ? idslsStr.substring(0, 10) : "");
     const idkec =
       item.idkec ||
       item.id_kec ||
-      idslsStr.substring(0, 7) ||
+      (idslsStr.length >= 7 ? idslsStr.substring(0, 7) : "") ||
       String(iddesa).substring(0, 7);
 
     if (store.filterKecamatan !== "Semua" && store.filterKecamatan) {
-      if (String(idkec) !== String(store.filterKecamatan)) return false;
+      if (normalizeSlsId(idkec) !== normalizeSlsId(store.filterKecamatan)) return false;
     }
     if (store.filterDesa !== "Semua" && store.filterDesa) {
-      if (String(iddesa) !== String(store.filterDesa)) return false;
+      if (normalizeSlsId(iddesa) !== normalizeSlsId(store.filterDesa)) return false;
+    }
+    if (store.filterSls !== "Semua" && store.filterSls) {
+      if (!isSlsMatch(idslsStr, store.filterSls)) return false;
+    }
+    if (store.filterDusun !== "Semua" && store.filterDusun) {
+      const parsed =
+        parsedSlsMap.get(idslsStr) ||
+        (idslsStr.length >= 14 ? parsedSlsMap.get(idslsStr.substring(0, 14)) : undefined);
+      if (!parsed || parsed.dusun !== store.filterDusun) return false;
     }
     return true;
   };
@@ -305,6 +331,9 @@ export function useEntityDetailTable(spatialData: any): UseEntityDetailTableRetu
     dataBangunan,
     store.filterKecamatan,
     store.filterDesa,
+    store.filterDusun,
+    store.filterSls,
+    parsedSlsMap,
   ]);
 
   /**
@@ -364,7 +393,7 @@ export function useEntityDetailTable(spatialData: any): UseEntityDetailTableRetu
   /**
    * Change tab and reset current page to 1.
    */
-  const handleTabChange = (tab: string) => {
+  const handleTabChange = (tab: EntityType) => {
     setActiveTab(tab);
     setCurrentPage(1);
   };

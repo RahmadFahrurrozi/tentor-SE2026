@@ -13,6 +13,12 @@ import {
   isPointInPolygon,
   getPolygonRings,
 } from "@/utils/dataProcessing";
+import {
+  extractDusunAndSlsList,
+  getSlsId,
+  isSlsMatch,
+  normalizeSlsId,
+} from "@/utils/slsHelper";
 import { useMapStore } from "@/store/mapStore";
 import { useTheme } from "@/context/theme-provider";
 
@@ -122,7 +128,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
   } = spatialData;
 
   const [viewState, setViewState] = useState({
-    center: (store.selectedKabupaten === "3515" ? [112.7183, -7.4478] : [114.3692, -8.2192]) as [number, number],
+    center: (store.selectedKabupaten === "3515"
+      ? [112.7183, -7.4478]
+      : [114.3692, -8.2192]) as [number, number],
     zoom: store.selectedKabupaten === "3515" ? 11 : 10,
     pitch: 45,
     bearing: 0,
@@ -164,6 +172,10 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     isLoading,
   ]);
 
+  const { parsedSlsMap } = useMemo(() => {
+    return extractDusunAndSlsList(dataSls, store.filterDesa, store.filterDusun);
+  }, [dataSls, store.filterDesa, store.filterDusun]);
+
   const filteredSls = useMemo(() => {
     if (!processedSls) return null;
     // Ketika filterKecamatan "Semua", kembalikan empty FeatureCollection
@@ -182,22 +194,43 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         String(iddesa).substring(0, 7);
       return String(idkec) === String(store.filterKecamatan);
     });
-    if (store.filterDesa === "Semua" || !store.filterDesa) {
-      return { ...processedSls, features: byKec };
-    }
-    return {
-      ...processedSls,
-      features: byKec.filter((f: any) => {
+
+    let current = byKec;
+    if (store.filterDesa && store.filterDesa !== "Semua") {
+      current = current.filter((f: any) => {
         const iddesa =
           f.properties.iddesa ||
           String(f.properties.idsls_str || "").substring(0, 10);
         return String(iddesa) === store.filterDesa;
-      }),
-    };
-  }, [processedSls, store.filterKecamatan, store.filterDesa]);
+      });
+    }
+
+    if (store.filterSls && store.filterSls !== "Semua") {
+      current = current.filter((f: any) => {
+        const str = String(f.properties.idsls_str || f.properties.idsls || "");
+        return str === store.filterSls;
+      });
+    } else if (store.filterDusun && store.filterDusun !== "Semua") {
+      current = current.filter((f: any) => {
+        const str = String(f.properties.idsls_str || f.properties.idsls || "");
+        const parsed = parsedSlsMap.get(str);
+        return parsed && parsed.dusun === store.filterDusun;
+      });
+    }
+
+    return { ...processedSls, features: current };
+  }, [
+    processedSls,
+    store.filterKecamatan,
+    store.filterDesa,
+    store.filterDusun,
+    store.filterSls,
+    parsedSlsMap,
+  ]);
 
   const geoJsonDesaBoundary = useMemo(() => {
-    if (store.filterKecamatan === "Semua" || !store.filterKecamatan) return null;
+    if (store.filterKecamatan === "Semua" || !store.filterKecamatan)
+      return null;
 
     // 1. Coba dari dataDesa (/data/regions.json)
     if (dataDesa?.features?.length) {
@@ -257,32 +290,44 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     return null;
   }, [dataDesa, dataSls, store.filterDesa]);
 
-  const filterDataByDesaAndSearch = (data: any[], dataType?: string) => {
+  const filterDataByDesaAndSearch = (data: any[], _dataType?: string) => {
     if (!data || !data.length) return [];
     let filtered = data;
 
-    if (store.filterDesa !== "Semua") {
+    if (store.filterDesa && store.filterDesa !== "Semua") {
+      const targetDesa = normalizeSlsId(store.filterDesa);
       filtered = filtered.filter((row) => {
-        let desaId = "";
-
-        if (dataType === "pertanian") {
-          desaId =
-            row["iddesa"] ||
-            row["id_desa"] ||
-            row["desa_id"] ||
-            row["kode_desa"] ||
-            "";
-        } else {
-          desaId =
-            row["idsls_str"] || row["idsls final"] || row["iddesa"] || "";
-        }
+        let desaId =
+          row["iddesa"] ||
+          row["id_desa"] ||
+          row["desa_id"] ||
+          row["kode_desa"] ||
+          row.properties?.iddesa ||
+          row.properties?.id_desa ||
+          "";
 
         if (!desaId) {
-          desaId = row["idsls_str"] || row["idsls final"] || "";
+          const str = getSlsId(row);
+          if (str.length >= 10) {
+            desaId = str.substring(0, 10);
+          }
         }
+        return normalizeSlsId(desaId) === targetDesa;
+      });
+    }
 
-        const idslsStr = String(desaId);
-        return idslsStr.substring(0, 10) === store.filterDesa;
+    if (store.filterSls && store.filterSls !== "Semua") {
+      filtered = filtered.filter((row) => {
+        const str = getSlsId(row);
+        return isSlsMatch(str, store.filterSls!);
+      });
+    } else if (store.filterDusun && store.filterDusun !== "Semua") {
+      filtered = filtered.filter((row) => {
+        const str = getSlsId(row);
+        const parsed =
+          parsedSlsMap.get(str) ||
+          (str.length >= 14 ? parsedSlsMap.get(str.substring(0, 14)) : undefined);
+        return parsed && parsed.dusun === store.filterDusun;
       });
     }
 
@@ -325,15 +370,29 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     if (!dataBangunan.length || isLoading || store.filterKecamatan === "Semua")
       return null;
 
-    const filteredBuildings =
-      store.filterDesa === "Semua"
-        ? dataBangunan
-        : dataBangunan.filter((row: any) => {
-            const idslsStr = String(
-              row["idsls_str"] || row["idsls final"] || "",
-            );
-            return idslsStr.substring(0, 10) === store.filterDesa;
-          });
+    let filteredBuildings = dataBangunan;
+    if (store.filterDesa && store.filterDesa !== "Semua") {
+      const targetDesa = normalizeSlsId(store.filterDesa);
+      filteredBuildings = filteredBuildings.filter((row: any) => {
+        const idslsStr = getSlsId(row);
+        return idslsStr.substring(0, 10) === targetDesa;
+      });
+    }
+
+    if (store.filterSls && store.filterSls !== "Semua") {
+      filteredBuildings = filteredBuildings.filter((row: any) => {
+        const str = getSlsId(row);
+        return isSlsMatch(str, store.filterSls!);
+      });
+    } else if (store.filterDusun && store.filterDusun !== "Semua") {
+      filteredBuildings = filteredBuildings.filter((row: any) => {
+        const str = getSlsId(row);
+        const parsed =
+          parsedSlsMap.get(str) ||
+          (str.length >= 14 ? parsedSlsMap.get(str.substring(0, 14)) : undefined);
+        return parsed && parsed.dusun === store.filterDusun;
+      });
+    }
 
     const geo = convertBangunanToGeoJson(filteredBuildings);
 
@@ -562,7 +621,11 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     dataUsahaPertanian,
     dataRumahTangga,
     isLoading,
+    store.filterKecamatan,
     store.filterDesa,
+    store.filterDusun,
+    store.filterSls,
+    parsedSlsMap,
     store.filterNama,
     store.showSyntheticBuildings,
     store.showUsaha,
@@ -580,6 +643,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     isLoading,
     store.filterKecamatan,
     store.filterDesa,
+    store.filterDusun,
+    store.filterSls,
+    parsedSlsMap,
     store.filterNama,
   ]);
 
@@ -596,6 +662,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     isLoading,
     store.filterKecamatan,
     store.filterDesa,
+    store.filterDusun,
+    store.filterSls,
+    parsedSlsMap,
     store.filterNama,
   ]);
 
@@ -614,6 +683,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     isLoading,
     store.filterKecamatan,
     store.filterDesa,
+    store.filterDusun,
+    store.filterSls,
+    parsedSlsMap,
     store.filterNama,
   ]);
 
@@ -630,6 +702,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     isLoading,
     store.filterKecamatan,
     store.filterDesa,
+    store.filterDusun,
+    store.filterSls,
+    parsedSlsMap,
     store.filterNama,
   ]);
 
@@ -684,7 +759,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           <div style="border-bottom: 1px solid ${theme === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"}; padding-bottom: 6px; margin-bottom: 8px;">
             <p style="font-weight: 700; font-size: 13px; margin: 0; color: ${theme === "dark" ? "#60A5FA" : "#2563EB"};">${nmSls}</p>
             <p style="font-size: 10px; margin: 2px 0 0 0; opacity: 0.8; line-height: 1.3;">
-              📍 ${nmDesa}, ${nmKec}
+              ${nmDesa}, ${nmKec}
             </p>
             <p style="font-size: 9px; margin: 1px 0 0 0; opacity: 0.6;">ID SLS: ${idslsStr}</p>
           </div>
@@ -737,7 +812,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             </p>
             ${
               properties.is_synthetic
-                ? `<p style="color: #6366F1; font-weight: 600; font-size: 10px; margin: 4px 0 0 0; text-align: center; background: rgba(99, 102, 241, 0.12); padding: 3px 6px; border-radius: 6px; border: 1px solid rgba(99, 102, 241, 0.25);">✨ Generatif Spasial 6m × 6m</p>`
+                ? `<p style="color: #6366F1; font-weight: 600; font-size: 10px; margin: 4px 0 0 0; text-align: center; background: rgba(99, 102, 241, 0.12); padding: 3px 6px; border-radius: 6px; border: 1px solid rgba(99, 102, 241, 0.25);">Generatif Spasial 6m × 6m</p>`
                 : isMixed
                   ? `<p style="color: #A855F7; font-weight: 600; font-size: 10px; margin: 4px 0 0 0; text-align: center;">Klik untuk detail Campuran!</p>`
                   : `<p style="display: flex; justify-content: space-between; margin: 0;"><span>Jml Usaha:</span><span style="font-weight: 600;">${properties.jml_usaha || 0}</span></p>`
@@ -876,9 +951,22 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     } else {
       usahaListHtml = usahaList
         .map((u) => {
-          const name = u["nama_final"] || u["nama final"] || u["Nama usaha"] || u["Nama Usaha"] || u["nama_usaha_edit"] || u["nama_komersial"] || u["nama"] || "Titik Usaha";
+          const name =
+            u["nama_final"] ||
+            u["nama final"] ||
+            u["Nama usaha"] ||
+            u["Nama Usaha"] ||
+            u["nama_usaha_edit"] ||
+            u["nama_komersial"] ||
+            u["nama"] ||
+            "Titik Usaha";
           const cat = u["kategori"] || "-";
-          const addr = u["alamat_final"] || u["alamat final"] || u["Alamat"] || u["alamat"] || "-";
+          const addr =
+            u["alamat_final"] ||
+            u["alamat final"] ||
+            u["Alamat"] ||
+            u["alamat"] ||
+            "-";
           return `
           <div style="padding: 8px; border-radius: 8px; background: ${theme === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"}; margin-bottom: 6px; border: 1px solid ${theme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"};">
             <p style="margin: 0; font-weight: 700; font-size: 12px;">${name}</p>
@@ -1574,6 +1662,8 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     store.showKab,
     store.filterKecamatan,
     store.filterDesa,
+    store.filterDusun,
+    store.filterSls,
   ]);
 
   // Tutup popup & radar saat filter/reset berubah
@@ -1586,7 +1676,13 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       radarMarkerRef.current.remove();
       radarMarkerRef.current = null;
     }
-  }, [store.filterKecamatan, store.filterDesa, store.filterNama]);
+  }, [
+    store.filterKecamatan,
+    store.filterDesa,
+    store.filterDusun,
+    store.filterSls,
+    store.filterNama,
+  ]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1612,8 +1708,24 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     const magneticZoom = () => {
       let bbox = null;
 
-      // 1. Prioritas utama: Kalau ada Desa yang dipilih
+      // 0. Prioritas tertinggi: Kalau ada RT / RW (SLS) yang dipilih
       if (
+        store.filterSls &&
+        store.filterSls !== "Semua" &&
+        filteredSls?.features?.length > 0
+      ) {
+        bbox = calculateBbox(filteredSls);
+      }
+      // 0b. Prioritas Dusun: Kalau ada Dusun yang dipilih
+      else if (
+        store.filterDusun &&
+        store.filterDusun !== "Semua" &&
+        filteredSls?.features?.length > 0
+      ) {
+        bbox = calculateBbox(filteredSls);
+      }
+      // 1. Prioritas Desa: Kalau ada Desa yang dipilih
+      else if (
         store.filterDesa &&
         store.filterDesa !== "Semua" &&
         geoJsonDesaSelected?.features?.length > 0
@@ -1630,11 +1742,11 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       }
       // 3. Prioritas terakhir: Balik ke BBox Kabupaten terpilih
       else if (store.selectedKabupaten === "3515") {
-        bbox = [112.45, -7.60, 112.88, -7.30]; // Bounding Box Sidoarjo
+        bbox = [112.45, -7.6, 112.88, -7.3]; // Bounding Box Sidoarjo
       } else if (dataKab?.features?.length > 0) {
         bbox = calculateBbox(dataKab);
       } else {
-        bbox = [113.80, -8.80, 114.60, -8.00]; // Bounding Box Banyuwangi
+        bbox = [113.8, -8.8, 114.6, -8.0]; // Bounding Box Banyuwangi
       }
 
       // Kalau koordinat bbox dapet, lakuin efek "Woozz"
@@ -1645,7 +1757,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             [bbox[2], bbox[3]],
           ],
           {
-            padding: 80, // Kasih jarak pinggir biar wilayahnya nggak mepet layar
+            padding: store.filterSls && store.filterSls !== "Semua" ? 140 : 80, // Kasih jarak pinggir biar wilayahnya nggak mepet layar
             duration: 2500, // Durasi 2.5 detik biar efek terbangnya kerasa banget
             pitch: store.enable3d ? 60 : 0, // Kalau lagi 3D, pertahankan angle-nya
             essential: true, // Maksa Maplibre jalanin animasi ini tanpa ragu
@@ -1655,7 +1767,6 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       }
     };
 
-    // KUNCI PENTING: Kasih jeda (delay) dikit.
     // Kadang React butuh waktu nol koma sekian detik buat nge-set geoJsonDesaSelected dll.
     // Kalau langsung ditembak, bbox-nya bisa null atau animasi tabrakan.
     const timeoutId = setTimeout(() => {
