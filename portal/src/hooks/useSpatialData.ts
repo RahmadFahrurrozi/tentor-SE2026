@@ -11,6 +11,7 @@ export function useSpatialData(versionOverride?: DatasetVersion) {
   const [dataUsahaPertanian, setDataUsahaPertanian] = useState<any[]>([]);
   const [dataRumahTangga, setDataRumahTangga] = useState<any[]>([]);
   const [dataBangunan, setDataBangunan] = useState<any[]>([]);
+  const [dataBangunanLainnya, setDataBangunanLainnya] = useState<any[]>([]);
   const [dataSls, setDataSls] = useState<any>(null);
   const [dataKab, setDataKab] = useState<any>(null);
   const [dataDesa, setDataDesa] = useState<any>(null);
@@ -163,6 +164,7 @@ export function useSpatialData(versionOverride?: DatasetVersion) {
       setDataUsahaPertanian([]);
       setDataRumahTangga([]);
       setDataBangunan([]);
+      setDataBangunanLainnya([]);
       setDataSls(null);
       setIsLoading(false);
       return;
@@ -180,6 +182,7 @@ export function useSpatialData(versionOverride?: DatasetVersion) {
         setDataUsahaPertanian(cached.usahaPertanian);
         setDataRumahTangga(cached.rumahTangga);
         setDataBangunan(cached.bangunan);
+        setDataBangunanLainnya((cached as any).bangunanLainnya || []);
         setDataSls(cached.sls);
         setIsLoading(false);
         return;
@@ -192,13 +195,14 @@ export function useSpatialData(versionOverride?: DatasetVersion) {
           ? 'spatial-chunks-sidoarjo'
           : (activeDatasetVersion === 'se2026' ? 'spatial-chunks-se2026' : 'spatial-chunks');
 
-        const fetchChunkSafe = async (dataset: string) => {
+        const fetchChunkSafe = async (dataset: string, bucketOverride?: string) => {
           try {
+            const bucket = bucketOverride || primaryBucket;
             const path = `${dataset}/kec_${kecId}.json`;
-            let res = await fetch(getChunksPublicUrl(path, primaryBucket));
+            let res = await fetch(getChunksPublicUrl(path, bucket));
 
-            // Fallback khusus Banyuwangi jika belum ada di se2026
-            if (!res.ok && selectedKabupaten === '3510' && activeDatasetVersion === 'se2026' && dataset === 'bangunan') {
+            // Fallback jika belum ada di bucket target
+            if (!res.ok && selectedKabupaten === '3510' && bucket !== 'spatial-chunks') {
               res = await fetch(getChunksPublicUrl(path, 'spatial-chunks'));
             }
 
@@ -228,21 +232,22 @@ export function useSpatialData(versionOverride?: DatasetVersion) {
           }
         };
 
-        // Fetch semua dataset paralel
-        const [usaha, usahaDigital, usahaPertanianRaw, rumahTangga, bangunan, sls] =
+        // Fetch semua dataset paralel:
+        // 1. Bangunan Fisik (32.358 polygon) diambil dari spatial-chunks
+        // 2. Titik Bangunan Lainnya (rumah kosong/fasum) diambil dari spatial-chunks-se2026
+        const [usaha, usahaDigital, usahaPertanianRaw, rumahTangga, bangunan, bangunanLainnya, sls] =
           await Promise.all([
             fetchChunkSafe('usaha'),
             fetchChunkSafe('usaha_digital'),
             fetchChunkSafe('usaha_pertanian'),
             fetchChunkSafe('rumah_tangga'),
-            fetchChunkSafe('bangunan'),
+            fetchChunkSafe('bangunan', 'spatial-chunks'),
+            fetchChunkSafe('bangunan', 'spatial-chunks-se2026'),
             fetchSlsChunkSafe(),
           ]);
 
         // Spatial join — assign idsls_str ke setiap titik pertanian
         const usahaPertanian = assignSlsToPoints(usahaPertanianRaw, sls);
-
-
 
         // Simpan ke cache
         cache.current[cacheKey] = {
@@ -251,14 +256,16 @@ export function useSpatialData(versionOverride?: DatasetVersion) {
           usahaPertanian,
           rumahTangga,
           bangunan,
+          bangunanLainnya,
           sls,
-        };
+        } as any;
 
         setDataUsaha(usaha);
         setDataUsahaDigital(usahaDigital);
         setDataUsahaPertanian(usahaPertanian);
         setDataRumahTangga(rumahTangga);
         setDataBangunan(bangunan);
+        setDataBangunanLainnya(bangunanLainnya);
         setDataSls(sls);
 
       } catch (err: any) {
@@ -278,6 +285,7 @@ export function useSpatialData(versionOverride?: DatasetVersion) {
     dataUsahaPertanian,
     dataRumahTangga,
     dataBangunan,
+    dataBangunanLainnya,
     dataSls,
     dataKab,
     dataDesa,

@@ -63,13 +63,12 @@ export function useStatisticsModal(spatialData: any) {
       });
     }
 
-    if (sudahKunjung === 0 && totalBangunan > 0) {
-      sudahKunjung = Math.round(totalBangunan * 0.72);
-      belumKunjung = totalBangunan - sudahKunjung;
-    }
+    const totalBangunanDariSls = sudahKunjung + belumKunjung;
+    const effectiveTotalBangunan =
+      totalBangunanDariSls > 0 ? totalBangunanDariSls : totalBangunan;
 
     return {
-      totalBangunan,
+      totalBangunan: effectiveTotalBangunan,
       totalUsaha,
       totalUsahaDigital,
       totalUsahaPertanian,
@@ -77,8 +76,11 @@ export function useStatisticsModal(spatialData: any) {
       sudahKunjung,
       belumKunjung,
       progressPct:
-        totalBangunan > 0
-          ? Math.round((sudahKunjung / totalBangunan) * 100)
+        effectiveTotalBangunan > 0
+          ? Math.min(
+              100,
+              Math.round((sudahKunjung / effectiveTotalBangunan) * 100),
+            )
           : 0,
     };
   }, [

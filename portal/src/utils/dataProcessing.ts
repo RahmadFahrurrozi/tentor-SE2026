@@ -6,7 +6,8 @@ export function processSlsData(
   dataUsahaDigital: any[],
   dataRumahTangga: any[],
   dataBangunan: any[],
-  dataUsahaPertanian?: any[]
+  dataUsahaPertanian?: any[],
+  dataBangunanLainnya?: any[]
 ) {
   if (!slsGeoJson || !slsGeoJson.features) return null;
 
@@ -55,20 +56,25 @@ export function processSlsData(
     registerCount(keluargaCount, curr['idsls_str'] || curr['idsls final'] || curr['idsls']);
   });
 
-  // 5. Hitung statistik bangunan per SLS
-  const bangunanStats: Record<string, Record<string, number>> = {};
+  // 5. Hitung statistik bangunan fisik per SLS
+  const bangunanStats: Record<string, { usaha: number; rt: number; belum: number; total: number }> = {};
   dataBangunan.forEach((curr) => {
     const rawId = curr['idsls_str'] || curr['idsls final'] || curr['idsls'];
-    const status = curr['status_bangunan'];
+    const status = curr['status_bangunan'] || curr['status'] || '';
     const key = getSlsKey(rawId);
     if (!key) return;
 
     const addStat = (k: string) => {
       if (!bangunanStats[k]) {
-        bangunanStats[k] = { 'Bangunan Usaha': 0, 'Rumah Tangga': 0, 'Belum Terdata': 0 };
+        bangunanStats[k] = { usaha: 0, rt: 0, belum: 0, total: 0 };
       }
-      if (status === 'Bangunan Usaha' || status === 'Rumah Tangga' || status === 'Belum Terdata') {
-        bangunanStats[k][status]++;
+      bangunanStats[k].total++;
+      if (status === 'Bangunan Usaha') {
+        bangunanStats[k].usaha++;
+      } else if (status === 'Rumah Tangga') {
+        bangunanStats[k].rt++;
+      } else {
+        bangunanStats[k].belum++;
       }
     };
 
@@ -79,6 +85,14 @@ export function processSlsData(
     }
   });
 
+  // 6. Hitung jumlah titik bangunan lainnya per SLS
+  const bangunanLainnyaCount: Record<string, number> = {};
+  if (dataBangunanLainnya) {
+    dataBangunanLainnya.forEach((curr) => {
+      registerCount(bangunanLainnyaCount, curr['idsls_str'] || curr['idsls final'] || curr['idsls']);
+    });
+  }
+
   const features = slsGeoJson.features.map((feature: any) => {
     const idslsRaw = feature.properties.idsls || feature.properties.id_sls || feature.properties.IDSLS || feature.properties.kode_sls;
     
@@ -86,15 +100,24 @@ export function processSlsData(
     const idsls14 = idslsStr.length >= 14 ? idslsStr.substring(0, 14) : idslsStr;
     const iddesa = idslsStr.substring(0, 10);
 
-    const bStats = bangunanStats[idslsStr] || bangunanStats[idsls14] || { 'Bangunan Usaha': 0, 'Rumah Tangga': 0, 'Belum Terdata': 0 };
-    const sudahTerdata = (bStats['Bangunan Usaha'] || 0) + (bStats['Rumah Tangga'] || 0);
-    const belumTerdata = bStats['Belum Terdata'] || 0;
-    const totalBangunan = sudahTerdata + belumTerdata;
+    const bStats = bangunanStats[idslsStr] || bangunanStats[idsls14] || { usaha: 0, rt: 0, belum: 0, total: 0 };
+    const bLainnya = (bangunanLainnyaCount[idslsStr] !== undefined ? bangunanLainnyaCount[idslsStr] : bangunanLainnyaCount[idsls14]) || 0;
 
     const uCount = (usahaCount[idslsStr] !== undefined ? usahaCount[idslsStr] : usahaCount[idsls14]) || 0;
     const udCount = (usahaDigitalCount[idslsStr] !== undefined ? usahaDigitalCount[idslsStr] : usahaDigitalCount[idsls14]) || 0;
     const upCount = (usahaPertanianCount[idslsStr] !== undefined ? usahaPertanianCount[idslsStr] : usahaPertanianCount[idsls14]) || 0;
     const kCount = (keluargaCount[idslsStr] !== undefined ? keluargaCount[idslsStr] : keluargaCount[idsls14]) || 0;
+
+    const totalBangunan = bStats.total;
+    let sudahTerdata = bStats.usaha + bStats.rt;
+    let belumTerdata = bStats.belum;
+
+    // Titik bangunan lainnya (rumah kosong / tempat ibadah yang disensus) diakui sebagai sudah dikunjungi
+    if (bLainnya > 0 && belumTerdata > 0) {
+      const tambahan = Math.min(belumTerdata, bLainnya);
+      sudahTerdata += tambahan;
+      belumTerdata -= tambahan;
+    }
 
     return {
       ...feature,
@@ -106,6 +129,7 @@ export function processSlsData(
         jumlah_usaha_digital: udCount,
         jumlah_usaha_pertanian: upCount,
         jumlah_keluarga: kCount,
+        jumlah_bangunan_lainnya: bLainnya,
         sudah_terdata: sudahTerdata,
         belum_terdata: belumTerdata,
         total_bangunan: totalBangunan
@@ -183,6 +207,8 @@ export function convertTitikToGeoJson(data: any[]) {
         row['nama_komersial'],
         row['nama final'],
         row['nama_final'],
+        row['kategori_bangunan'],
+        row['status_bangunan'],
         row['nm_project'],
         row['nama'],
         row['Nama'],
@@ -194,6 +220,7 @@ export function convertTitikToGeoJson(data: any[]) {
       const alamatVal =
         row['alamat final'] ||
         row['alamat_final'] ||
+        row['level_6_name'] ||
         row['Alamat'] ||
         row['alamat'] ||
         row['Alamat final'] ||
