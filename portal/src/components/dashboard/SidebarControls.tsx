@@ -33,21 +33,29 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
     displayRole,
   } = useSidebarControls(spatialData);
 
-  const kecamatanOptions = useMemo(() => [
-    ...(role === "admin" ? [{ value: "Semua", label: "Semua Kecamatan" }] : []),
-    ...kecOptions.map((k: any) => ({
-      value: k.idkec,
-      label: k.nmkec || k.nama || k.name || k.idkec,
-    })),
-  ], [role, kecOptions]);
+  const kecamatanOptions = useMemo(
+    () => [
+      ...(role === "admin"
+        ? [{ value: "Semua", label: "Semua Kecamatan" }]
+        : []),
+      ...kecOptions.map((k: any) => ({
+        value: k.idkec,
+        label: k.nmkec || k.nama || k.name || k.idkec,
+      })),
+    ],
+    [role, kecOptions],
+  );
 
-  const desaListOptions = useMemo(() => [
-    { value: "Semua", label: "Semua Desa" },
-    ...desaOptions.map((d: any) => ({
-      value: d.iddesa,
-      label: d.nmdesa || d.nama || d.name || d.iddesa,
-    })),
-  ], [desaOptions]);
+  const desaListOptions = useMemo(
+    () => [
+      { value: "Semua", label: "Semua Desa" },
+      ...desaOptions.map((d: any) => ({
+        value: d.iddesa,
+        label: d.nmdesa || d.nama || d.name || d.iddesa,
+      })),
+    ],
+    [desaOptions],
+  );
 
   return (
     <Card className="h-full w-full max-w-75 flex flex-col rounded-none border-y-0 border-l-0">
@@ -228,6 +236,19 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
               id="showRt"
               checked={store.showRt}
               onCheckedChange={() => store.toggleLayer("showRt")}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="showBangunanLainnya" className="text-sm">
+                Titik Bangunan Lainnya
+              </Label>
+            </div>
+            <Switch
+              id="showBangunanLainnya"
+              checked={store.showBangunanLainnya}
+              onCheckedChange={() => store.toggleLayer("showBangunanLainnya")}
             />
           </div>
         </div>

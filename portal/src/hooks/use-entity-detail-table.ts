@@ -245,17 +245,19 @@ export function useEntityDetailTable(spatialData: any): UseEntityDetailTableRetu
       list.push({
         id: `up-${i}-${up.id || up.idsls_str || i}`,
         nama:
-          up.nama_krt ||
-          up.nm_project ||
+          up.nama_komersial ||
+          up.nama_usaha_edit ||
           up["nama final"] ||
           up.nama_final ||
+          up.nama_krt ||
+          up.nm_project ||
           up.nama ||
           "Usaha Pertanian",
         alamat:
-          up.deskripsi_project ||
-          up.alamat_project ||
           up["alamat final"] ||
           up.alamat_final ||
+          up.deskripsi_project ||
+          up.alamat_project ||
           up.alamat ||
           "-",
         type: "usaha-pertanian",
@@ -264,7 +266,7 @@ export function useEntityDetailTable(spatialData: any): UseEntityDetailTableRetu
           "bg-emerald-500/10 text-emerald-500 border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400",
         iddesa: up.iddesa,
         idkec: up.idkec,
-        detail: up.komoditas || up.jenis_usaha || "Agrikultur",
+        detail: up.produk || up.keg_utama || up.komoditas || up.jenis_usaha || "Agrikultur",
       });
     });
 
@@ -283,6 +285,8 @@ export function useEntityDetailTable(spatialData: any): UseEntityDetailTableRetu
         alamat:
           rt["alamat final"] ||
           rt.alamat_final ||
+          rt.level_6_name ||
+          rt["level_6_name"] ||
           rt.alamat_krt ||
           rt.alamat ||
           "-",

@@ -21,6 +21,7 @@ interface MapState {
   showUsahaDigital: boolean;
   showUsahaPertanian: boolean;   
   showRt: boolean;
+  showBangunanLainnya: boolean;
   showBuild: boolean;
   showSyntheticBuildings: boolean;
   enable3d: boolean;
@@ -63,6 +64,7 @@ export const useMapStore = create<MapState>((set) => ({
   showUsahaDigital: false,
   showUsahaPertanian: false,    
   showRt: false,
+  showBangunanLainnya: false,
   showBuild: true,
   showSyntheticBuildings: false,
   enable3d: false,

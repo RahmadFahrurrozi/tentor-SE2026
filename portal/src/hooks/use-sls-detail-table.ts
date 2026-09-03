@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useMapStore } from "@/store/mapStore";
 import { useAuthStore } from "@/store/auth-store";
 import * as XLSX from "xlsx";
+import { getSlsId, isSlsMatch } from "@/utils/slsHelper";
 
 /**
  * Interface item data agregat per SLS (Satuan Lingkungan Setempat).
@@ -169,33 +170,58 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
     const countMapPertanian: Record<string, number> = {};
     const countMapRt: Record<string, number> = {};
     const countMapBangunan: Record<string, number> = {};
+    const bangunanStats: Record<string, { sudah: number; belum: number }> = {};
 
-    (dataUsaha || []).forEach((u: any) => {
-      const sls = String(u.idsls_str || u.idsls_final || "");
-      if (sls) countMapUsaha[sls] = (countMapUsaha[sls] || 0) + 1;
-    });
-    (dataUsahaDigital || []).forEach((ud: any) => {
-      const sls = String(ud.idsls_str || ud.idsls_final || "");
-      if (sls) countMapDigital[sls] = (countMapDigital[sls] || 0) + 1;
-    });
-    (dataUsahaPertanian || []).forEach((up: any) => {
-      const sls = String(up.idsls_str || up.idsls_final || "");
-      if (sls) countMapPertanian[sls] = (countMapPertanian[sls] || 0) + 1;
-    });
-    (dataRumahTangga || []).forEach((rt: any) => {
-      const sls = String(rt.idsls_str || rt.idsls_final || "");
-      if (sls) countMapRt[sls] = (countMapRt[sls] || 0) + 1;
-    });
-    (dataBangunan || []).forEach((b: any) => {
-      const sls = String(b.idsls_str || b.idsls_final || "");
-      if (sls) countMapBangunan[sls] = (countMapBangunan[sls] || 0) + 1;
-    });
+    const registerCount = (acc: Record<string, number>, item: any) => {
+      const key = getSlsId(item);
+      if (!key) return;
+      acc[key] = (acc[key] || 0) + 1;
+      if (key.length >= 14) {
+        const key14 = key.substring(0, 14);
+        if (key14 !== key) {
+          acc[key14] = (acc[key14] || 0) + 1;
+        }
+      }
+    };
+
+    const registerBangunan = (item: any) => {
+      const key = getSlsId(item);
+      if (!key) return;
+      countMapBangunan[key] = (countMapBangunan[key] || 0) + 1;
+
+      const status = item.status_bangunan || item.status || "";
+      const isSudah =
+        status && status !== "Belum Terdata" && status !== "belum";
+
+      const updateStat = (k: string) => {
+        if (!bangunanStats[k]) bangunanStats[k] = { sudah: 0, belum: 0 };
+        if (isSudah) bangunanStats[k].sudah++;
+        else bangunanStats[k].belum++;
+      };
+
+      updateStat(key);
+
+      if (key.length >= 14) {
+        const key14 = key.substring(0, 14);
+        if (key14 !== key) {
+          countMapBangunan[key14] = (countMapBangunan[key14] || 0) + 1;
+          updateStat(key14);
+        }
+      }
+    };
+
+    (dataUsaha || []).forEach((u: any) => registerCount(countMapUsaha, u));
+    (dataUsahaDigital || []).forEach((ud: any) => registerCount(countMapDigital, ud));
+    (dataUsahaPertanian || []).forEach((up: any) => registerCount(countMapPertanian, up));
+    (dataRumahTangga || []).forEach((rt: any) => registerCount(countMapRt, rt));
+    (dataBangunan || []).forEach((b: any) => registerBangunan(b));
 
     const rows: SlsRowItem[] = [];
 
     dataSls.features.forEach((f: any, i: number) => {
       const props = f.properties || {};
-      const idslsStr = String(props.idsls_str || props.idsls || i + 1);
+      const idslsStr = getSlsId(f) || String(props.idsls_str || props.idsls || i + 1);
+      const idsls14 = idslsStr.length >= 14 ? idslsStr.substring(0, 14) : idslsStr;
 
       const iddesa = String(
         props.iddesa || props.id_desa || idslsStr.substring(0, 10),
@@ -218,23 +244,51 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
         props.nmdesa || desaMap[iddesa] || `Desa ${iddesa.slice(-3)}`;
       const namaKec = props.nmkec || kecMap[idkec] || `Kec ${idkec.slice(-3)}`;
 
-      const totalUsaha = props.count_usaha ?? (countMapUsaha[idslsStr] || 0);
+      const totalUsaha =
+        props.jumlah_usaha ??
+        props.count_usaha ??
+        countMapUsaha[idslsStr] ??
+        countMapUsaha[idsls14] ??
+        0;
       const totalUsahaDigital =
-        props.count_usaha_digital ?? (countMapDigital[idslsStr] || 0);
+        props.jumlah_usaha_digital ??
+        props.count_usaha_digital ??
+        countMapDigital[idslsStr] ??
+        countMapDigital[idsls14] ??
+        0;
       const totalUsahaPertanian =
-        props.count_usaha_pertanian ?? (countMapPertanian[idslsStr] || 0);
-      const totalRt = props.count_rt ?? (countMapRt[idslsStr] || 0);
+        props.jumlah_usaha_pertanian ??
+        props.count_usaha_pertanian ??
+        countMapPertanian[idslsStr] ??
+        countMapPertanian[idsls14] ??
+        0;
+      const totalRt =
+        props.jumlah_keluarga ??
+        props.count_rt ??
+        countMapRt[idslsStr] ??
+        countMapRt[idsls14] ??
+        0;
+
+      const bStat = bangunanStats[idslsStr] || bangunanStats[idsls14];
       const totalBangunan =
-        props.count_bangunan ?? (countMapBangunan[idslsStr] || 0);
+        props.total_bangunan ??
+        props.count_bangunan ??
+        (bStat ? bStat.sudah + bStat.belum : (countMapBangunan[idslsStr] ?? countMapBangunan[idsls14] ?? 0));
 
       const sudahTerdata =
-        props.sudah_terdata || Math.round(totalBangunan * 0.75);
+        props.sudah_terdata !== undefined
+          ? props.sudah_terdata
+          : (bStat ? bStat.sudah : 0);
+
       const belumTerdata =
-        props.belum_terdata || Math.max(0, totalBangunan - sudahTerdata);
+        props.belum_terdata !== undefined
+          ? props.belum_terdata
+          : (bStat ? bStat.belum : Math.max(0, totalBangunan - sudahTerdata));
+
       const progressPct =
         totalBangunan > 0
           ? Math.round((sudahTerdata / totalBangunan) * 100)
-          : 100;
+          : 0;
 
       rows.push({
         id: `sls-${idslsStr}-${i}`,
@@ -306,65 +360,82 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
 
     // Usaha Biasa
     (dataUsaha || []).forEach((u: any, i: number) => {
-      const sls = String(u.idsls_str || u.idsls_final || "");
-      if (sls === targetSls) {
+      const itemSls = getSlsId(u);
+      if (isSlsMatch(itemSls, targetSls)) {
         list.push({
           id: `ub-${i}`,
-          nama: u["nama final"] || u.nama_final || u.nama || "Usaha Biasa",
+          nama: u["nama final"] || u.nama_final || u.nama_usaha_edit || u.nama || "Usaha Biasa",
           alamat: u["alamat final"] || u.alamat_final || u.alamat || "-",
           type: "usaha",
           typeLabel: "Usaha Biasa",
           badgeClass:
             "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30",
-          detail: u.kategori || u.jenis_usaha || "Non-Pertanian",
+          detail: u.kategori || u.jenis_usaha || u.keg_utama || "Non-Pertanian",
         });
       }
     });
 
     // Usaha Digital
     (dataUsahaDigital || []).forEach((ud: any, i: number) => {
-      const sls = String(ud.idsls_str || ud.idsls_final || "");
-      if (sls === targetSls) {
+      const itemSls = getSlsId(ud);
+      if (isSlsMatch(itemSls, targetSls)) {
         list.push({
           id: `ud-${i}`,
-          nama: ud["nama final"] || ud.nama_final || ud.nama || "Usaha Digital",
+          nama: ud["nama final"] || ud.nama_final || ud.nama_usaha_edit || ud.nama || "Usaha Digital",
           alamat: ud["alamat final"] || ud.alamat_final || ud.alamat || "-",
           type: "usaha-digital",
           typeLabel: "Usaha Digital",
           badgeClass:
             "bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/30",
-          detail: ud.kategori || "E-Commerce",
+          detail: ud.kategori || ud.jenis_usaha || "E-Commerce",
         });
       }
     });
 
     // Usaha Pertanian
     (dataUsahaPertanian || []).forEach((up: any, i: number) => {
-      const sls = String(up.idsls_str || up.idsls_final || "");
-      if (sls === targetSls) {
+      const itemSls = getSlsId(up);
+      if (isSlsMatch(itemSls, targetSls)) {
         list.push({
           id: `up-${i}`,
-          nama: up.nama_krt || up["nama final"] || up.nama || "Usaha Pertanian",
+          nama:
+            up.nama_komersial ||
+            up.nama_usaha_edit ||
+            up["nama final"] ||
+            up.nama_final ||
+            up.nama_krt ||
+            up.nama ||
+            "Usaha Pertanian",
           alamat:
-            up.deskripsi_project || up["alamat final"] || up.alamat || "-",
+            up["alamat final"] ||
+            up.alamat_final ||
+            up.deskripsi_project ||
+            up.alamat ||
+            "-",
           type: "usaha-pertanian",
           typeLabel: "Usaha Pertanian",
           badgeClass:
             "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
-          detail: up.komoditas || "Agrikultur",
+          detail: up.produk || up.keg_utama || up.komoditas || up.kategori || "Agrikultur",
         });
       }
     });
 
     // Rumah Tangga
     (dataRumahTangga || []).forEach((rt: any, i: number) => {
-      const sls = String(rt.idsls_str || rt.idsls_final || "");
-      if (sls === targetSls) {
+      const itemSls = getSlsId(rt);
+      if (isSlsMatch(itemSls, targetSls)) {
         list.push({
           id: `rt-${i}`,
           nama:
             rt["nama final"] || rt.nama_final || rt.nama_kk || "Rumah Tangga",
-          alamat: rt["alamat final"] || rt.alamat_final || rt.alamat_krt || "-",
+          alamat:
+            rt["alamat final"] ||
+            rt.alamat_final ||
+            rt.level_6_name ||
+            rt["level_6_name"] ||
+            rt.alamat_krt ||
+            "-",
           type: "rt",
           typeLabel: "Rumah Tangga",
           badgeClass:
@@ -376,8 +447,8 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
 
     // Bangunan Fisik
     (dataBangunan || []).forEach((b: any, i: number) => {
-      const sls = String(b.idsls_str || b.idsls_final || "");
-      if (sls === targetSls) {
+      const itemSls = getSlsId(b);
+      if (isSlsMatch(itemSls, targetSls)) {
         list.push({
           id: `b-${i}`,
           nama: b.nama_bangunan || b.nama || `Bangunan #${i + 1}`,
@@ -387,7 +458,8 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
           badgeClass:
             "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30",
           detail:
-            b.status_kunjungan === "sudah" ? "Terkunjungi" : "Belum Dikunjungi",
+            b.status_bangunan ||
+            (b.status_kunjungan === "sudah" ? "Terkunjungi" : "Belum Dikunjungi"),
         });
       }
     });

@@ -162,11 +162,14 @@ def load_titik(filename: str, name: str, custom_file: Path | str = None) -> pd.D
             print(f"    Dropped {dropped:,} baris koordinat invalid")
 
     # Normalisasi kolom nama & alamat
-    nama_col = find_col(df, ["nama final", "Nama usaha", "Nama Usaha", "nama_usaha", "nama_usaha_edit", "nama_komersial", "nama", "Nama"])
+    nama_col = find_col(df, ["nama final", "Nama usaha", "Nama Usaha", "nama_usaha", "nama_usaha_edit", "nama_komersial", "nama", "Nama", "kategori_bangunan"])
     if nama_col and nama_col != "nama final":
         df["nama final"] = df[nama_col]
 
-    alamat_col = find_col(df, ["alamat final", "Alamat", "alamat", "Alamat final"])
+    if "nama final" in df.columns and "kategori_bangunan" in df.columns:
+        df["nama final"] = df["nama final"].fillna(df["kategori_bangunan"])
+
+    alamat_col = find_col(df, ["alamat final", "Alamat", "alamat", "Alamat final", "level_6_name"])
     if alamat_col and alamat_col != "alamat final":
         df["alamat final"] = df[alamat_col]
 
@@ -180,9 +183,12 @@ def load_titik(filename: str, name: str, custom_file: Path | str = None) -> pd.D
     return df
 
 
-def load_bangunan(filename: str) -> gpd.GeoDataFrame:
+def load_bangunan(filename: str, custom_file: Path | str = None) -> gpd.GeoDataFrame:
     """Load Parquet bangunan dengan geometry WKT."""
-    path = find_input_file(filename, "bangunan")
+    if custom_file and Path(custom_file).exists():
+        path = Path(custom_file)
+    else:
+        path = find_input_file(filename, "bangunan")
     if not path:
         print(f"  [WARN] {filename} tidak ditemukan, skip.")
         return gpd.GeoDataFrame()
@@ -520,8 +526,9 @@ def upload_to_supabase(dataset_filter: str = None, bucket_name: str = "spatial-c
         pass  # Sudah ada
 
     # Filter file berdasarkan dataset_filter jika ditentukan
-    if dataset_filter and dataset_filter != "all":
-        target_dir = OUTPUT_DIR / dataset_filter
+    target_filter = "bangunan" if dataset_filter in ("bangunan", "bangunan_lainnya") else dataset_filter
+    if target_filter and target_filter != "all":
+        target_dir = OUTPUT_DIR / target_filter
         if not target_dir.exists():
             print(f"[WARN] Folder {target_dir} tidak ditemukan, tidak ada file yang di-upload.")
             return
@@ -578,7 +585,7 @@ def main():
     parser = argparse.ArgumentParser(description="Split Parquet -> JSON chunks")
     parser.add_argument("--upload", action="store_true",
                         help="Upload hasil ke Supabase Storage setelah selesai")
-    parser.add_argument("--dataset", "-d", choices=["all", "usaha", "usaha_digital", "usaha_pertanian", "rumah_tangga", "bangunan", "sls"],
+    parser.add_argument("--dataset", "-d", choices=["all", "usaha", "usaha_digital", "usaha_pertanian", "rumah_tangga", "bangunan", "bangunan_lainnya", "sls"],
                         default="all", help="Pilih dataset spesifik untuk diproses (default: all)")
     parser.add_argument("--file", "-f", default=None,
                         help="Path ke file parquet kustom (misal: data/data-usaha-biasa-2.parquet)")
@@ -636,11 +643,31 @@ def main():
         df_rt = load_titik(FILES["rumah_tangga"], "rumah_tangga", custom_file=args.file if args.dataset == "rumah_tangga" else None)
         split_titik_by_kec(df_rt, "rumah_tangga")
 
-    # 4. Data bangunan
-    if args.dataset in ("all", "bangunan"):
+    # 4. Data bangunan / bangunan lainnya
+    if args.dataset in ("all", "bangunan", "bangunan_lainnya"):
         print("\n[Data bangunan] Processing...")
-        gdf_bangunan = load_bangunan(FILES["bangunan"])
-        split_bangunan_by_kec(gdf_bangunan)
+        custom_file = args.file if args.dataset in ("bangunan", "bangunan_lainnya") else None
+        target_path = Path(custom_file) if custom_file else find_input_file(FILES["bangunan"], "bangunan")
+        if not target_path or not target_path.exists():
+            target_path = find_input_file("bangunan-lainnya.parquet", "bangunan")
+
+        is_point_file = False
+        if target_path and target_path.exists():
+            try:
+                import pyarrow.parquet as pq
+                schema_names = pq.read_schema(target_path).names
+                if any(c in schema_names for c in ["lat final", "lat", "latitude"]) and not any(c in schema_names for c in ["geometry", "geom", "GEOMETRY"]):
+                    is_point_file = True
+            except Exception:
+                pass
+
+        if is_point_file:
+            print("  Deteksi format: Titik koordinat (point data)")
+            df_bangunan = load_titik(FILES["bangunan"], "bangunan", custom_file=target_path)
+            split_titik_by_kec(df_bangunan, "bangunan")
+        else:
+            gdf_bangunan = load_bangunan(FILES["bangunan"], custom_file=target_path)
+            split_bangunan_by_kec(gdf_bangunan)
 
     # 5. Data SLS & Manifest
     if args.dataset in ("all", "sls"):

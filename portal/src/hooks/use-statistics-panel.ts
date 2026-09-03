@@ -269,11 +269,19 @@ export function useStatisticsPanel(spatialData: any) {
       totalEntitasUsaha > 0
         ? Math.round((totalUsahaDigital / totalEntitasUsaha) * 100)
         : 0;
+
+    const totalBangunanFisik =
+      sudahKunjung + belumKunjung > 0
+        ? sudahKunjung + belumKunjung
+        : totalBangunan;
+
     const rasioKepadatan =
-      totalBangunan > 0 ? (totalEntitas / totalBangunan).toFixed(1) : "0.0";
+      totalBangunanFisik > 0
+        ? (totalEntitas / totalBangunanFisik).toFixed(1)
+        : "0.0";
 
     return {
-      totalBangunan,
+      totalBangunan: totalBangunanFisik,
       totalUsaha,
       totalUsahaDigital,
       totalUsahaPertanian,
@@ -286,8 +294,8 @@ export function useStatisticsPanel(spatialData: any) {
       rasioKepadatan,
       slsCount: filteredData.sls.length,
       progressPct:
-        totalBangunan > 0
-          ? Math.min(100, Math.round((sudahKunjung / totalBangunan) * 100))
+        totalBangunanFisik > 0
+          ? Math.min(100, Math.round((sudahKunjung / totalBangunanFisik) * 100))
           : 0,
     };
   }, [filteredData]);
