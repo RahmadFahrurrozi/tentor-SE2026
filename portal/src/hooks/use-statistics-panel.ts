@@ -328,7 +328,7 @@ export function useStatisticsPanel(spatialData: any) {
         jumlah: stats.totalUsahaPertanian,
         color: "#10B981",
       },
-      { name: "Rumah Tangga", jumlah: stats.totalRt, color: "#3B82F6" },
+      { name: "KK", jumlah: stats.totalRt, color: "#3B82F6" },
     ],
     [stats],
   );
@@ -350,7 +350,7 @@ export function useStatisticsPanel(spatialData: any) {
         "Usaha Biasa": stats.totalUsaha,
         "Usaha Digital": stats.totalUsahaDigital,
         "Usaha Pertanian": stats.totalUsahaPertanian,
-        "Rumah Tangga": stats.totalRt,
+        KK: stats.totalRt,
         "Total Entitas": stats.totalEntitas,
         "Rasio Usaha Digital (%)": `${stats.rasioDigital}%`,
       },
@@ -384,7 +384,7 @@ export function useStatisticsPanel(spatialData: any) {
         "Usaha Biasa": stats.totalUsaha,
         "Usaha Digital": stats.totalUsahaDigital,
         "Usaha Pertanian": stats.totalUsahaPertanian,
-        "Rumah Tangga": stats.totalRt,
+        KK: stats.totalRt,
         "Total Entitas": stats.totalEntitas,
         "Rasio Usaha Digital (%)": `${stats.rasioDigital}%`,
       },
@@ -518,7 +518,7 @@ export function useStatisticsPanel(spatialData: any) {
             type: "Feature",
             geometry: { type: "Point", coordinates: [lng, lat] },
             properties: {
-              tipe_entitas: "Rumah Tangga",
+              tipe_entitas: "KK",
               nama:
                 row["nama final"] || row["nama_krt"] || row["nama"] || "",
               alamat: row["alamat final"] || row["alamat"] || "",

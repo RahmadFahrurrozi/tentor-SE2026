@@ -41,7 +41,7 @@ export const ENTITY_TABS: EntityTabConfig[] = [
   },
   {
     key: "rt",
-    label: "Rumah Tangga",
+    label: "KK",
     icon: Home,
     activeColorClass: "bg-blue-600 text-white border-blue-600 shadow-xs",
     iconColorClass: "text-blue-500",

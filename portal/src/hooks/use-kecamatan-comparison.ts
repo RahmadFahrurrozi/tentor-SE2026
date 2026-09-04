@@ -104,7 +104,7 @@ export function useKecamatanComparison(spatialData: any) {
       name: k.nmkec,
       "Usaha Pertanian": k.usahaPertanian,
       "Usaha Biasa": k.usahaBiasa,
-      "Rumah Tangga": k.rumahTangga,
+      KK: k.rumahTangga,
       "Usaha Digital": k.usahaDigital,
     }));
   }, [processedData, showAll25]);
@@ -130,7 +130,7 @@ export function useKecamatanComparison(spatialData: any) {
       "Usaha Pertanian": k.usahaPertanian,
       "Usaha Biasa": k.usahaBiasa,
       "Usaha Digital": k.usahaDigital,
-      "Rumah Tangga": k.rumahTangga,
+      KK: k.rumahTangga,
       "Total Entitas": k.totalEntitas,
       "Total Bangunan": k.totalBangunan,
       "Adopsi Digital (%)": `${k.rasioDigitalPct}%`,
@@ -155,7 +155,7 @@ export function useKecamatanComparison(spatialData: any) {
       "Usaha Pertanian": k.usahaPertanian,
       "Usaha Biasa": k.usahaBiasa,
       "Usaha Digital": k.usahaDigital,
-      "Rumah Tangga": k.rumahTangga,
+      KK: k.rumahTangga,
       "Total Entitas": k.totalEntitas,
       "Total Bangunan": k.totalBangunan,
       "Adopsi Digital (%)": `${k.rasioDigitalPct}%`,

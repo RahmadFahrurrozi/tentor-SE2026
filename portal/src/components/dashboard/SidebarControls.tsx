@@ -230,7 +230,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
 
           <div className="flex items-center justify-between">
             <Label htmlFor="showRt" className="text-sm">
-              Titik Rumah Tangga
+              Titik Keluarga (KK)
             </Label>
             <Switch
               id="showRt"

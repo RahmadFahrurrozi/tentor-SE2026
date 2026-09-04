@@ -113,7 +113,7 @@ export function useStatisticsModal(spatialData: any) {
         jumlah: stats.totalUsahaPertanian,
         color: "#10B981",
       },
-      { name: "Rumah Tangga", jumlah: stats.totalRt, color: "#3B82F6" },
+      { name: "KK", jumlah: stats.totalRt, color: "#3B82F6" },
     ],
     [stats],
   );
@@ -131,7 +131,7 @@ export function useStatisticsModal(spatialData: any) {
         "Usaha Biasa": stats.totalUsaha,
         "Usaha Digital": stats.totalUsahaDigital,
         "Usaha Pertanian": stats.totalUsahaPertanian,
-        "Rumah Tangga": stats.totalRt,
+        KK: stats.totalRt,
       },
     ];
 
@@ -160,7 +160,7 @@ export function useStatisticsModal(spatialData: any) {
         "Usaha Biasa": stats.totalUsaha,
         "Usaha Digital": stats.totalUsahaDigital,
         "Usaha Pertanian": stats.totalUsahaPertanian,
-        "Rumah Tangga": stats.totalRt,
+        KK: stats.totalRt,
       },
     ];
 

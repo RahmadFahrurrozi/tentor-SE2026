@@ -62,7 +62,7 @@ export function EntityDetailTable({ spatialData }: EntityDetailTableProps) {
             Rincian Entitas & Bangunan Terdata
           </CardTitle>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            Daftar nama usaha, rumah tangga, dan bangunan di wilayah terpilih
+            Daftar nama usaha, KK, dan bangunan di wilayah terpilih
           </p>
         </div>
 

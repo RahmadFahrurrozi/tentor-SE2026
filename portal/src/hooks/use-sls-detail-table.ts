@@ -428,7 +428,7 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
         list.push({
           id: `rt-${i}`,
           nama:
-            rt["nama final"] || rt.nama_final || rt.nama_kk || "Rumah Tangga",
+            rt["nama final"] || rt.nama_final || rt.nama_kk || "KK",
           alamat:
             rt["alamat final"] ||
             rt.alamat_final ||
@@ -437,10 +437,10 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
             rt.alamat_krt ||
             "-",
           type: "rt",
-          typeLabel: "Rumah Tangga",
+          typeLabel: "KK",
           badgeClass:
             "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30",
-          detail: rt.jenis_rt || "Unit Keluarga",
+          detail: rt.jenis_rt || "Unit KK",
         });
       }
     });
@@ -531,7 +531,7 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
       "Usaha Biasa": r.totalUsaha,
       "Usaha Digital": r.totalUsahaDigital,
       "Usaha Pertanian": r.totalUsahaPertanian,
-      "Rumah Tangga": r.totalRt,
+      KK: r.totalRt,
       "Total Bangunan": r.totalBangunan,
       "Sudah Terdata": r.sudahTerdata,
       "Progress (%)": `${r.progressPct}%`,
@@ -562,7 +562,7 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
       "Usaha Biasa": r.totalUsaha,
       "Usaha Digital": r.totalUsahaDigital,
       "Usaha Pertanian": r.totalUsahaPertanian,
-      "Rumah Tangga": r.totalRt,
+      KK: r.totalRt,
       "Total Bangunan": r.totalBangunan,
       "Sudah Terdata": r.sudahTerdata,
       "Progress (%)": `${r.progressPct}%`,

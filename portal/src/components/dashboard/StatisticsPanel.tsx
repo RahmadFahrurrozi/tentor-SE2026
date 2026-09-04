@@ -541,11 +541,11 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               </CardContent>
             </Card>
 
-            {/* KPI: Rumah Tangga */}
+            {/* KPI: KK */}
             <Card className="bg-card/60">
               <CardHeader className="p-2.5 sm:p-3 pb-1 flex flex-row items-center justify-between space-y-0">
                 <CardTitle className="text-[10px] sm:text-[11px] font-medium text-muted-foreground truncate">
-                  Rumah Tangga
+                  Keluarga (KK)
                 </CardTitle>
                 <Home className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 shrink-0" />
               </CardHeader>
@@ -554,7 +554,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
                   {stats.totalRt.toLocaleString()}
                 </div>
                 <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-0.5">
-                  Unit Keluarga
+                  Kepala Keluarga (KK)
                 </p>
               </CardContent>
             </Card>
@@ -832,7 +832,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
                     <tr>
                       <td className="p-2 sm:p-2.5 font-medium flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>{" "}
-                        Unit Rumah Tangga
+                        Keluarga (KK)
                       </td>
                       <td className="p-2 sm:p-2.5 text-right font-bold text-blue-500">
                         {stats.totalRt.toLocaleString()}
