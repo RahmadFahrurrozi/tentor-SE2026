@@ -281,7 +281,7 @@ export function useEntityDetailTable(spatialData: any): UseEntityDetailTableRetu
           rt.nama_kk ||
           rt.nama ||
           rt.nama_kpl ||
-          "Rumah Tangga",
+          "KK",
         alamat:
           rt["alamat final"] ||
           rt.alamat_final ||
@@ -291,12 +291,12 @@ export function useEntityDetailTable(spatialData: any): UseEntityDetailTableRetu
           rt.alamat ||
           "-",
         type: "rt",
-        typeLabel: "Rumah Tangga",
+        typeLabel: "KK",
         badgeClass:
           "bg-blue-500/10 text-blue-500 border-blue-500/30 dark:bg-blue-500/20 dark:text-blue-400",
         iddesa: rt.iddesa,
         idkec: rt.idkec,
-        detail: rt.jenis_rt || rt.status_rt || "Unit Keluarga",
+        detail: rt.jenis_rt || rt.status_rt || "Unit KK",
       });
     });
 

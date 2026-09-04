@@ -837,7 +837,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
               <span>Titik Usaha Pertanian:</span><span style="font-weight: 600;">${usahaPertanian}</span>
             </p>
             <p style="display: flex; justify-content: space-between; color: #3B82F6; margin: 0;">
-              <span>Titik Keluarga (RT):</span><span style="font-weight: 600;">${rt}</span>
+              <span>Titik Keluarga (KK):</span><span style="font-weight: 600;">${rt}</span>
             </p>
             <p style="display: flex; justify-content: space-between; color: #8B5CF6; margin: 0;">
               <span>Titik Bangunan Lainnya:</span><span style="font-weight: 600;">${properties.jumlah_bangunan_lainnya || 0}</span>
@@ -877,7 +877,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
             <p style="display: flex; justify-content: space-between; margin: 0;">
               <span>Status:</span>
-              <span style="font-weight: 700; color: ${statusColor};">${status}</span>
+              <span style="font-weight: 700; color: ${statusColor};">${status === "Rumah Tangga" ? "Keluarga (KK)" : status}</span>
             </p>
             ${
               properties.is_synthetic
@@ -907,7 +907,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
               ? "Titik Usaha Pertanian"
               : layerId === "bangunan-circle-layer"
                 ? (properties["kategori_bangunan"] || "Bangunan Lainnya")
-                : "Titik Rumah Tangga";
+                : "Titik Keluarga (KK)";
 
       const color =
         layerId === "usaha-circle-layer"
@@ -1074,7 +1074,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       props["nama_kpl"] ||
       props["kategori_bangunan"] ||
       (type === "rt"
-        ? "Rumah Tangga"
+        ? "KK"
         : type === "usaha-pertanian"
           ? "Usaha Pertanian"
           : type === "bangunan-lainnya"
@@ -1136,7 +1136,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             ? "Usaha Pertanian"
             : type === "bangunan-lainnya"
               ? (props["kategori_bangunan"] || props["status_bangunan"] || "Bangunan Lainnya")
-              : "Rumah Tangga";
+              : "Keluarga (KK)";
 
     const html = `
       <div style="font-family: 'Outfit', 'Inter', sans-serif; color: ${theme === "dark" ? "#f8fafc" : "#0f172a"}; padding: 14px; border-radius: 16px; max-width: 260px; background: ${theme === "dark" ? "rgba(30, 41, 59, 0.95)" : "rgba(255, 255, 255, 0.95)"}; backdrop-filter: blur(8px); border: 1px solid ${theme === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)"}; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);">
@@ -1376,11 +1376,11 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
 
     let rtListHtml = "";
     if (totalRt === 0) {
-      rtListHtml = `<p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 20px 0;">Tidak ada titik rumah tangga di bangunan ini.</p>`;
+      rtListHtml = `<p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 20px 0;">Tidak ada titik KK di bangunan ini.</p>`;
     } else {
       rtListHtml = rtList
         .map((r) => {
-          const name = escapeHtml(r["nama_krt"] || r["nama_kpl"] || "Rumah Tangga");
+          const name = escapeHtml(r["nama_krt"] || r["nama_kpl"] || "KK");
           const cat = escapeHtml(r["jenis_rt"] || "-");
           const addr = escapeHtml(
             r["alamat final"] ||
@@ -1406,7 +1406,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         </div>
         <div style="display: flex; gap: 4px; margin-bottom: 12px; background: ${theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}; padding: 2px; border-radius: 8px;">
           <button id="mixed-popup-tab-usaha" class="active-tab" onclick="window.switchMixedPopupTab('usaha')" style="flex: 1; padding: 6px; font-size: 11px; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; color: ${theme === "dark" ? "#cbd5e1" : "#475569"}; background: transparent; transition: all 0.2s;">Usaha (${totalUsaha})</button>
-          <button id="mixed-popup-tab-rt" onclick="window.switchMixedPopupTab('rt')" style="flex: 1; padding: 6px; font-size: 11px; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; color: ${theme === "dark" ? "#cbd5e1" : "#475569"}; background: transparent; transition: all 0.2s;">Keluarga (${totalRt})</button>
+          <button id="mixed-popup-tab-rt" onclick="window.switchMixedPopupTab('rt')" style="flex: 1; padding: 6px; font-size: 11px; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; color: ${theme === "dark" ? "#cbd5e1" : "#475569"}; background: transparent; transition: all 0.2s;">KK (${totalRt})</button>
         </div>
         <div id="mixed-popup-content-usaha" style="max-height: 180px; overflow-y: auto; display: block;">${usahaListHtml}</div>
         <div id="mixed-popup-content-rt" style="max-height: 180px; overflow-y: auto; display: none;">${rtListHtml}</div>

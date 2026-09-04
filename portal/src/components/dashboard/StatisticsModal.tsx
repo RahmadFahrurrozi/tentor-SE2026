@@ -156,7 +156,7 @@ export function StatisticsModal({
           <Card className="bg-card/50">
             <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-xs font-medium text-muted-foreground">
-                Rumah Tangga
+                Keluarga (KK)
               </CardTitle>
               <Home className="w-4 h-4 text-blue-500" />
             </CardHeader>
@@ -165,7 +165,7 @@ export function StatisticsModal({
                 {stats.totalRt.toLocaleString()}
               </div>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                Unit Keluarga
+                Kepala Keluarga (KK)
               </p>
             </CardContent>
           </Card>
@@ -288,7 +288,7 @@ export function StatisticsModal({
                     <td className="p-2.5 text-right font-medium">-</td>
                   </tr>
                   <tr>
-                    <td className="p-2.5 font-medium">Titik Rumah Tangga</td>
+                    <td className="p-2.5 font-medium">Titik Keluarga (KK)</td>
                     <td className="p-2.5 text-right font-bold text-blue-500">
                       {stats.totalRt.toLocaleString()}
                     </td>

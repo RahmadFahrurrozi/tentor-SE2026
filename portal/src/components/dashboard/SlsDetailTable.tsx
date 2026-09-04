@@ -165,7 +165,7 @@ export function SlsDetailTable({ spatialData }: SlsDetailTableProps) {
                   Pertanian
                 </th>
                 <th className="p-2.5 text-center text-blue-500">
-                  Rumah Tangga
+                  KK
                 </th>
                 <th className="p-2.5 text-center">Total Bangunan</th>
                 <th className="p-2.5 text-center min-w-27.5">
@@ -375,7 +375,7 @@ export function SlsDetailTable({ spatialData }: SlsDetailTableProps) {
                   Rincian Entitas & Usaha {selectedSls.namaSls}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
-                  Daftar nama usaha, rumah tangga, dan objek terdata di SLS ini
+                  Daftar nama usaha, KK, dan objek terdata di SLS ini
                   ({slsEntities.length} Total Objek)
                 </DialogDescription>
               </DialogHeader>
@@ -408,7 +408,7 @@ export function SlsDetailTable({ spatialData }: SlsDetailTableProps) {
                 </div>
                 <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-center">
                   <span className="text-[10px] text-muted-foreground block">
-                    Rumah Tangga
+                    KK
                   </span>
                   <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
                     {selectedSls.totalRt}
@@ -471,7 +471,7 @@ export function SlsDetailTable({ spatialData }: SlsDetailTableProps) {
                     onClick={() => setModalActiveTab("rt")}
                     className="h-7 text-xs px-2 gap-1 border-blue-500/30 text-blue-600 dark:text-blue-400"
                   >
-                    <Home className="w-3 h-3" /> KRT
+                    <Home className="w-3 h-3" /> KK
                   </Button>
                 </div>
 

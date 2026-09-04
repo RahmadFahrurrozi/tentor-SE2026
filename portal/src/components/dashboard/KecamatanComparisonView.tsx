@@ -169,7 +169,7 @@ export function KecamatanComparisonView({
                     radius={[0, 4, 4, 0]}
                   />
                   <Bar
-                    dataKey="Rumah Tangga"
+                    dataKey="KK"
                     fill="#3B82F6"
                     radius={[0, 4, 4, 0]}
                   />
@@ -208,7 +208,7 @@ export function KecamatanComparisonView({
                     radius={[4, 4, 0, 0]}
                   />
                   <Bar
-                    dataKey="Rumah Tangga"
+                    dataKey="KK"
                     fill="#3B82F6"
                     radius={[4, 4, 0, 0]}
                   />
@@ -287,7 +287,7 @@ export function KecamatanComparisonView({
               onClick={() => toggleSort("rt")}
               className="h-7 text-xs px-2.5 gap-1 border-blue-500/30 text-blue-600 dark:text-blue-400"
             >
-              <Home className="w-3 h-3" /> KRT
+              <Home className="w-3 h-3" /> KK
             </Button>
 
             {/* Asc/Desc Indicator */}
@@ -320,7 +320,7 @@ export function KecamatanComparisonView({
                   Usaha Digital
                 </th>
                 <th className="p-2.5 text-center text-blue-500">
-                  Rumah Tangga
+                  KK
                 </th>
                 <th className="p-2.5 text-center text-primary font-bold">
                   Total Entitas
