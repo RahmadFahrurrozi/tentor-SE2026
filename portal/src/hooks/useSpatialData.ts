@@ -199,12 +199,7 @@ export function useSpatialData(versionOverride?: DatasetVersion) {
           try {
             const bucket = bucketOverride || primaryBucket;
             const path = `${dataset}/kec_${kecId}.json`;
-            let res = await fetch(getChunksPublicUrl(path, bucket));
-
-            // Fallback jika belum ada di bucket target
-            if (!res.ok && selectedKabupaten === '3510' && bucket !== 'spatial-chunks') {
-              res = await fetch(getChunksPublicUrl(path, 'spatial-chunks'));
-            }
+            const res = await fetch(getChunksPublicUrl(path, bucket));
 
             if (!res.ok) return [];
             const json = await res.json();
