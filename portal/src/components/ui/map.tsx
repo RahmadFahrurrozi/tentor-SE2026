@@ -19,11 +19,9 @@ import { createPortal } from "react-dom";
 import { X, Minus, Plus, Locate, Maximize, Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { DEFAULT_MAP_STYLES } from "@/config/mapStyles";
 
-const defaultStyles = {
-  dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-  light: "https://tiles.openfreemap.org/styles/liberty",
-};
+const defaultStyles = DEFAULT_MAP_STYLES;
 
 type Theme = "light" | "dark";
 
@@ -127,6 +125,8 @@ type MapProps = {
     light?: MapStyleOption;
     dark?: MapStyleOption;
   };
+  /** Direct map style override (takes precedence over theme/styles) */
+  mapStyle?: MapStyleOption;
   /** Map projection type. Use `{ type: "globe" }` for 3D globe view. */
   projection?: MapLibreGL.ProjectionSpecification;
   /**
@@ -172,6 +172,7 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     className,
     theme: themeProp,
     styles,
+    mapStyle: mapStyleProp,
     projection,
     viewport,
     onViewportChange,
@@ -202,6 +203,11 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     [styles],
   );
 
+  const targetStyle = useMemo(() => {
+    if (mapStyleProp) return mapStyleProp;
+    return resolvedTheme === "dark" ? mapStyles.dark : mapStyles.light;
+  }, [mapStyleProp, resolvedTheme, mapStyles]);
+
   // Expose the map instance to the parent component
   useImperativeHandle(ref, () => mapInstance as MapLibreGL.Map, [mapInstance]);
 
@@ -216,8 +222,7 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const initialStyle =
-      resolvedTheme === "dark" ? mapStyles.dark : mapStyles.light;
+    const initialStyle = targetStyle;
     currentStyleRef.current = initialStyle;
 
     const map = new MapLibreGL.Map({
@@ -299,19 +304,16 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
 
   // Handle style change
   useEffect(() => {
-    if (!mapInstance || !resolvedTheme) return;
+    if (!mapInstance || !targetStyle) return;
 
-    const newStyle =
-      resolvedTheme === "dark" ? mapStyles.dark : mapStyles.light;
-
-    if (currentStyleRef.current === newStyle) return;
+    if (currentStyleRef.current === targetStyle) return;
 
     clearStyleTimeout();
-    currentStyleRef.current = newStyle;
+    currentStyleRef.current = targetStyle;
     setIsStyleLoaded(false);
 
-    mapInstance.setStyle(newStyle, { diff: true });
-  }, [mapInstance, resolvedTheme, mapStyles, clearStyleTimeout]);
+    mapInstance.setStyle(targetStyle as any, { diff: true });
+  }, [mapInstance, targetStyle, clearStyleTimeout]);
 
   const contextValue = useMemo(
     () => ({

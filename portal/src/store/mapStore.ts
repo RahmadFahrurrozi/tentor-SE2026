@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { BasemapId } from '@/config/mapStyles';
 
 export type DatasetVersion = 'prelist' | 'se2026';
 export type KabupatenId = '3510' | '3515';
@@ -27,6 +28,9 @@ interface MapState {
   enable3d: boolean;
   showCounting: boolean;
 
+  // Basemap Theme
+  selectedBasemap: BasemapId;
+
   // Filter Wilayah
   filterKecamatan: string | null;
   filterDesa: string | null;
@@ -46,6 +50,7 @@ interface MapState {
   // Actions
   setKabupaten: (kabId: KabupatenId) => void;
   toggleLayer: (layer: keyof MapState) => void;
+  setBasemap: (basemap: BasemapId) => void;
   setFilter: (key: keyof MapState, value: any) => void;
   resetFilter: (role?: string, assignedDesas?: string[], allKecamatans?: any[]) => void;
   setDatasetVersion: (version: DatasetVersion) => void;
@@ -57,6 +62,7 @@ interface MapState {
 export const useMapStore = create<MapState>((set) => ({
   // Default values
   selectedKabupaten: '3510', // Default Banyuwangi
+  selectedBasemap: 'auto',
 
   showKab: false,
   showSls: true,
@@ -100,6 +106,7 @@ export const useMapStore = create<MapState>((set) => ({
   },
 
   toggleLayer: (layer) => set((state) => ({ [layer]: !state[layer as keyof MapState] })),
+  setBasemap: (basemap) => set({ selectedBasemap: basemap }),
 
   setFilter: (key: string, value: any) => set({ [key]: value }),
 

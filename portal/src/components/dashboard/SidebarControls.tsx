@@ -12,9 +12,10 @@ import {
 } from "@/components/ui/select";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Button } from "@/components/ui/button";
-import { Eraser, LogOut, ArrowLeftRight, Database } from "lucide-react";
+import { Eraser, LogOut, ArrowLeftRight, Database, Layers } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { useSidebarControls } from "@/hooks/use-sidebar-controls";
+import { AVAILABLE_BASEMAPS, type BasemapId } from "@/config/mapStyles";
 
 export function SidebarControls({ spatialData }: { spatialData: any }) {
   const {
@@ -132,6 +133,35 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
               {store.isCompareMode ? "Tutup Komparasi" : "Mode Komparasi"}
             </Button>
           </div>
+        </div>
+
+        {/* Pilihan Basemap / Tema Peta */}
+        <div className="space-y-2.5 p-3 bg-muted/40 rounded-lg border">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-primary" /> Basemap
+            </span>
+          </div>
+          <Select
+            value={store.selectedBasemap}
+            onValueChange={(val) => store.setBasemap(val as BasemapId)}
+          >
+            <SelectTrigger className="w-full h-8 text-xs bg-background">
+              <SelectValue placeholder="Pilih Basemap" />
+            </SelectTrigger>
+            <SelectContent>
+              {AVAILABLE_BASEMAPS.map((bm) => (
+                <SelectItem key={bm.id} value={bm.id} className="text-xs">
+                  <div className="flex flex-col text-left">
+                    <span className="font-medium">{bm.name}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {bm.description}
+                    </span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Layer Visibility */}
