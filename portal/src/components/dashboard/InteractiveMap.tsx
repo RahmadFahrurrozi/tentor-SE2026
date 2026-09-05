@@ -1,8 +1,17 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Map, MapControls } from "@/components/ui/map";
 import maplibregl from "maplibre-gl";
-import { AlertTriangle, BookOpen } from "lucide-react";
+import { AlertTriangle, BookOpen, Layers } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { AVAILABLE_BASEMAPS, resolveMapStyle } from "@/config/mapStyles";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import {
   processSlsData,
@@ -107,6 +116,10 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
   const mapRef = useRef<maplibregl.Map>(null);
   const store = useMapStore();
   const { theme } = useTheme();
+
+  const activeMapStyle = useMemo(() => {
+    return resolveMapStyle(store.selectedBasemap, theme === "dark" ? "dark" : "light");
+  }, [store.selectedBasemap, theme]);
 
   const activePopupRef = useRef<maplibregl.Popup | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
@@ -2050,6 +2063,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     geoJsonDesaSelected,
     dataKab,
     theme,
+    activeMapStyle,
     store.showSls,
     store.showBuild,
     store.showUsaha,
@@ -2210,9 +2224,54 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         @keyframes radar-pulse { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(4.5); opacity: 0; } }
       `}</style>
 
-      {/* FLOATING DOCUMENTATION BUTTON MELAYANG DI DALAM PETA (Hilang saat Panel Statistik Terbuka) */}
-      {!store.isStatisticsOpen && (
-        <div className="absolute top-4 right-4 z-40">
+      {/* FLOATING ACTION TOOLBAR (Basemap & Panduan) */}
+      <div className="absolute top-4 right-4 z-40 flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-9 px-3 text-xs font-semibold gap-1.5 shadow-lg bg-card/90 backdrop-blur-md border border-border/70 text-foreground hover:text-primary transition-all rounded-xl hover:shadow-xl cursor-pointer"
+            >
+              <Layers className="w-4 h-4 text-primary" />
+              <span className="hidden sm:inline">
+                {AVAILABLE_BASEMAPS.find((b) => b.id === store.selectedBasemap)?.name || "Basemap"}
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-60 bg-card/95 backdrop-blur-md border shadow-xl p-1.5 rounded-xl z-50">
+            <DropdownMenuLabel className="text-[11px] font-semibold text-muted-foreground px-2 py-1">
+              Pilihan Peta Dasar (Basemap)
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {AVAILABLE_BASEMAPS.map((bm) => {
+              const isSelected = store.selectedBasemap === bm.id;
+              return (
+                <DropdownMenuItem
+                  key={bm.id}
+                  onClick={() => store.setBasemap(bm.id)}
+                  className={`flex flex-col items-start gap-0.5 cursor-pointer px-2.5 py-2 rounded-lg transition-colors ${
+                    isSelected ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/60"
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-medium">{bm.name}</span>
+                    {isSelected && (
+                      <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded font-bold">
+                        Aktif
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground leading-tight">
+                    {bm.description}
+                  </span>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {!store.isStatisticsOpen && (
           <Button
             size="sm"
             variant="secondary"
@@ -2222,8 +2281,8 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             <BookOpen className="w-4 h-4 text-primary" />
             <span className="hidden sm:inline">Panduan & Dokumentasi</span>
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       {store.filterKecamatan === "Semua" && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-amber-500/95 text-white backdrop-blur-md px-4 py-2.5 rounded-xl shadow-xl border border-amber-400/50 flex items-center gap-2.5 text-xs font-semibold max-w-[90%] sm:max-w-xl text-center pointer-events-auto">
@@ -2250,6 +2309,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         viewport={viewState}
         onViewportChange={setViewState}
         theme={theme === "dark" ? "dark" : "light"}
+        mapStyle={activeMapStyle}
         projection={{ type: "globe" }}
       >
         <MapControls
