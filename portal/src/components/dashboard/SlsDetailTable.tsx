@@ -473,6 +473,20 @@ export function SlsDetailTable({ spatialData }: SlsDetailTableProps) {
                   >
                     <Home className="w-3 h-3" /> KK
                   </Button>
+                  {slsEntities.some((e) => e.isAnomaly) && (
+                    <Button
+                      size="sm"
+                      variant={modalActiveTab === "anomali" ? "default" : "outline"}
+                      onClick={() => setModalActiveTab("anomali")}
+                      className={`h-7 text-xs px-2 gap-1 border-red-500/40 text-red-600 dark:text-red-400 ${
+                        modalActiveTab === "anomali"
+                          ? "bg-red-600 hover:bg-red-700 text-white"
+                          : ""
+                      }`}
+                    >
+                      Luar Batas ({slsEntities.filter((e) => e.isAnomaly).length})
+                    </Button>
+                  )}
                 </div>
 
                 <div className="relative w-full sm:w-56">
@@ -518,7 +532,14 @@ export function SlsDetailTable({ spatialData }: SlsDetailTableProps) {
                             {idx + 1}
                           </td>
                           <td className="p-2.5 font-semibold text-foreground">
-                            {item.nama}
+                            <div>{item.nama}</div>
+                            {item.isAnomaly && (
+                              <div className="mt-1">
+                                <span className="inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30">
+                                  Luar Batas (Fisik di: {item.actualSlsName || item.actualSlsId || "Luar SLS"})
+                                </span>
+                              </div>
+                            )}
                           </td>
                           <td className="p-2.5 text-muted-foreground text-[11px]">
                             <div className="flex items-start gap-1">

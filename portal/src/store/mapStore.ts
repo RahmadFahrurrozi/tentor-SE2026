@@ -47,6 +47,22 @@ interface MapState {
   isCompareMode: boolean;
   isStatisticsOpen: boolean;
 
+  // Spatial Anomaly QC
+  highlightAnomalies: boolean;
+  filterOnlyAnomalies: boolean;
+  selectedAnomalyPoint: any | null;
+
+  // Spatial Clustering QC (Titik Bergerombol)
+  highlightClusters: boolean;
+  filterOnlyClusters: boolean;
+  focusedClusterPoint: {
+    lng: number;
+    lat: number;
+    count?: number;
+    slsId?: string;
+    title?: string;
+  } | null;
+
   // Actions
   setKabupaten: (kabId: KabupatenId) => void;
   toggleLayer: (layer: keyof MapState) => void;
@@ -57,6 +73,20 @@ interface MapState {
   setCompareMode: (enabled: boolean) => void;
   setStatisticsOpen: (open: boolean) => void;
   toggleStatisticsOpen: () => void;
+  toggleHighlightAnomalies: () => void;
+  toggleFilterOnlyAnomalies: () => void;
+  setSelectedAnomalyPoint: (point: any | null) => void;
+  toggleHighlightClusters: () => void;
+  toggleFilterOnlyClusters: () => void;
+  setFocusedClusterPoint: (
+    point: {
+      lng: number;
+      lat: number;
+      count?: number;
+      slsId?: string;
+      title?: string;
+    } | null
+  ) => void;
 }
 
 export const useMapStore = create<MapState>((set) => ({
@@ -89,6 +119,14 @@ export const useMapStore = create<MapState>((set) => ({
   isCompareMode: false,
   isStatisticsOpen: true,
 
+  highlightAnomalies: true,
+  filterOnlyAnomalies: false,
+  selectedAnomalyPoint: null,
+
+  highlightClusters: true,
+  filterOnlyClusters: false,
+  focusedClusterPoint: null,
+
   setKabupaten: (kabId: KabupatenId) => {
     set({
       selectedKabupaten: kabId,
@@ -97,6 +135,9 @@ export const useMapStore = create<MapState>((set) => ({
       filterDusun: "Semua",
       filterSls: "Semua",
       filterNama: "",
+      selectedAnomalyPoint: null,
+      focusedClusterPoint: null,
+      filterOnlyClusters: false,
       // Jika Sidoarjo (3515), otomatis matikan compare mode & kunci ke se2026
       ...(kabId === '3515' ? {
         activeDatasetVersion: 'se2026',
@@ -117,6 +158,10 @@ export const useMapStore = create<MapState>((set) => ({
       filterDusun: "Semua",
       filterSls: "Semua",
       filterNama: "",
+      filterOnlyAnomalies: false,
+      selectedAnomalyPoint: null,
+      filterOnlyClusters: false,
+      focusedClusterPoint: null,
     });
 
     if (role === "ppl" && assignedDesas && assignedDesas.length > 0 && allKecamatans) {
@@ -142,4 +187,10 @@ export const useMapStore = create<MapState>((set) => ({
   setCompareMode: (enabled) => set({ isCompareMode: enabled }),
   setStatisticsOpen: (open) => set({ isStatisticsOpen: open }),
   toggleStatisticsOpen: () => set((state) => ({ isStatisticsOpen: !state.isStatisticsOpen })),
+  toggleHighlightAnomalies: () => set((state) => ({ highlightAnomalies: !state.highlightAnomalies })),
+  toggleFilterOnlyAnomalies: () => set((state) => ({ filterOnlyAnomalies: !state.filterOnlyAnomalies })),
+  setSelectedAnomalyPoint: (point) => set({ selectedAnomalyPoint: point }),
+  toggleHighlightClusters: () => set((state) => ({ highlightClusters: !state.highlightClusters })),
+  toggleFilterOnlyClusters: () => set((state) => ({ filterOnlyClusters: !state.filterOnlyClusters })),
+  setFocusedClusterPoint: (point) => set({ focusedClusterPoint: point }),
 }));

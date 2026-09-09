@@ -49,6 +49,7 @@ import {
 import { EntityDetailTable } from "./EntityDetailTable";
 import { SlsDetailTable } from "./SlsDetailTable";
 import { KecamatanComparisonView } from "./KecamatanComparisonView";
+import { ClusterAnalysisTab } from "./ClusterAnalysisTab";
 import { useStatisticsPanel } from "@/hooks/use-statistics-panel";
 
 /**
@@ -638,7 +639,7 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
 
           {/* ── 5. Visual Charts, Komparasi, & Table Tabs ─────────────────── */}
           <Tabs defaultValue="visual" className="w-full">
-            <TabsList className="grid grid-cols-2 sm:grid-cols-4 max-w-2xl mb-4">
+            <TabsList className="grid grid-cols-2 sm:grid-cols-5 max-w-3xl mb-4">
               <TabsTrigger value="visual" className="text-xs">
                 Visual Chart & Insight
               </TabsTrigger>
@@ -647,6 +648,9 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
               </TabsTrigger>
               <TabsTrigger value="sls" className="text-xs">
                 Tabel Data SLS
+              </TabsTrigger>
+              <TabsTrigger value="cluster" className="text-xs">
+                Titik Bergerombol
               </TabsTrigger>
               <TabsTrigger value="table" className="text-xs">
                 Rekap Indikator
@@ -659,6 +663,10 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
 
             <TabsContent value="sls">
               <SlsDetailTable spatialData={spatialData} />
+            </TabsContent>
+
+            <TabsContent value="cluster">
+              <ClusterAnalysisTab spatialData={spatialData} />
             </TabsContent>
 
             <TabsContent value="visual" className="space-y-4">
