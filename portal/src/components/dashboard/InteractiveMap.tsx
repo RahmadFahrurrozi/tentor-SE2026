@@ -22,6 +22,7 @@ import {
   isPointInPolygon,
   getPolygonRings,
 } from "@/utils/dataProcessing";
+import { buildSlsSpatialIndex } from "@/utils/spatialAnomalyDetector";
 import {
   extractDusunAndSlsList,
   getSlsId,
@@ -118,7 +119,10 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
   const { theme } = useTheme();
 
   const activeMapStyle = useMemo(() => {
-    return resolveMapStyle(store.selectedBasemap, theme === "dark" ? "dark" : "light");
+    return resolveMapStyle(
+      store.selectedBasemap,
+      theme === "dark" ? "dark" : "light",
+    );
   }, [store.selectedBasemap, theme]);
 
   const activePopupRef = useRef<maplibregl.Popup | null>(null);
@@ -342,7 +346,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         const str = getSlsId(row);
         const parsed =
           parsedSlsMap.get(str) ||
-          (str.length >= 14 ? parsedSlsMap.get(str.substring(0, 14)) : undefined);
+          (str.length >= 14
+            ? parsedSlsMap.get(str.substring(0, 14))
+            : undefined);
         return parsed && parsed.dusun === store.filterDusun;
       });
     }
@@ -405,7 +411,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         const str = getSlsId(row);
         const parsed =
           parsedSlsMap.get(str) ||
-          (str.length >= 14 ? parsedSlsMap.get(str.substring(0, 14)) : undefined);
+          (str.length >= 14
+            ? parsedSlsMap.get(str.substring(0, 14))
+            : undefined);
         return parsed && parsed.dusun === store.filterDusun;
       });
     }
@@ -627,7 +635,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
                 point._type === "Rumah Tangga"
                   ? "Rumah Tangga"
                   : point._type === "Bangunan Lainnya"
-                    ? (point.kategori_bangunan || "Bangunan Lainnya")
+                    ? point.kategori_bangunan || "Bangunan Lainnya"
                     : "Bangunan Usaha",
               nama_bangunan: `Bangunan Sintetis (${point._type} 6m × 6m)`,
               is_synthetic: true,
@@ -680,10 +688,26 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     store.showBangunanLainnya,
   ]);
 
+  const slsSpatialIndex = useMemo(() => {
+    return buildSlsSpatialIndex(dataSls);
+  }, [dataSls]);
+
   const geoJsonUsaha = useMemo(() => {
     if (!dataUsaha.length || isLoading || store.filterKecamatan === "Semua")
       return null;
-    return convertTitikToGeoJson(filterDataByDesaAndSearch(dataUsaha));
+    const geo = convertTitikToGeoJson(
+      filterDataByDesaAndSearch(dataUsaha),
+      slsSpatialIndex,
+    );
+    if (store.filterOnlyAnomalies && geo) {
+      return {
+        ...geo,
+        features: geo.features.filter(
+          (f: any) => f.properties?.is_anomaly === true,
+        ),
+      };
+    }
+    return geo;
   }, [
     dataUsaha,
     isLoading,
@@ -693,6 +717,8 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     store.filterSls,
     parsedSlsMap,
     store.filterNama,
+    slsSpatialIndex,
+    store.filterOnlyAnomalies,
   ]);
 
   const geoJsonUsahaDigital = useMemo(() => {
@@ -702,7 +728,19 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       store.filterKecamatan === "Semua"
     )
       return null;
-    return convertTitikToGeoJson(filterDataByDesaAndSearch(dataUsahaDigital));
+    const geo = convertTitikToGeoJson(
+      filterDataByDesaAndSearch(dataUsahaDigital),
+      slsSpatialIndex,
+    );
+    if (store.filterOnlyAnomalies && geo) {
+      return {
+        ...geo,
+        features: geo.features.filter(
+          (f: any) => f.properties?.is_anomaly === true,
+        ),
+      };
+    }
+    return geo;
   }, [
     dataUsahaDigital,
     isLoading,
@@ -712,6 +750,8 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     store.filterSls,
     parsedSlsMap,
     store.filterNama,
+    slsSpatialIndex,
+    store.filterOnlyAnomalies,
   ]);
 
   const geoJsonUsahaPertanian = useMemo(() => {
@@ -721,9 +761,19 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       store.filterKecamatan === "Semua"
     )
       return null;
-    return convertTitikToGeoJson(
+    const geo = convertTitikToGeoJson(
       filterDataByDesaAndSearch(dataUsahaPertanian, "pertanian"),
+      slsSpatialIndex,
     );
+    if (store.filterOnlyAnomalies && geo) {
+      return {
+        ...geo,
+        features: geo.features.filter(
+          (f: any) => f.properties?.is_anomaly === true,
+        ),
+      };
+    }
+    return geo;
   }, [
     dataUsahaPertanian,
     isLoading,
@@ -733,6 +783,8 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     store.filterSls,
     parsedSlsMap,
     store.filterNama,
+    slsSpatialIndex,
+    store.filterOnlyAnomalies,
   ]);
 
   const geoJsonRt = useMemo(() => {
@@ -742,7 +794,19 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       store.filterKecamatan === "Semua"
     )
       return null;
-    return convertTitikToGeoJson(filterDataByDesaAndSearch(dataRumahTangga));
+    const geo = convertTitikToGeoJson(
+      filterDataByDesaAndSearch(dataRumahTangga),
+      slsSpatialIndex,
+    );
+    if (store.filterOnlyAnomalies && geo) {
+      return {
+        ...geo,
+        features: geo.features.filter(
+          (f: any) => f.properties?.is_anomaly === true,
+        ),
+      };
+    }
+    return geo;
   }, [
     dataRumahTangga,
     isLoading,
@@ -752,17 +816,27 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     store.filterSls,
     parsedSlsMap,
     store.filterNama,
+    slsSpatialIndex,
+    store.filterOnlyAnomalies,
   ]);
 
   const geoJsonBangunanLainnya = useMemo(() => {
     const rawData = dataBangunanLainnya?.length ? dataBangunanLainnya : [];
-    if (
-      !rawData.length ||
-      isLoading ||
-      store.filterKecamatan === "Semua"
-    )
+    if (!rawData.length || isLoading || store.filterKecamatan === "Semua")
       return null;
-    return convertTitikToGeoJson(filterDataByDesaAndSearch(rawData));
+    const geo = convertTitikToGeoJson(
+      filterDataByDesaAndSearch(rawData),
+      slsSpatialIndex,
+    );
+    if (store.filterOnlyAnomalies && geo) {
+      return {
+        ...geo,
+        features: geo.features.filter(
+          (f: any) => f.properties?.is_anomaly === true,
+        ),
+      };
+    }
+    return geo;
   }, [
     dataBangunanLainnya,
     isLoading,
@@ -772,7 +846,52 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     store.filterSls,
     parsedSlsMap,
     store.filterNama,
+    slsSpatialIndex,
+    store.filterOnlyAnomalies,
   ]);
+
+  const geoJsonDiscrepancyLine = useMemo(() => {
+    const p = store.selectedAnomalyPoint;
+    if (
+      !p ||
+      !p.is_anomaly ||
+      p.recorded_centroid_lng === undefined ||
+      p.recorded_centroid_lat === undefined
+    ) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    const ptLng = Number(
+      p.long_final ?? p.longitude ?? p["long final"] ?? p.long ?? p.lon,
+    );
+    const ptLat = Number(p.lat_final ?? p.latitude ?? p["lat final"] ?? p.lat);
+    if (!ptLng || !ptLat || isNaN(ptLng) || isNaN(ptLat)) {
+      return { type: "FeatureCollection", features: [] };
+    }
+
+    return {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [ptLng, ptLat],
+              [
+                Number(p.recorded_centroid_lng),
+                Number(p.recorded_centroid_lat),
+              ],
+            ],
+          },
+          properties: {
+            deviation_distance_meters: p.deviation_distance_meters,
+            recorded_sls_name: p.recorded_sls_name || p.recorded_sls_id,
+            actual_sls_name: p.actual_sls_name || p.actual_sls_id,
+          },
+        },
+      ],
+    };
+  }, [store.selectedAnomalyPoint]);
 
   useEffect(() => {
     return () => {
@@ -781,6 +900,53 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       }
     };
   }, []);
+
+  // Observasi pemilihan kluster dari Tab Titik Bergerombol
+  useEffect(() => {
+    const cp = store.focusedClusterPoint;
+    if (!cp || !mapRef.current) return;
+
+    mapRef.current.flyTo({
+      center: [cp.lng, cp.lat],
+      zoom: 19,
+      pitch: 45,
+      duration: 1500,
+    });
+
+    triggerRadarAnimation([cp.lng, cp.lat], "cluster");
+
+    if (activePopupRef.current) {
+      activePopupRef.current.remove();
+      activePopupRef.current = null;
+    }
+
+    const popupHtml = `
+      <div style="font-family: inherit; font-size: 11px; padding: 4px; min-width: 200px;">
+        <div style="font-weight: 800; color: #DC2626; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px;">
+          [TITIK BERGEROMBOL]
+        </div>
+        <div style="font-weight: 700; color: #111827; font-size: 12px; margin-bottom: 4px; line-height: 1.3;">
+          ${escapeHtml(cp.title || "Kelompok Titik Spasial")}
+        </div>
+        <div style="color: #4B5563; margin-bottom: 6px; font-size: 11px;">
+          Terdeteksi <strong>${cp.count || "Sejumlah"} titik</strong> berada dalam radius 5 meter di koordinat ini.
+        </div>
+        <div style="font-family: monospace; font-size: 10px; color: #6B7280; background: #F3F4F6; padding: 4px 6px; border-radius: 4px;">
+          Lat: ${cp.lat.toFixed(6)}, Lng: ${cp.lng.toFixed(6)}
+        </div>
+      </div>
+    `;
+
+    activePopupRef.current = new maplibregl.Popup({
+      offset: 15,
+      closeButton: true,
+      closeOnClick: false,
+      maxWidth: "340px",
+    })
+      .setLngLat([cp.lng, cp.lat])
+      .setHTML(popupHtml)
+      .addTo(mapRef.current);
+  }, [store.focusedClusterPoint]);
 
   const updateTooltip = (e: any, layerId: string, properties: any) => {
     const tooltip = tooltipRef.current;
@@ -867,7 +1033,8 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           ? "#F59E0B"
           : status === "Rumah Tangga"
             ? "#3B82F6"
-            : properties._type === "Bangunan Lainnya" || properties.kategori_bangunan
+            : properties._type === "Bangunan Lainnya" ||
+                properties.kategori_bangunan
               ? "#8B5CF6"
               : "#94A3B8";
 
@@ -919,7 +1086,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             : layerId === "usaha-pertanian-circle-layer"
               ? "Titik Usaha Pertanian"
               : layerId === "bangunan-circle-layer"
-                ? (properties["kategori_bangunan"] || "Bangunan Lainnya")
+                ? properties["kategori_bangunan"] || "Bangunan Lainnya"
                 : "Titik Keluarga (KK)";
 
       const color =
@@ -956,14 +1123,14 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
 
       const alamat = escapeHtml(
         properties["alamat_final"] ||
-        properties["alamat final"] ||
-        properties["level_6_name"] ||
-        properties["Alamat"] ||
-        properties["Alamat final"] ||
-        properties["alamat"] ||
-        properties["deskripsi_project"] ||
-        properties["alamat_project"] ||
-        "-"
+          properties["alamat final"] ||
+          properties["level_6_name"] ||
+          properties["Alamat"] ||
+          properties["Alamat final"] ||
+          properties["alamat"] ||
+          properties["deskripsi_project"] ||
+          properties["alamat_project"] ||
+          "-",
       );
 
       html = `
@@ -975,6 +1142,15 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           <div style="display: flex; flex-direction: column; gap: 3px; font-size: 10px; color: #94A3B8;">
             <p style="white-space: normal; word-break: break-word; margin: 0;"><span style="font-weight: 500; color: ${theme === "dark" ? "#CBD5E1" : "#475569"};">Alamat:</span> ${alamat}</p>
           </div>
+          ${
+            properties.is_anomaly
+              ? `
+            <div style="margin-top: 6px; padding: 4px 6px; border-radius: 4px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3);">
+              <p style="margin: 0; font-size: 9px; font-weight: 700; color: #EF4444;">[PERINGATAN] Luar Batas SLS (Lokasi Riil: ${escapeHtml(properties.actual_sls_name || "Beda SLS")})</p>
+            </div>
+          `
+              : ""
+          }
         </div>
       `;
     }
@@ -995,7 +1171,13 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
 
   const triggerRadarAnimation = (
     coords: [number, number],
-    type: "usaha" | "rt" | "usaha-digital" | "usaha-pertanian" | "bangunan-lainnya",
+    type:
+      | "usaha"
+      | "rt"
+      | "usaha-digital"
+      | "usaha-pertanian"
+      | "bangunan-lainnya"
+      | "cluster",
   ) => {
     const map = mapRef.current;
     if (!map) return;
@@ -1009,25 +1191,26 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     el.className = "radar-marker";
 
     const color =
-      type === "usaha"
-        ? "#F59E0B"
-        : type === "usaha-digital"
-          ? "#FF32DC"
-          : type === "usaha-pertanian"
-            ? "#10B981"
-            : type === "bangunan-lainnya"
-              ? "#8B5CF6"
-              : "#2563EB";
+      type === "cluster"
+        ? "#EF4444"
+        : type === "usaha"
+          ? "#F59E0B"
+          : type === "usaha-digital"
+            ? "#FF32DC"
+            : type === "usaha-pertanian"
+              ? "#10B981"
+              : type === "bangunan-lainnya"
+                ? "#8B5CF6"
+                : "#2563EB";
 
     el.innerHTML = `
       <div class="radar-dot" style="background-color: ${color};"></div>
       <div class="radar-ring" style="border-color: ${color};"></div>
     `;
 
-    const marker = new maplibregl.Marker({ element: el })
+    radarMarkerRef.current = new maplibregl.Marker({ element: el })
       .setLngLat(coords)
       .addTo(map);
-    radarMarkerRef.current = marker;
   };
 
   const spiderMarkersRef = useRef<maplibregl.Marker[]>([]);
@@ -1048,13 +1231,15 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     }
   };
 
-  const showEntityPopup = (
-    lngLat: any,
-    layerId: string,
-    props: any,
-  ) => {
+  const showEntityPopup = (lngLat: any, layerId: string, props: any) => {
     const map = mapRef.current;
     if (!map) return;
+
+    if (props.is_anomaly) {
+      store.setSelectedAnomalyPoint(props);
+    } else {
+      store.setSelectedAnomalyPoint(null);
+    }
 
     if (activePopupRef.current) {
       activePopupRef.current.remove();
@@ -1078,9 +1263,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       props["nama final"] ||
       props["nama_final"] ||
       (type === "usaha-pertanian"
-        ? props["nama_krt"] ||
-          props["nm_project"] ||
-          props["nama_project"]
+        ? props["nama_krt"] || props["nm_project"] || props["nama_project"]
         : null) ||
       props["nama_kk"] ||
       props["nama"] ||
@@ -1109,11 +1292,20 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       type === "rt"
         ? props["jenis_rt"] || props["status_rt"] || null
         : type === "usaha" || type === "usaha-digital"
-          ? props["kategori"] || props["jenis_usaha"] || props["keg_utama"] || null
+          ? props["kategori"] ||
+            props["jenis_usaha"] ||
+            props["keg_utama"] ||
+            null
           : type === "usaha-pertanian"
-            ? props["produk"] || props["keg_utama"] || props["komoditas"] || props["jenis_usaha"] || null
+            ? props["produk"] ||
+              props["keg_utama"] ||
+              props["komoditas"] ||
+              props["jenis_usaha"] ||
+              null
             : type === "bangunan-lainnya"
-              ? (props["kategori_bangunan"] ? `${props["kategori_bangunan"]} (${props["assignment_status_alias"] || "Terdata"})` : props["assignment_status_alias"] || null)
+              ? props["kategori_bangunan"]
+                ? `${props["kategori_bangunan"]} (${props["assignment_status_alias"] || "Terdata"})`
+                : props["assignment_status_alias"] || null
               : null;
 
     const slsInfoRaw =
@@ -1148,13 +1340,16 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           : type === "usaha-pertanian"
             ? "Usaha Pertanian"
             : type === "bangunan-lainnya"
-              ? (props["kategori_bangunan"] || props["status_bangunan"] || "Bangunan Lainnya")
+              ? props["kategori_bangunan"] ||
+                props["status_bangunan"] ||
+                "Bangunan Lainnya"
               : "Keluarga (KK)";
 
     const html = `
-      <div style="font-family: 'Outfit', 'Inter', sans-serif; color: ${theme === "dark" ? "#f8fafc" : "#0f172a"}; padding: 14px; border-radius: 16px; max-width: 260px; background: ${theme === "dark" ? "rgba(30, 41, 59, 0.95)" : "rgba(255, 255, 255, 0.95)"}; backdrop-filter: blur(8px); border: 1px solid ${theme === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)"}; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);">
-        <div style="margin-bottom: 10px;">
+      <div style="font-family: 'Outfit', 'Inter', sans-serif; color: ${theme === "dark" ? "#f8fafc" : "#0f172a"}; padding: 14px; border-radius: 16px; max-width: 280px; background: ${theme === "dark" ? "rgba(30, 41, 59, 0.95)" : "rgba(255, 255, 255, 0.95)"}; backdrop-filter: blur(8px); border: 1px solid ${theme === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)"}; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);">
+        <div style="margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;">
           <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 9999px; display: inline-flex; align-items: center; ${badgeColor}">${escapeHtml(badgeLabel)}</span>
+          ${props.is_anomaly ? `<span style="font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 6px; background-color: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3);">Luar Batas SLS</span>` : ""}
         </div>
         <h3 style="margin: 0 0 6px 0; font-size: 14px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em;">${nama}</h3>
         <div style="height: 1px; background: ${theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"}; margin: 8px 0;"></div>
@@ -1164,15 +1359,51 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             ${alamat !== null ? `<span style="margin-left: 4px;">${alamat}</span>` : `<span style="margin-left: 4px; opacity: 0.5; font-style: italic;">Tidak tersedia</span>`}
           </p>
           ${extraInfo ? `<p style="margin: 0;"><span style="font-weight: 500; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};">Keterangan:</span> <span style="margin-left: 4px;">${extraInfo}</span></p>` : ""}
-          ${slsInfo ? `<p style="margin: 0;"><span style="font-weight: 500; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};">ID SLS:</span> <span style="margin-left: 4px; font-family: monospace; font-size: 9px;">${slsInfo}</span></p>` : ""}
+          ${slsInfo ? `<p style="margin: 0;"><span style="font-weight: 500; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};">ID SLS Tercatat:</span> <span style="margin-left: 4px; font-family: monospace; font-size: 9px;">${slsInfo}</span></p>` : ""}
         </div>
+
+        ${
+          props.is_anomaly
+            ? `
+          <div style="margin-top: 10px; padding: 10px; border-radius: 10px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); font-family: 'Outfit', 'Inter', sans-serif;">
+            <div style="font-size: 11px; font-weight: 700; color: #EF4444; letter-spacing: 0.02em; margin-bottom: 6px;">
+              [PERINGATAN] POSISI DI LUAR BATAS SLS
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 10px;">
+              <p style="margin: 0; line-height: 1.4;">
+                <span style="color: ${theme === "dark" ? "#94A3B8" : "#64748B"};">Tercatat di Kuesioner:</span><br/>
+                <strong style="color: ${theme === "dark" ? "#F8FAFC" : "#0F172A"};">${escapeHtml(props.recorded_sls_name || props.recorded_sls_id || "SLS Tidak Diketahui")}</strong>
+                <span style="font-size: 9px; opacity: 0.7; font-family: monospace;"> (ID: ${escapeHtml(props.recorded_sls_id || "-")})</span>
+              </p>
+              <p style="margin: 3px 0 0 0; line-height: 1.4;">
+                <span style="color: ${theme === "dark" ? "#94A3B8" : "#64748B"};">Lokasi Fisik GPS Riil:</span><br/>
+                <strong style="color: #EF4444;">${escapeHtml(props.actual_sls_name || props.actual_sls_id || "Di luar batas resmi")}</strong>
+                ${props.actual_sls_id && props.actual_sls_id !== "LUAR_BATAS" ? `<span style="font-size: 9px; opacity: 0.7; font-family: monospace;"> (ID: ${escapeHtml(props.actual_sls_id)})</span>` : ""}
+              </p>
+              ${
+                props.deviation_distance_meters
+                  ? `
+                <p style="margin: 2px 0 0 0; font-size: 9px; color: ${theme === "dark" ? "#CBD5E1" : "#475569"};">
+                  Jarak deviasi pergeseran: ~${props.deviation_distance_meters} meter
+                </p>
+              `
+                  : ""
+              }
+              <div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(239, 68, 68, 0.25); font-size: 9px; color: ${theme === "dark" ? "#CBD5E1" : "#475569"}; line-height: 1.3;">
+                <strong>Saran Rekomendasi:</strong> lakukan geotagging ulang.
+              </div>
+            </div>
+          </div>
+        `
+            : ""
+        }
       </div>
     `;
 
     const popup = new maplibregl.Popup({
       closeButton: true,
       closeOnClick: true,
-      maxWidth: "280px",
+      maxWidth: "300px",
       className: "premium-maplibre-popup",
     })
       .setLngLat(lngLat)
@@ -1182,6 +1413,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     activePopupRef.current = popup;
     popup.on("close", () => {
       if (activePopupRef.current === popup) activePopupRef.current = null;
+      store.setSelectedAnomalyPoint(null);
     });
   };
 
@@ -1221,10 +1453,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         type: "Feature",
         geometry: {
           type: "LineString",
-          coordinates: [
-            centerCoord,
-            [targetLngLat.lng, targetLngLat.lat],
-          ],
+          coordinates: [centerCoord, [targetLngLat.lng, targetLngLat.lat]],
         },
       });
 
@@ -1232,22 +1461,26 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       const props = feat.properties || {};
 
       let color = "#2563EB";
-      let icon = "RT";
+      // Icon SVG tajam untuk setiap tipe entitas (Rumah Tangga, Pertanian, Usaha, Digital, Bangunan)
+      let iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`; // Home (RT)
+
       if (layerId === "usaha-pertanian-circle-layer") {
         color = "#10B981";
-        icon = "🌾";
+        iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-13"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/></svg>`; // Sprout (Pertanian)
       } else if (layerId === "usaha-circle-layer") {
         color = "#F59E0B";
-        icon = "🏪";
+        iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7"/></svg>`; // Store (Usaha)
       } else if (layerId === "usaha-digital-circle-layer") {
         color = "#FF32DC";
-        icon = "📱";
+        iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>`; // Laptop (Digital)
       } else if (layerId === "bangunan-circle-layer") {
         color = "#8B5CF6";
-        icon = "🏢";
-      } else {
-        color = "#2563EB";
-        icon = "🏠";
+        iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>`; // Building (Bangunan Lainnya)
+      }
+
+      // Jika titik ini anomali, beri warna merah penanda
+      if (props.is_anomaly && store.highlightAnomalies) {
+        color = "#EF4444";
       }
 
       // Gunakan wrapper div untuk MapLibre marker, dan inner div untuk animasi/styling CSS
@@ -1258,7 +1491,8 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       const inner = document.createElement("div");
       inner.className = "spider-petal-inner";
       inner.style.backgroundColor = color;
-      inner.innerHTML = icon;
+      inner.style.color = "#ffffff";
+      inner.innerHTML = iconSvg;
       wrapper.appendChild(inner);
 
       wrapper.addEventListener("mouseenter", () => {
@@ -1298,7 +1532,17 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     centerInner.style.border = "2px solid #6366F1";
     centerInner.style.color = "#6366F1";
     centerInner.style.boxShadow = "0 0 14px rgba(99, 102, 241, 0.6)";
-    centerInner.innerHTML = `${n}`;
+
+    // Samakan dengan count kluster DBSCAN (misal 456) jika sedang memfokuskan kluster di koordinat ini
+    const focused = store.focusedClusterPoint;
+    const isMatchingFocused =
+      focused &&
+      focused.count &&
+      Math.abs(centerCoord[0] - focused.lng) < 0.0004 &&
+      Math.abs(centerCoord[1] - focused.lat) < 0.0004;
+
+    const displayCount = isMatchingFocused && focused ? focused.count : n;
+    centerInner.innerHTML = `${displayCount}`;
     centerInner.title = "Klik untuk menutup mekar";
     centerWrapper.appendChild(centerInner);
 
@@ -1319,7 +1563,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     };
 
     if (map.getSource("spider-lines-source")) {
-      (map.getSource("spider-lines-source") as maplibregl.GeoJSONSource).setData(linesGeo as any);
+      (
+        map.getSource("spider-lines-source") as maplibregl.GeoJSONSource
+      ).setData(linesGeo as any);
     } else {
       map.addSource("spider-lines-source", {
         type: "geojson",
@@ -1330,7 +1576,8 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         type: "line",
         source: "spider-lines-source",
         paint: {
-          "line-color": theme === "dark" ? "rgba(255,255,255,0.7)" : "rgba(30,41,59,0.7)",
+          "line-color":
+            theme === "dark" ? "rgba(255,255,255,0.7)" : "rgba(30,41,59,0.7)",
           "line-width": 1.8,
           "line-dasharray": [2, 2],
         },
@@ -1361,21 +1608,21 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         .map((u) => {
           const name = escapeHtml(
             u["nama_komersial"] ||
-            u["nama_usaha_edit"] ||
-            u["nama_final"] ||
-            u["nama final"] ||
-            u["Nama usaha"] ||
-            u["Nama Usaha"] ||
-            u["nama"] ||
-            "Titik Usaha"
+              u["nama_usaha_edit"] ||
+              u["nama_final"] ||
+              u["nama final"] ||
+              u["Nama usaha"] ||
+              u["Nama Usaha"] ||
+              u["nama"] ||
+              "Titik Usaha",
           );
           const cat = escapeHtml(u["kategori"] || "-");
           const addr = escapeHtml(
             u["alamat_final"] ||
-            u["alamat final"] ||
-            u["Alamat"] ||
-            u["alamat"] ||
-            "-"
+              u["alamat final"] ||
+              u["Alamat"] ||
+              u["alamat"] ||
+              "-",
           );
           return `
           <div style="padding: 8px; border-radius: 8px; background: ${theme === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"}; margin-bottom: 6px; border: 1px solid ${theme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"};">
@@ -1397,10 +1644,10 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           const cat = escapeHtml(r["jenis_rt"] || "-");
           const addr = escapeHtml(
             r["alamat final"] ||
-            r["alamat_final"] ||
-            r["level_6_name"] ||
-            r["alamat"] ||
-            "-"
+              r["alamat_final"] ||
+              r["level_6_name"] ||
+              r["alamat"] ||
+              "-",
           );
           return `
           <div style="padding: 8px; border-radius: 8px; background: ${theme === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"}; margin-bottom: 6px; border: 1px solid ${theme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"};">
@@ -1713,11 +1960,61 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       }
 
       // 4. Titik Usaha
+      const getAnomalyColor = (defaultColor: string) =>
+        store.highlightAnomalies
+          ? [
+              "case",
+              ["boolean", ["get", "is_anomaly"], false],
+              "#EF4444",
+              defaultColor,
+            ]
+          : defaultColor;
+
+      const getAnomalyRadius = (
+        defaultRadius: number,
+        anomalyRadius: number,
+      ) =>
+        store.highlightAnomalies
+          ? [
+              "case",
+              ["boolean", ["get", "is_anomaly"], false],
+              anomalyRadius,
+              defaultRadius,
+            ]
+          : defaultRadius;
+
+      const getAnomalyStroke = (defaultStroke: number) =>
+        store.highlightAnomalies
+          ? [
+              "case",
+              ["boolean", ["get", "is_anomaly"], false],
+              2.2,
+              defaultStroke,
+            ]
+          : defaultStroke;
+
       if (geoJsonUsaha) {
         if (map.getSource("usaha-source")) {
           (map.getSource("usaha-source") as maplibregl.GeoJSONSource).setData(
             geoJsonUsaha as any,
           );
+          if (map.getLayer("usaha-circle-layer")) {
+            map.setPaintProperty(
+              "usaha-circle-layer",
+              "circle-color",
+              getAnomalyColor("#F59E0B") as any,
+            );
+            map.setPaintProperty(
+              "usaha-circle-layer",
+              "circle-radius",
+              getAnomalyRadius(7, 8.5) as any,
+            );
+            map.setPaintProperty(
+              "usaha-circle-layer",
+              "circle-stroke-width",
+              getAnomalyStroke(1.2) as any,
+            );
+          }
         } else {
           map.addSource("usaha-source", {
             type: "geojson",
@@ -1729,9 +2026,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             source: "usaha-source",
             layout: { visibility: store.showUsaha ? "visible" : "none" },
             paint: {
-              "circle-radius": 7,
-              "circle-color": "#F59E0B",
-              "circle-stroke-width": 1.2,
+              "circle-radius": getAnomalyRadius(7, 8.5) as any,
+              "circle-color": getAnomalyColor("#F59E0B") as any,
+              "circle-stroke-width": getAnomalyStroke(1.2) as any,
               "circle-stroke-color": "#ffffff",
             },
           });
@@ -1744,6 +2041,23 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           (
             map.getSource("usaha-digital-source") as maplibregl.GeoJSONSource
           ).setData(geoJsonUsahaDigital as any);
+          if (map.getLayer("usaha-digital-circle-layer")) {
+            map.setPaintProperty(
+              "usaha-digital-circle-layer",
+              "circle-color",
+              getAnomalyColor("#FF32DC") as any,
+            );
+            map.setPaintProperty(
+              "usaha-digital-circle-layer",
+              "circle-radius",
+              getAnomalyRadius(5, 7.5) as any,
+            );
+            map.setPaintProperty(
+              "usaha-digital-circle-layer",
+              "circle-stroke-width",
+              getAnomalyStroke(1) as any,
+            );
+          }
         } else {
           map.addSource("usaha-digital-source", {
             type: "geojson",
@@ -1755,9 +2069,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             source: "usaha-digital-source",
             layout: { visibility: store.showUsahaDigital ? "visible" : "none" },
             paint: {
-              "circle-radius": 5,
-              "circle-color": "#FF32DC",
-              "circle-stroke-width": 1,
+              "circle-radius": getAnomalyRadius(5, 7.5) as any,
+              "circle-color": getAnomalyColor("#FF32DC") as any,
+              "circle-stroke-width": getAnomalyStroke(1) as any,
               "circle-stroke-color": "#ffffff",
             },
           });
@@ -1770,6 +2084,23 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           (
             map.getSource("usaha-pertanian-source") as maplibregl.GeoJSONSource
           ).setData(geoJsonUsahaPertanian as any);
+          if (map.getLayer("usaha-pertanian-circle-layer")) {
+            map.setPaintProperty(
+              "usaha-pertanian-circle-layer",
+              "circle-color",
+              getAnomalyColor("#10B981") as any,
+            );
+            map.setPaintProperty(
+              "usaha-pertanian-circle-layer",
+              "circle-radius",
+              getAnomalyRadius(6, 8.5) as any,
+            );
+            map.setPaintProperty(
+              "usaha-pertanian-circle-layer",
+              "circle-stroke-width",
+              getAnomalyStroke(1.5) as any,
+            );
+          }
         } else {
           map.addSource("usaha-pertanian-source", {
             type: "geojson",
@@ -1783,9 +2114,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
               visibility: store.showUsahaPertanian ? "visible" : "none",
             },
             paint: {
-              "circle-radius": 6,
-              "circle-color": "#10B981",
-              "circle-stroke-width": 1.5,
+              "circle-radius": getAnomalyRadius(6, 8.5) as any,
+              "circle-color": getAnomalyColor("#10B981") as any,
+              "circle-stroke-width": getAnomalyStroke(1.5) as any,
               "circle-stroke-color": "#ffffff",
               "circle-opacity": 0.9,
             },
@@ -1799,6 +2130,23 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           (map.getSource("rt-source") as maplibregl.GeoJSONSource).setData(
             geoJsonRt as any,
           );
+          if (map.getLayer("rt-circle-layer")) {
+            map.setPaintProperty(
+              "rt-circle-layer",
+              "circle-color",
+              getAnomalyColor("#2563EB") as any,
+            );
+            map.setPaintProperty(
+              "rt-circle-layer",
+              "circle-radius",
+              getAnomalyRadius(3.5, 6.5) as any,
+            );
+            map.setPaintProperty(
+              "rt-circle-layer",
+              "circle-stroke-width",
+              getAnomalyStroke(0.8) as any,
+            );
+          }
         } else {
           map.addSource("rt-source", {
             type: "geojson",
@@ -1810,9 +2158,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             source: "rt-source",
             layout: { visibility: store.showRt ? "visible" : "none" },
             paint: {
-              "circle-radius": 3.5,
-              "circle-color": "#2563EB",
-              "circle-stroke-width": 0.8,
+              "circle-radius": getAnomalyRadius(3.5, 6.5) as any,
+              "circle-color": getAnomalyColor("#2563EB") as any,
+              "circle-stroke-width": getAnomalyStroke(0.8) as any,
               "circle-stroke-color": "#ffffff",
             },
           });
@@ -1823,10 +2171,25 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       if (geoJsonBangunanLainnya) {
         if (map.getSource("bangunan-lainnya-source")) {
           (
-            map.getSource(
-              "bangunan-lainnya-source",
-            ) as maplibregl.GeoJSONSource
+            map.getSource("bangunan-lainnya-source") as maplibregl.GeoJSONSource
           ).setData(geoJsonBangunanLainnya as any);
+          if (map.getLayer("bangunan-circle-layer")) {
+            map.setPaintProperty(
+              "bangunan-circle-layer",
+              "circle-color",
+              getAnomalyColor("#8B5CF6") as any,
+            );
+            map.setPaintProperty(
+              "bangunan-circle-layer",
+              "circle-radius",
+              getAnomalyRadius(3.5, 6.5) as any,
+            );
+            map.setPaintProperty(
+              "bangunan-circle-layer",
+              "circle-stroke-width",
+              getAnomalyStroke(0.8) as any,
+            );
+          }
         } else {
           map.addSource("bangunan-lainnya-source", {
             type: "geojson",
@@ -1840,10 +2203,35 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
               visibility: store.showBangunanLainnya ? "visible" : "none",
             },
             paint: {
-              "circle-radius": 3.5,
-              "circle-color": "#8B5CF6",
-              "circle-stroke-width": 0.8,
+              "circle-radius": getAnomalyRadius(3.5, 6.5) as any,
+              "circle-color": getAnomalyColor("#8B5CF6") as any,
+              "circle-stroke-width": getAnomalyStroke(0.8) as any,
               "circle-stroke-color": "#ffffff",
+            },
+          });
+        }
+      }
+
+      // 8. Garis Penghubung Discrepancy (Titik Nyasar -> Centroid SLS Asli)
+      if (geoJsonDiscrepancyLine) {
+        if (map.getSource("discrepancy-line-source")) {
+          (
+            map.getSource("discrepancy-line-source") as maplibregl.GeoJSONSource
+          ).setData(geoJsonDiscrepancyLine as any);
+        } else {
+          map.addSource("discrepancy-line-source", {
+            type: "geojson",
+            data: geoJsonDiscrepancyLine as any,
+          });
+          map.addLayer({
+            id: "discrepancy-line-layer",
+            type: "line",
+            source: "discrepancy-line-source",
+            paint: {
+              "line-color": "#EF4444",
+              "line-width": 2.5,
+              "line-dasharray": [3, 2],
+              "line-opacity": 0.9,
             },
           });
         }
@@ -2235,11 +2623,15 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             >
               <Layers className="w-4 h-4 text-primary" />
               <span className="hidden sm:inline">
-                {AVAILABLE_BASEMAPS.find((b) => b.id === store.selectedBasemap)?.name || "Basemap"}
+                {AVAILABLE_BASEMAPS.find((b) => b.id === store.selectedBasemap)
+                  ?.name || "Basemap"}
               </span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-60 bg-card/95 backdrop-blur-md border shadow-xl p-1.5 rounded-xl z-50">
+          <DropdownMenuContent
+            align="end"
+            className="w-60 bg-card/95 backdrop-blur-md border shadow-xl p-1.5 rounded-xl z-50"
+          >
             <DropdownMenuLabel className="text-[11px] font-semibold text-muted-foreground px-2 py-1">
               Pilihan Peta Dasar (Basemap)
             </DropdownMenuLabel>
@@ -2251,7 +2643,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
                   key={bm.id}
                   onClick={() => store.setBasemap(bm.id)}
                   className={`flex flex-col items-start gap-0.5 cursor-pointer px-2.5 py-2 rounded-lg transition-colors ${
-                    isSelected ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/60"
+                    isSelected
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "hover:bg-muted/60"
                   }`}
                 >
                   <div className="flex items-center justify-between w-full">

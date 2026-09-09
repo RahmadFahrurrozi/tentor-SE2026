@@ -173,7 +173,9 @@ export function convertBangunanToGeoJson(dataBangunan: any[]) {
   };
 }
 
-export function convertTitikToGeoJson(data: any[]) {
+import { checkPointAnomaly, type SlsPolygonIndex, type SpatialAnomalyResult } from './spatialAnomalyDetector';
+
+export function convertTitikToGeoJson(data: any[], slsIndex?: SlsPolygonIndex[]) {
   const features = data.reduce((acc, row) => {
     const lat = parseFloat(
       row['lat final'] ||
@@ -228,6 +230,19 @@ export function convertTitikToGeoJson(data: any[]) {
         row['alamat_project'] ||
         null;
 
+      const recordedSls =
+        row['idsls final'] || row['idsls_str'] || row['idsls'] || null;
+
+      let anomalyInfo: SpatialAnomalyResult = {
+        isAnomaly: false,
+        anomalyType: 'valid',
+        recordedSlsId: String(recordedSls || ''),
+      };
+
+      if (slsIndex && slsIndex.length > 0 && recordedSls) {
+        anomalyInfo = checkPointAnomaly([lng, lat], recordedSls, slsIndex);
+      }
+
       acc.push({
         type: "Feature",
         geometry: {
@@ -238,9 +253,19 @@ export function convertTitikToGeoJson(data: any[]) {
           ...row,
           alamat_final: alamatVal,
           nama_final: namaVal,
-          idsls_final: row['idsls final'] || row['idsls_str'] || row['idsls'] || null,
+          idsls_final: recordedSls,
           lat_final: lat,
           long_final: lng,
+          is_anomaly: anomalyInfo.isAnomaly,
+          anomaly_type: anomalyInfo.anomalyType,
+          recorded_sls_id: anomalyInfo.recordedSlsId,
+          recorded_sls_name: anomalyInfo.recordedSlsName,
+          actual_sls_id: anomalyInfo.actualSlsId,
+          actual_sls_name: anomalyInfo.actualSlsName,
+          actual_desa_name: anomalyInfo.actualDesaName,
+          recorded_centroid_lng: anomalyInfo.recordedSlsCentroid?.[0],
+          recorded_centroid_lat: anomalyInfo.recordedSlsCentroid?.[1],
+          deviation_distance_meters: anomalyInfo.deviationDistanceMeters,
         }
       });
     }

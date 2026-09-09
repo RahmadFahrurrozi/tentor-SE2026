@@ -285,6 +285,61 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
 
         <hr />
 
+        {/* Kontrol Kualitas Spasial (QC) */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-semibold text-xs tracking-wider uppercase text-muted-foreground">
+              Kualitas Spasial (QC)
+            </h4>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Label htmlFor="highlightAnomalies" className="text-sm cursor-pointer">
+              Sorot Titik Luar Batas
+            </Label>
+            <Switch
+              id="highlightAnomalies"
+              checked={store.highlightAnomalies}
+              onCheckedChange={() => store.toggleHighlightAnomalies()}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Label htmlFor="filterOnlyAnomalies" className="text-sm text-muted-foreground cursor-pointer">
+              Hanya Titik Luar Batas
+            </Label>
+            <Switch
+              id="filterOnlyAnomalies"
+              checked={store.filterOnlyAnomalies}
+              onCheckedChange={() => store.toggleFilterOnlyAnomalies()}
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-1 border-t border-border/50">
+            <Label htmlFor="highlightClusters" className="text-sm cursor-pointer">
+              Sorot Titik Bergerombol
+            </Label>
+            <Switch
+              id="highlightClusters"
+              checked={store.highlightClusters}
+              onCheckedChange={() => store.toggleHighlightClusters()}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Label htmlFor="filterOnlyClusters" className="text-sm text-muted-foreground cursor-pointer">
+              Hanya Titik Bergerombol
+            </Label>
+            <Switch
+              id="filterOnlyClusters"
+              checked={store.filterOnlyClusters}
+              onCheckedChange={() => store.toggleFilterOnlyClusters()}
+            />
+          </div>
+        </div>
+
+        <hr />
+
         {/* Filter Wilayah */}
         <div className="space-y-4">
           <h4 className="font-semibold text-sm">Filter Wilayah</h4>

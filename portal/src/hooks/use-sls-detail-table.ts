@@ -3,6 +3,7 @@ import { useMapStore } from "@/store/mapStore";
 import { useAuthStore } from "@/store/auth-store";
 import * as XLSX from "xlsx";
 import { getSlsId, isSlsMatch } from "@/utils/slsHelper";
+import { buildSlsSpatialIndex, checkPointAnomaly } from "@/utils/spatialAnomalyDetector";
 
 /**
  * Interface item data agregat per SLS (Satuan Lingkungan Setempat).
@@ -58,6 +59,14 @@ export interface SlsEntityDetailItem {
   badgeClass: string;
   /** Detail atau kategori tambahan */
   detail: string;
+  /** Flag anomali jika titik koordinat jatuh di luar batas poligon SLS ini */
+  isAnomaly?: boolean;
+  /** Nama SLS tempat titik ini sebenarnya berada */
+  actualSlsName?: string;
+  /** ID SLS tempat titik ini sebenarnya berada */
+  actualSlsId?: string;
+  /** Jarak simpangan pergeseran dalam meter */
+  deviationDistanceMeters?: number;
 }
 
 /**
@@ -355,6 +364,16 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
   const slsEntities = useMemo<SlsEntityDetailItem[]>(() => {
     if (!selectedSls) return [];
     const targetSls = selectedSls.idslsStr;
+    const slsIndex = buildSlsSpatialIndex(dataSls);
+
+    const getAnomaly = (item: any) => {
+      const lat = parseFloat(item['lat final'] || item['lat_final'] || item.lat || item.latitude || '');
+      const lng = parseFloat(item['long final'] || item['long_final'] || item.long || item.longitude || '');
+      if (!isNaN(lat) && !isNaN(lng) && slsIndex.length > 0) {
+        return checkPointAnomaly([lng, lat], targetSls, slsIndex);
+      }
+      return null;
+    };
 
     const list: SlsEntityDetailItem[] = [];
 
@@ -362,6 +381,7 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
     (dataUsaha || []).forEach((u: any, i: number) => {
       const itemSls = getSlsId(u);
       if (isSlsMatch(itemSls, targetSls)) {
+        const anom = getAnomaly(u);
         list.push({
           id: `ub-${i}`,
           nama: u["nama final"] || u.nama_final || u.nama_usaha_edit || u.nama || "Usaha Biasa",
@@ -371,6 +391,10 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
           badgeClass:
             "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30",
           detail: u.kategori || u.jenis_usaha || u.keg_utama || "Non-Pertanian",
+          isAnomaly: anom?.isAnomaly,
+          actualSlsName: anom?.actualSlsName,
+          actualSlsId: anom?.actualSlsId,
+          deviationDistanceMeters: anom?.deviationDistanceMeters,
         });
       }
     });
@@ -379,6 +403,7 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
     (dataUsahaDigital || []).forEach((ud: any, i: number) => {
       const itemSls = getSlsId(ud);
       if (isSlsMatch(itemSls, targetSls)) {
+        const anom = getAnomaly(ud);
         list.push({
           id: `ud-${i}`,
           nama: ud["nama final"] || ud.nama_final || ud.nama_usaha_edit || ud.nama || "Usaha Digital",
@@ -388,6 +413,10 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
           badgeClass:
             "bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/30",
           detail: ud.kategori || ud.jenis_usaha || "E-Commerce",
+          isAnomaly: anom?.isAnomaly,
+          actualSlsName: anom?.actualSlsName,
+          actualSlsId: anom?.actualSlsId,
+          deviationDistanceMeters: anom?.deviationDistanceMeters,
         });
       }
     });
@@ -396,6 +425,7 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
     (dataUsahaPertanian || []).forEach((up: any, i: number) => {
       const itemSls = getSlsId(up);
       if (isSlsMatch(itemSls, targetSls)) {
+        const anom = getAnomaly(up);
         list.push({
           id: `up-${i}`,
           nama:
@@ -417,6 +447,10 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
           badgeClass:
             "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
           detail: up.produk || up.keg_utama || up.komoditas || up.kategori || "Agrikultur",
+          isAnomaly: anom?.isAnomaly,
+          actualSlsName: anom?.actualSlsName,
+          actualSlsId: anom?.actualSlsId,
+          deviationDistanceMeters: anom?.deviationDistanceMeters,
         });
       }
     });
@@ -425,6 +459,7 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
     (dataRumahTangga || []).forEach((rt: any, i: number) => {
       const itemSls = getSlsId(rt);
       if (isSlsMatch(itemSls, targetSls)) {
+        const anom = getAnomaly(rt);
         list.push({
           id: `rt-${i}`,
           nama:
@@ -441,6 +476,10 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
           badgeClass:
             "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30",
           detail: rt.jenis_rt || "Unit KK",
+          isAnomaly: anom?.isAnomaly,
+          actualSlsName: anom?.actualSlsName,
+          actualSlsId: anom?.actualSlsId,
+          deviationDistanceMeters: anom?.deviationDistanceMeters,
         });
       }
     });
@@ -467,6 +506,7 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
     return list;
   }, [
     selectedSls,
+    dataSls,
     dataUsaha,
     dataUsahaDigital,
     dataUsahaPertanian,
@@ -479,14 +519,18 @@ export function useSlsDetailTable(spatialData: any): UseSlsDetailTableReturn {
    */
   const modalFilteredEntities = useMemo(() => {
     return slsEntities.filter((item) => {
-      if (modalActiveTab !== "all" && item.type !== modalActiveTab)
+      if (modalActiveTab === "anomali") {
+        if (!item.isAnomaly) return false;
+      } else if (modalActiveTab !== "all" && item.type !== modalActiveTab) {
         return false;
+      }
       if (modalSearchQuery.trim()) {
         const q = modalSearchQuery.toLowerCase();
         return (
           item.nama.toLowerCase().includes(q) ||
           item.alamat.toLowerCase().includes(q) ||
-          item.detail.toLowerCase().includes(q)
+          item.detail.toLowerCase().includes(q) ||
+          (item.actualSlsName && item.actualSlsName.toLowerCase().includes(q))
         );
       }
       return true;
