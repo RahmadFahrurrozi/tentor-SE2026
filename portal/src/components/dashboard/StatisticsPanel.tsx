@@ -46,6 +46,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { AVAILABLE_BASEMAPS } from "@/config/mapStyles";
 import { EntityDetailTable } from "./EntityDetailTable";
 import { SlsDetailTable } from "./SlsDetailTable";
 import { KecamatanComparisonView } from "./KecamatanComparisonView";
@@ -171,10 +180,10 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
 
       {/* ── 2. EXPANDED FLOATING BOTTOM OVERLAY SHEET (Panel Terbuka) ──────── */}
       <div
-        className={`absolute bottom-0 left-0 right-0 w-full bg-card/95 backdrop-blur-md border-t shadow-2xl z-30 transition-all duration-300 ease-in-out transform ${
+        className={`absolute bottom-0 left-0 right-0 w-full bg-card/95 backdrop-blur-md border-t shadow-2xl transition-all duration-300 ease-in-out transform ${
           isExpanded
-            ? "h-full max-h-full rounded-none"
-            : "h-[75vh] sm:h-[60vh] md:h-[58vh] max-h-[75vh] sm:max-h-[60vh] md:max-h-[58vh] rounded-t-2xl"
+            ? "h-full max-h-full rounded-none z-50"
+            : "h-[75vh] sm:h-[60vh] md:h-[58vh] max-h-[75vh] sm:max-h-[60vh] md:max-h-[58vh] rounded-t-2xl z-30"
         } ${
           store.isStatisticsOpen
             ? "translate-y-0 opacity-100 pointer-events-auto"
@@ -416,6 +425,60 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
                 <ShieldCheck className="w-3.5 h-3.5 text-blue-500" /> Export
                 (Khusus Admin)
               </div>
+            )}
+
+            {/* Tombol Pilihan Basemap (muncul saat Fullscreen) */}
+            {isExpanded && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs gap-1.5 px-2.5 border-border/70 text-foreground hover:text-primary shrink-0"
+                    title="Pilihan Peta Dasar (Basemap)"
+                  >
+                    <Layers className="w-3.5 h-3.5 text-primary" />
+                    <span className="hidden sm:inline">
+                      {AVAILABLE_BASEMAPS.find((b) => b.id === store.selectedBasemap)?.name || "Basemap"}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="w-60 bg-card/95 backdrop-blur-md border shadow-xl p-1.5 rounded-xl z-50"
+                >
+                  <DropdownMenuLabel className="text-[11px] font-semibold text-muted-foreground px-2 py-1">
+                    Pilihan Peta Dasar (Basemap)
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {AVAILABLE_BASEMAPS.map((bm) => {
+                    const isSelected = store.selectedBasemap === bm.id;
+                    return (
+                      <DropdownMenuItem
+                        key={bm.id}
+                        onClick={() => store.setBasemap(bm.id)}
+                        className={`flex flex-col items-start gap-0.5 cursor-pointer px-2.5 py-2 rounded-lg transition-colors ${
+                          isSelected
+                            ? "bg-primary/10 text-primary font-medium"
+                            : "hover:bg-muted/60"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-xs font-medium">{bm.name}</span>
+                          {isSelected && (
+                            <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded font-bold">
+                              Aktif
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground leading-tight">
+                          {bm.description}
+                        </span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
 
             {/* Tombol Dokumentasi */}

@@ -46,6 +46,7 @@ interface MapState {
   activeDatasetVersion: DatasetVersion;
   isCompareMode: boolean;
   isStatisticsOpen: boolean;
+  isStatisticsExpanded: boolean;
 
   // Spatial Anomaly QC
   highlightAnomalies: boolean;
@@ -72,6 +73,7 @@ interface MapState {
   setDatasetVersion: (version: DatasetVersion) => void;
   setCompareMode: (enabled: boolean) => void;
   setStatisticsOpen: (open: boolean) => void;
+  setStatisticsExpanded: (expanded: boolean) => void;
   toggleStatisticsOpen: () => void;
   toggleHighlightAnomalies: () => void;
   toggleFilterOnlyAnomalies: () => void;
@@ -118,6 +120,7 @@ export const useMapStore = create<MapState>((set) => ({
   activeDatasetVersion: 'se2026',
   isCompareMode: false,
   isStatisticsOpen: true,
+  isStatisticsExpanded: false,
 
   highlightAnomalies: true,
   filterOnlyAnomalies: false,
@@ -186,6 +189,7 @@ export const useMapStore = create<MapState>((set) => ({
   setDatasetVersion: (version) => set({ activeDatasetVersion: version }),
   setCompareMode: (enabled) => set({ isCompareMode: enabled }),
   setStatisticsOpen: (open) => set({ isStatisticsOpen: open }),
+  setStatisticsExpanded: (expanded) => set({ isStatisticsExpanded: expanded }),
   toggleStatisticsOpen: () => set((state) => ({ isStatisticsOpen: !state.isStatisticsOpen })),
   toggleHighlightAnomalies: () => set((state) => ({ highlightAnomalies: !state.highlightAnomalies })),
   toggleFilterOnlyAnomalies: () => set((state) => ({ filterOnlyAnomalies: !state.filterOnlyAnomalies })),
