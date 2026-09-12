@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/auth-store";
 import { useMapStore } from "@/store/mapStore";
@@ -32,7 +32,14 @@ export function useStatisticsPanel(spatialData: any) {
   // ── 1. User & Role Identification ─────────────────────────────────────────
   const { profile } = useAuthStore();
   const store = useMapStore();
-  const [isExpanded, setIsExpanded] = useState(false);
+  const isExpanded = store.isStatisticsExpanded;
+  const setIsExpanded = (val: boolean | ((prev: boolean) => boolean)) => {
+    if (typeof val === "function") {
+      store.setStatisticsExpanded(val(store.isStatisticsExpanded));
+    } else {
+      store.setStatisticsExpanded(val);
+    }
+  };
 
   const role = profile?.role ?? "ppl";
   const isAdmin = role === "admin";
