@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import type { BasemapId } from '@/config/mapStyles';
+import { getUserRegionAccess } from '@/utils/regionAccess';
 
 export type DatasetVersion = 'prelist' | 'se2026';
-export type KabupatenId = '3510' | '3515';
+export type KabupatenId = '3510' | '3515' | '3577';
 
 export const DATASET_VERSION = {
   PRELIST: 'prelist',
@@ -10,6 +11,24 @@ export const DATASET_VERSION = {
 } as const;
 
 export type DatasetType = (typeof DATASET_VERSION)[keyof typeof DATASET_VERSION];
+
+function getInitialKabupaten(): KabupatenId {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('bspatial-auth') : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const profile = parsed?.state?.profile;
+      const user = parsed?.state?.user;
+      const access = getUserRegionAccess(profile, user, []);
+      if (access.lockedKabupaten) {
+        return access.lockedKabupaten;
+      }
+    }
+  } catch {}
+  return '3510';
+}
+
+const initialKab = getInitialKabupaten();
 
 interface MapState {
   // Region Selection
@@ -93,7 +112,7 @@ interface MapState {
 
 export const useMapStore = create<MapState>((set) => ({
   // Default values
-  selectedKabupaten: '3510', // Default Banyuwangi
+  selectedKabupaten: initialKab,
   selectedBasemap: 'auto',
 
   showKab: false,
@@ -141,8 +160,8 @@ export const useMapStore = create<MapState>((set) => ({
       selectedAnomalyPoint: null,
       focusedClusterPoint: null,
       filterOnlyClusters: false,
-      // Jika Sidoarjo (3515), otomatis matikan compare mode & kunci ke se2026
-      ...(kabId === '3515' ? {
+      // Jika bukan Banyuwangi (misal Sidoarjo 3515 / Madiun 3577), otomatis matikan compare mode & kunci ke se2026
+      ...(kabId !== '3510' ? {
         activeDatasetVersion: 'se2026',
         isCompareMode: false,
       } : {})

@@ -8,6 +8,7 @@ import {
   isSlsMatch,
   normalizeSlsId,
 } from "@/utils/slsHelper";
+import { REGIONS } from "@/config/regionConfig";
 import * as XLSX from "xlsx";
 
 /**
@@ -85,7 +86,7 @@ export function useStatisticsPanel(spatialData: any) {
    * Mengambil seluruh daftar kecamatan dari manifest wilayah
    */
   const allKecamatans = useMemo(
-    () => wilayahManifest?.kecamatan || [],
+    () => (Array.isArray(wilayahManifest) ? wilayahManifest : wilayahManifest?.kecamatan || []),
     [wilayahManifest],
   );
 
@@ -149,7 +150,9 @@ export function useStatisticsPanel(spatialData: any) {
     const dusun = store.filterDusun;
     const sls = store.filterSls;
 
-    if (kec === "Semua" || !kec) return "Seluruh Kabupaten Banyuwangi";
+    const currentRegionName = REGIONS[store.selectedKabupaten]?.name || "Wilayah";
+
+    if (kec === "Semua" || !kec) return `Seluruh ${currentRegionName}`;
     const kecName =
       selectedKecObj?.nmkec || selectedKecObj?.nama || `Kec. ${kec}`;
     if (desa === "Semua" || !desa) return `${kecName} (Semua Desa)`;
@@ -173,6 +176,7 @@ export function useStatisticsPanel(spatialData: any) {
     store.filterDesa,
     store.filterDusun,
     store.filterSls,
+    store.selectedKabupaten,
     selectedKecObj,
     rawDesaOptions,
     parsedSlsMap,

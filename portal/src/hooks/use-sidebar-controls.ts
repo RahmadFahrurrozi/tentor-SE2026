@@ -3,6 +3,7 @@ import { useMapStore } from "@/store/mapStore";
 import { useAuthStore } from "@/store/auth-store";
 import { useAuth } from "@/hooks/use-auth";
 import { extractDusunAndSlsList } from "@/utils/slsHelper";
+import { getUserRegionAccess } from "@/utils/regionAccess";
 
 /**
  * Custom Hook: useSidebarControls
@@ -13,29 +14,28 @@ import { extractDusunAndSlsList } from "@/utils/slsHelper";
 export function useSidebarControls(spatialData: any) {
   // ── 1. Store & Auth Hooks ───────────────────────────────────────────────────
   
-  /**
-   * Hook Zustand MapStore:
-   * Menyimpan dan memperbarui filter aktif (filterKecamatan, filterDesa, filterDusun, filterSls, filterNama),
-   * toggle layer peta, versi dataset (prelist/se2026), dan mode komparasi.
-   */
   const store = useMapStore();
-
-  /**
-   * Hook AuthStore:
-   * Mengambil data profil pengguna yang sedang aktif login (nama, email, role).
-   */
   const { profile, user } = useAuthStore();
-
-  /**
-   * Hook useAuth:
-   * Mengelola proses logout pengguna dan memberikan indikator loading (isLoggingOut).
-   */
   const { logout, isLoggingOut } = useAuth();
 
   // ── 2. Data Spatial & Role Extraction ───────────────────────────────────────
   
   const { dataSls, wilayahManifest, assignments = [] } = spatialData || {};
   const role = profile?.role ?? "ppl";
+
+  // ── 2b. Region Access Control ───────────────────────────────────────────────
+  const regionAccess = useMemo(() => {
+    return getUserRegionAccess(profile, user, assignments);
+  }, [profile, user, assignments]);
+
+  // Otomatis kunci kabupaten jika user hanya punya akses ke 1 wilayah
+  useEffect(() => {
+    if (regionAccess.lockedKabupaten) {
+      if (store.selectedKabupaten !== regionAccess.lockedKabupaten) {
+        store.setKabupaten(regionAccess.lockedKabupaten);
+      }
+    }
+  }, [regionAccess.lockedKabupaten, store.selectedKabupaten]);
 
   // ── 3. Filter & Option Calculations (Memoized) ──────────────────────────────
   
@@ -214,5 +214,6 @@ export function useSidebarControls(spatialData: any) {
     userFullName,
     userInitials,
     displayRole,
+    regionAccess,
   };
 }

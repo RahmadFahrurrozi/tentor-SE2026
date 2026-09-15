@@ -16,6 +16,8 @@ import { Eraser, LogOut, ArrowLeftRight, Database, Layers } from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { useSidebarControls } from "@/hooks/use-sidebar-controls";
 import { AVAILABLE_BASEMAPS, type BasemapId } from "@/config/mapStyles";
+import { REGIONS } from "@/config/regionConfig";
+import type { KabupatenId } from "@/store/mapStore";
 
 export function SidebarControls({ spatialData }: { spatialData: any }) {
   const {
@@ -32,6 +34,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
     userFullName,
     userInitials,
     displayRole,
+    regionAccess,
   } = useSidebarControls(spatialData);
 
   const kecamatanOptions = useMemo(
@@ -98,7 +101,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
               }
               className="text-[11px] h-7 px-1"
               onClick={() => store.setDatasetVersion("prelist")}
-              disabled={store.selectedKabupaten === "3515"}
+              disabled={!REGIONS[store.selectedKabupaten]?.hasPrelist}
             >
               Baseline Prelist
             </Button>
@@ -114,10 +117,10 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
             </Button>
           </div>
 
-          {store.selectedKabupaten === "3515" && (
+          {!REGIONS[store.selectedKabupaten]?.hasPrelist && (
             <p className="text-[10px] text-amber-500 font-medium italic">
-              * Kabupaten Sidoarjo hanya menyediakan data SE 2026 terbaru (tanpa
-              Prelist).
+              * {REGIONS[store.selectedKabupaten]?.name || "Wilayah ini"} hanya
+              menyediakan data SE 2026 terbaru (tanpa Prelist).
             </p>
           )}
 
@@ -127,7 +130,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
               variant="outline"
               className="w-full text-xs h-8 gap-1.5 border-primary/40 text-primary"
               onClick={() => store.setCompareMode(!store.isCompareMode)}
-              disabled={store.selectedKabupaten === "3515"}
+              disabled={!REGIONS[store.selectedKabupaten]?.hasPrelist}
             >
               <ArrowLeftRight className="w-3.5 h-3.5" />
               {store.isCompareMode ? "Tutup Komparasi" : "Mode Komparasi"}
@@ -294,7 +297,10 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
           </div>
 
           <div className="flex items-center justify-between">
-            <Label htmlFor="highlightAnomalies" className="text-sm cursor-pointer">
+            <Label
+              htmlFor="highlightAnomalies"
+              className="text-sm cursor-pointer"
+            >
               Sorot Titik Luar Batas
             </Label>
             <Switch
@@ -305,7 +311,10 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
           </div>
 
           <div className="flex items-center justify-between">
-            <Label htmlFor="filterOnlyAnomalies" className="text-sm text-muted-foreground cursor-pointer">
+            <Label
+              htmlFor="filterOnlyAnomalies"
+              className="text-sm text-muted-foreground cursor-pointer"
+            >
               Hanya Titik Luar Batas
             </Label>
             <Switch
@@ -316,7 +325,10 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
           </div>
 
           <div className="flex items-center justify-between pt-1 border-t border-border/50">
-            <Label htmlFor="highlightClusters" className="text-sm cursor-pointer">
+            <Label
+              htmlFor="highlightClusters"
+              className="text-sm cursor-pointer"
+            >
               Sorot Titik Bergerombol
             </Label>
             <Switch
@@ -327,7 +339,10 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
           </div>
 
           <div className="flex items-center justify-between">
-            <Label htmlFor="filterOnlyClusters" className="text-sm text-muted-foreground cursor-pointer">
+            <Label
+              htmlFor="filterOnlyClusters"
+              className="text-sm text-muted-foreground cursor-pointer"
+            >
               Hanya Titik Bergerombol
             </Label>
             <Switch
@@ -350,18 +365,26 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
             </Label>
             <Select
               value={store.selectedKabupaten}
-              onValueChange={(val) =>
-                store.setKabupaten(val as "3510" | "3515")
-              }
+              onValueChange={(val) => store.setKabupaten(val as KabupatenId)}
+              disabled={!!regionAccess.lockedKabupaten}
             >
               <SelectTrigger className="w-full font-medium">
-                <SelectValue placeholder="Pilih Kabupaten" />
+                <SelectValue placeholder="Pilih Kabupaten / Kota" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="3510">Kab. Banyuwangi (3510)</SelectItem>
-                <SelectItem value="3515">Kab. Sidoarjo (3515)</SelectItem>
+                {regionAccess.allowedKabupaten.map((kabId) => (
+                  <SelectItem key={kabId} value={kabId}>
+                    {REGIONS[kabId]?.name || kabId} ({kabId})
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            {regionAccess.lockedKabupaten && (
+              <p className="text-[10px] text-green-600 italic">
+                * Hak akses wilayah{" "}
+                {REGIONS[regionAccess.lockedKabupaten]?.name}.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
