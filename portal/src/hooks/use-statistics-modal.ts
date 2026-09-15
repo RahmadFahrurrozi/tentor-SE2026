@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { useMapStore } from "@/store/mapStore";
+import { REGIONS } from "@/config/regionConfig";
 import * as XLSX from "xlsx";
 
 /**
@@ -32,18 +33,20 @@ export function useStatisticsModal(spatialData: any) {
   const regionLabel = useMemo(() => {
     const kec = store.filterKecamatan;
     const desa = store.filterDesa;
-    if (kec === "Semua" || !kec) return "Seluruh Kabupaten Banyuwangi";
-    const kecObj = wilayahManifest?.kecamatan?.find(
+    const regName = REGIONS[store.selectedKabupaten]?.name || "Wilayah";
+    if (kec === "Semua" || !kec) return `Seluruh ${regName}`;
+    const allKec = Array.isArray(wilayahManifest) ? wilayahManifest : wilayahManifest?.kecamatan || [];
+    const kecObj = allKec.find(
       (k: any) => String(k.idkec) === String(kec),
     );
-    const kecName = kecObj?.nmkec || `Kec. ${kec}`;
+    const kecName = kecObj?.nmkec || kecObj?.nama || `Kec. ${kec}`;
     if (desa === "Semua" || !desa) return `${kecName} (Semua Desa)`;
     const desaObj = kecObj?.desa?.find(
       (d: any) => String(d.iddesa) === String(desa),
     );
-    const desaName = desaObj?.nmdesa || `Desa ${desa}`;
+    const desaName = desaObj?.nmdesa || desaObj?.nama || `Desa ${desa}`;
     return `${desaName}, ${kecName}`;
-  }, [store.filterKecamatan, store.filterDesa, wilayahManifest]);
+  }, [store.filterKecamatan, store.filterDesa, store.selectedKabupaten, wilayahManifest]);
 
   // Aggregate metrics
   const stats = useMemo(() => {

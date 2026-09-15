@@ -30,6 +30,7 @@ import {
   normalizeSlsId,
 } from "@/utils/slsHelper";
 import { useMapStore } from "@/store/mapStore";
+import { REGIONS } from "@/config/regionConfig";
 import { useTheme } from "@/context/theme-provider";
 
 const getGeometryCentroid = (geometry: any): [number, number] | null => {
@@ -145,29 +146,21 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     error,
   } = spatialData;
 
+  const currentRegion = REGIONS[store.selectedKabupaten] || REGIONS["3510"];
   const [viewState, setViewState] = useState({
-    center: (store.selectedKabupaten === "3515"
-      ? [112.7183, -7.4478]
-      : [114.3692, -8.2192]) as [number, number],
-    zoom: store.selectedKabupaten === "3515" ? 11 : 10,
+    center: currentRegion.center,
+    zoom: currentRegion.zoom,
     pitch: 45,
     bearing: 0,
   });
 
   useEffect(() => {
-    if (store.selectedKabupaten === "3515") {
-      setViewState((prev) => ({
-        ...prev,
-        center: [112.7183, -7.4478],
-        zoom: 11,
-      }));
-    } else {
-      setViewState((prev) => ({
-        ...prev,
-        center: [114.3692, -8.2192],
-        zoom: 10,
-      }));
-    }
+    const reg = REGIONS[store.selectedKabupaten] || REGIONS["3510"];
+    setViewState((prev) => ({
+      ...prev,
+      center: reg.center,
+      zoom: reg.zoom,
+    }));
   }, [store.selectedKabupaten]);
 
   const processedSls = useMemo(() => {
@@ -2541,10 +2534,12 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         bbox = calculateBbox(geoJsonDesaBoundary);
       }
       // 3. Prioritas terakhir: Balik ke BBox Kabupaten terpilih
-      else if (store.selectedKabupaten === "3515") {
-        bbox = [112.45, -7.6, 112.88, -7.3]; // Bounding Box Sidoarjo
-      } else if (dataKab?.features?.length > 0) {
+      else if (dataKab?.features?.length > 0) {
         bbox = calculateBbox(dataKab);
+      } else if (store.selectedKabupaten === "3515") {
+        bbox = [112.45, -7.6, 112.88, -7.3]; // Bounding Box Sidoarjo
+      } else if (store.selectedKabupaten === "3577") {
+        bbox = [111.49, -7.68, 111.56, -7.59]; // Bounding Box Madiun
       } else {
         bbox = [113.8, -8.8, 114.6, -8.0]; // Bounding Box Banyuwangi
       }

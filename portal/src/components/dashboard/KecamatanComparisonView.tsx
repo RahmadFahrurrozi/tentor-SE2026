@@ -28,6 +28,8 @@ import {
   Minimize2,
 } from "lucide-react";
 import { useKecamatanComparison } from "@/hooks/use-kecamatan-comparison";
+import { useMapStore } from "@/store/mapStore";
+import { REGIONS } from "@/config/regionConfig";
 
 interface KecamatanComparisonViewProps {
   spatialData: any;
@@ -36,6 +38,9 @@ interface KecamatanComparisonViewProps {
 export function KecamatanComparisonView({
   spatialData,
 }: KecamatanComparisonViewProps) {
+  const selectedKabupaten = useMapStore((s) => s.selectedKabupaten);
+  const regName = REGIONS[selectedKabupaten]?.name || "Wilayah";
+
   const {
     isAdmin,
     searchQuery,
@@ -60,7 +65,7 @@ export function KecamatanComparisonView({
           </CardTitle>
           <p className="text-[11px] text-muted-foreground mt-0.5">
             Perbandingan Usaha Pertanian, Usaha Biasa, Rumah Tangga, & Usaha
-            Digital se-Kabupaten Banyuwangi
+            Digital se-{regName}
           </p>
         </div>
 

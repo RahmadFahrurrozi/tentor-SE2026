@@ -1,5 +1,5 @@
 export interface RegionConfig {
-  id: string; // "3510" | "3515"
+  id: string; // "3510" | "3515" | "3577"
   name: string;
   shortName: string;
   bucketName: string;
@@ -25,6 +25,15 @@ export const REGIONS: Record<string, RegionConfig> = {
     bucketName: "spatial-chunks-sidoarjo",
     center: [112.7183, -7.4478],
     zoom: 11,
+    hasPrelist: false,
+  },
+  "3577": {
+    id: "3577",
+    name: "Kota Madiun",
+    shortName: "Madiun",
+    bucketName: "spatial-chunks-madiun",
+    center: [111.527, -7.638],
+    zoom: 13,
     hasPrelist: false,
   },
 };

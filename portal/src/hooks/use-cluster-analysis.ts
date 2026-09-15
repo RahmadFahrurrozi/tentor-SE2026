@@ -16,6 +16,7 @@ import {
   parseSlsName,
 } from "@/utils/slsHelper";
 import { assignSlsToPoints } from "@/utils/dataProcessing";
+import { REGIONS } from "@/config/regionConfig";
 
 export interface UseClusterAnalysisOptions {
   spatialData: any;
@@ -371,12 +372,11 @@ export function useClusterAnalysis({
     setIsLoadingAllKab(true);
     setLoadProgress({ current: 0, total: allKecamatans.length, kecName: "Memulai..." });
 
-    const primaryBucket =
-      kabId === "3515"
-        ? "spatial-chunks-sidoarjo"
-        : version === "se2026"
-          ? "spatial-chunks-se2026"
-          : "spatial-chunks";
+    const region = REGIONS[kabId] || REGIONS["3510"];
+    let primaryBucket = region.bucketName;
+    if (kabId === "3510" && version !== "se2026") {
+      primaryBucket = "spatial-chunks";
+    }
 
     const getChunkUrl = (path: string, bucket: string = primaryBucket) => {
       const { data } = supabase.storage.from(bucket).getPublicUrl(path);
@@ -397,11 +397,10 @@ export function useClusterAnalysis({
     const fetchSlsChunkSafe = async (kId: string) => {
       try {
         const path = `sls/kec_${kId}.json`;
-        const slsBucket =
-          kabId === "3515" ? "spatial-chunks-sidoarjo" : "spatial-chunks";
+        const slsBucket = region.bucketName;
         let res = await fetch(getChunkUrl(path, slsBucket));
         if (!res.ok && kabId === "3510") {
-          res = await fetch(getChunkUrl(path, "spatial-chunks-se2026"));
+          res = await fetch(getChunkUrl(path, "spatial-chunks"));
         }
         if (!res.ok) return null;
         return await res.json();
