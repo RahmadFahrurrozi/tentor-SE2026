@@ -31,6 +31,7 @@ import {
   useSlsDetailTable,
   type SlsRowItem,
 } from "@/hooks/use-sls-detail-table";
+import { cn } from "@/lib/utils";
 
 export type { SlsRowItem };
 
@@ -429,60 +430,80 @@ export function SlsDetailTable({ spatialData }: SlsDetailTableProps) {
                 <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
                   <Button
                     size="sm"
-                    variant={modalActiveTab === "all" ? "default" : "outline"}
+                    variant="outline"
                     onClick={() => setModalActiveTab("all")}
-                    className="h-7 text-xs px-2 gap-1"
+                    className={cn(
+                      "h-7 text-xs px-2 gap-1 transition-all",
+                      modalActiveTab === "all"
+                        ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground shadow-xs"
+                        : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
+                    )}
                   >
                     <Layers className="w-3 h-3" /> Semua ({slsEntities.length})
                   </Button>
                   <Button
                     size="sm"
-                    variant={modalActiveTab === "usaha" ? "default" : "outline"}
+                    variant="outline"
                     onClick={() => setModalActiveTab("usaha")}
-                    className="h-7 text-xs px-2 gap-1 border-amber-500/30 text-amber-600 dark:text-amber-400"
+                    className={cn(
+                      "h-7 text-xs px-2 gap-1 transition-all",
+                      modalActiveTab === "usaha"
+                        ? "bg-amber-500 text-white border-amber-500 hover:bg-amber-600 hover:text-white shadow-xs"
+                        : "border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                    )}
                   >
                     <Store className="w-3 h-3" /> Usaha
                   </Button>
                   <Button
                     size="sm"
-                    variant={
-                      modalActiveTab === "usaha-digital" ? "default" : "outline"
-                    }
+                    variant="outline"
                     onClick={() => setModalActiveTab("usaha-digital")}
-                    className="h-7 text-xs px-2 gap-1 border-pink-500/30 text-pink-600 dark:text-pink-400"
+                    className={cn(
+                      "h-7 text-xs px-2 gap-1 transition-all",
+                      modalActiveTab === "usaha-digital"
+                        ? "bg-pink-500 text-white border-pink-500 hover:bg-pink-600 hover:text-white shadow-xs"
+                        : "border-pink-500/30 text-pink-600 dark:text-pink-400 hover:bg-pink-500/10"
+                    )}
                   >
                     <Laptop className="w-3 h-3" /> Digital
                   </Button>
                   <Button
                     size="sm"
-                    variant={
-                      modalActiveTab === "usaha-pertanian"
-                        ? "default"
-                        : "outline"
-                    }
+                    variant="outline"
                     onClick={() => setModalActiveTab("usaha-pertanian")}
-                    className="h-7 text-xs px-2 gap-1 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                    className={cn(
+                      "h-7 text-xs px-2 gap-1 transition-all",
+                      modalActiveTab === "usaha-pertanian"
+                        ? "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 hover:text-white shadow-xs"
+                        : "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                    )}
                   >
                     <Sprout className="w-3 h-3" /> Tani
                   </Button>
                   <Button
                     size="sm"
-                    variant={modalActiveTab === "rt" ? "default" : "outline"}
+                    variant="outline"
                     onClick={() => setModalActiveTab("rt")}
-                    className="h-7 text-xs px-2 gap-1 border-blue-500/30 text-blue-600 dark:text-blue-400"
+                    className={cn(
+                      "h-7 text-xs px-2 gap-1 transition-all",
+                      modalActiveTab === "rt"
+                        ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:text-white shadow-xs"
+                        : "border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
+                    )}
                   >
                     <Home className="w-3 h-3" /> KK
                   </Button>
                   {slsEntities.some((e) => e.isAnomaly) && (
                     <Button
                       size="sm"
-                      variant={modalActiveTab === "anomali" ? "default" : "outline"}
+                      variant="outline"
                       onClick={() => setModalActiveTab("anomali")}
-                      className={`h-7 text-xs px-2 gap-1 border-red-500/40 text-red-600 dark:text-red-400 ${
+                      className={cn(
+                        "h-7 text-xs px-2 gap-1 transition-all",
                         modalActiveTab === "anomali"
-                          ? "bg-red-600 hover:bg-red-700 text-white"
-                          : ""
-                      }`}
+                          ? "bg-red-600 text-white border-red-600 hover:bg-red-700 hover:text-white shadow-xs"
+                          : "border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-500/10"
+                      )}
                     >
                       Luar Batas ({slsEntities.filter((e) => e.isAnomaly).length})
                     </Button>
