@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { KecamatanComparisonView } from "./KecamatanComparisonView";
 import {
   BarChart,
   Bar,
@@ -24,7 +25,6 @@ import {
   Home,
   Laptop,
   Sprout,
-  ShieldCheck,
   ChevronUp,
   ChevronDown,
   BarChart3,
@@ -57,7 +57,6 @@ import {
 import { AVAILABLE_BASEMAPS } from "@/config/mapStyles";
 import { EntityDetailTable } from "./EntityDetailTable";
 import { SlsDetailTable } from "./SlsDetailTable";
-import { KecamatanComparisonView } from "./KecamatanComparisonView";
 import { ClusterAnalysisTab } from "./ClusterAnalysisTab";
 import { useStatisticsPanel } from "@/hooks/use-statistics-panel";
 
@@ -102,21 +101,27 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
     handleExportGeoJSON,
   } = useStatisticsPanel(spatialData);
 
-  const kecamatanOptions = useMemo(() => [
-    ...(isAdmin ? [{ value: "Semua", label: "Semua Kecamatan" }] : []),
-    ...kecOptions.map((k: any) => ({
-      value: k.idkec,
-      label: k.nmkec || k.nama || k.name || k.idkec,
-    })),
-  ], [isAdmin, kecOptions]);
+  const kecamatanOptions = useMemo(
+    () => [
+      ...(isAdmin ? [{ value: "Semua", label: "Semua Kecamatan" }] : []),
+      ...kecOptions.map((k: any) => ({
+        value: k.idkec,
+        label: k.nmkec || k.nama || k.name || k.idkec,
+      })),
+    ],
+    [isAdmin, kecOptions],
+  );
 
-  const desaListOptions = useMemo(() => [
-    { value: "Semua", label: "Semua Desa" },
-    ...desaOptions.map((d: any) => ({
-      value: d.iddesa,
-      label: d.nmdesa || d.nama || d.name || d.iddesa,
-    })),
-  ], [desaOptions]);
+  const desaListOptions = useMemo(
+    () => [
+      { value: "Semua", label: "Semua Desa" },
+      ...desaOptions.map((d: any) => ({
+        value: d.iddesa,
+        label: d.nmdesa || d.nama || d.name || d.iddesa,
+      })),
+    ],
+    [desaOptions],
+  );
 
   return (
     <>
@@ -226,20 +231,21 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
                 >
                   <Filter className="w-3.5 h-3.5 text-primary" />
                   <span className="font-medium">Filter Wilayah</span>
-                  {store.filterKecamatan !== "Semua" && store.filterKecamatan && (
-                    <Badge
-                      variant="secondary"
-                      className="px-1.5 py-0 text-[10px] h-4 font-semibold bg-primary/15 text-primary border-0"
-                    >
-                      {store.filterSls !== "Semua"
-                        ? "Level RT/RW"
-                        : store.filterDusun !== "Semua"
-                          ? "Level Dusun"
-                          : store.filterDesa !== "Semua"
-                            ? "Level Desa"
-                            : "Level Kec"}
-                    </Badge>
-                  )}
+                  {store.filterKecamatan !== "Semua" &&
+                    store.filterKecamatan && (
+                      <Badge
+                        variant="secondary"
+                        className="px-1.5 py-0 text-[10px] h-4 font-semibold bg-primary/15 text-primary border-0"
+                      >
+                        {store.filterSls !== "Semua"
+                          ? "Level RT/RW"
+                          : store.filterDusun !== "Semua"
+                            ? "Level Dusun"
+                            : store.filterDesa !== "Semua"
+                              ? "Level Desa"
+                              : "Level Kec"}
+                      </Badge>
+                    )}
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -382,14 +388,17 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
 
                 <div className="pt-2 border-t text-[11px] text-muted-foreground flex items-center justify-between">
                   <span className="truncate max-w-[280px]">
-                    <span className="font-semibold text-foreground">Aktif:</span> {regionLabel}
+                    <span className="font-semibold text-foreground">
+                      Aktif:
+                    </span>{" "}
+                    {regionLabel}
                   </span>
                 </div>
               </PopoverContent>
             </Popover>
 
-            {/* Tombol Ekspor (CSV, Excel, GeoJSON) */}
-            {canExport ? (
+            {/* Tombol Ekspor (Khusus Admin) */}
+            {canExport && (
               <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
                 <Button
                   size="sm"
@@ -420,11 +429,6 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
                   </Button>
                 )}
               </div>
-            ) : (
-              <div className="text-[11px] text-muted-foreground flex items-center gap-1 bg-muted/60 px-2.5 py-1 rounded border ml-auto sm:ml-0">
-                <ShieldCheck className="w-3.5 h-3.5 text-blue-500" /> Export
-                (Khusus Admin)
-              </div>
             )}
 
             {/* Tombol Pilihan Basemap (muncul saat Fullscreen) */}
@@ -439,7 +443,9 @@ export function StatisticsPanel({ spatialData }: StatisticsPanelProps) {
                   >
                     <Layers className="w-3.5 h-3.5 text-primary" />
                     <span className="hidden sm:inline">
-                      {AVAILABLE_BASEMAPS.find((b) => b.id === store.selectedBasemap)?.name || "Basemap"}
+                      {AVAILABLE_BASEMAPS.find(
+                        (b) => b.id === store.selectedBasemap,
+                      )?.name || "Basemap"}
                     </span>
                   </Button>
                 </DropdownMenuTrigger>

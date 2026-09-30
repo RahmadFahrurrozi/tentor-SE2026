@@ -18,7 +18,6 @@ import {
   FileSpreadsheet,
   X,
   Building,
-  ShieldCheck,
   Building2,
   Store,
   Laptop,
@@ -87,8 +86,8 @@ export function SlsDetailTable({ spatialData }: SlsDetailTableProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Admin-only Export Buttons vs Read-Only Badge for PML/PPL */}
-          {isAdmin ? (
+          {/* Admin-only Export Buttons */}
+          {isAdmin && (
             <div className="flex items-center gap-1.5">
               <Button
                 size="sm"
@@ -108,14 +107,6 @@ export function SlsDetailTable({ spatialData }: SlsDetailTableProps) {
                 <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
               </Button>
             </div>
-          ) : (
-            <Badge
-              variant="outline"
-              className="text-[10px] bg-muted/60 text-muted-foreground border flex items-center gap-1 py-1"
-            >
-              <ShieldCheck className="w-3 h-3 text-blue-500" /> Read Only
-              (PML/PPL)
-            </Badge>
           )}
 
           <Badge

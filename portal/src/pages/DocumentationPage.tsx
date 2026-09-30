@@ -138,7 +138,6 @@ export default function DocumentationPage() {
             </Badge>
           </div>
 
-
           {/* Stepper Dot Progress Component */}
           <div className="pt-2 pb-1 space-y-2">
             {/* Row 1: Dots + inline connectors — button hanya berisi dot (w-9 = 36px fixed) */}
@@ -220,8 +219,6 @@ export default function DocumentationPage() {
               })}
             </div>
           </div>
-
-
         </section>
 
         {/* Step Content Panels */}
@@ -451,9 +448,9 @@ export default function DocumentationPage() {
                         Export Excel & CSV
                       </h4>
                       <p className="text-xs text-muted-foreground">
-                        Khusus Role Admin yang dapat mengunduh laporan rekapitulasi
-                        data spasial ke format file <code>.xlsx</code> atau{" "}
-                        <code>.csv</code>.
+                        Khusus Role Admin yang dapat mengunduh laporan
+                        rekapitulasi data spasial ke format file{" "}
+                        <code>.xlsx</code> atau <code>.csv</code>.
                       </p>
                     </div>
                   </div>

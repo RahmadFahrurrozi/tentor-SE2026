@@ -12,7 +12,7 @@ export type UserType = {
   id: string;
   full_name: string;
   email: string;
-  role: "ppl" | "pml" | "admin";
+  role: "ppl" | "pml" | "admin" | "pengolahan";
   created_at: string;
   assignments?: string[];
 };
@@ -58,6 +58,10 @@ export const columns = ({
         },
         ppl: { label: "PPL", className: "bg-blue-100 text-blue-700" },
         pml: { label: "PML", className: "bg-emerald-100 text-emerald-700" },
+        pengolahan: {
+          label: "Pengolahan",
+          className: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+        },
       };
       const config =
         roleConfig[role as keyof typeof roleConfig] || roleConfig.ppl;
@@ -78,10 +82,12 @@ export const columns = ({
       const user = row.original;
       const assignments = user.assignments || [];
 
-      if (user.role === "admin") {
+      if (user.role === "admin" || user.role === "pengolahan") {
         return (
           <div className="text-muted-foreground text-xs italic">
-            Seluruh Wilayah
+            {user.role === "admin"
+              ? "Seluruh Wilayah"
+              : "Semua Kecamatan (Banyuwangi)"}
           </div>
         );
       }

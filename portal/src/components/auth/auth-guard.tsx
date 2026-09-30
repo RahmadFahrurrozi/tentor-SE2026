@@ -45,19 +45,13 @@ export function AuthGuard({ allowedRoles }: { allowedRoles?: string[] }) {
         if (currentSession?.user) {
           // Session masih valid di Supabase
           // Fetch profile kalau belum ada (misalnya pertama login atau store corrupt)
-          if (!profile) {
-            try {
-              const userProfile = await profileService.getById(
-                currentSession.user.id,
-              );
-              setAuth(currentSession, userProfile);
-            } catch {
-              // Profile fetch gagal tapi session valid — set session dulu
-              setAuth(currentSession, null);
-            }
-          } else {
-            // Profile sudah ada dari persist, update session kalau beda
-            setAuth(currentSession, profile);
+          try {
+            const userProfile = await profileService.getById(
+              currentSession.user.id,
+            );
+            setAuth(currentSession, userProfile);
+          } catch {
+            setAuth(currentSession, profile || null);
           }
         } else {
           // Supabase tidak punya session valid → clear store

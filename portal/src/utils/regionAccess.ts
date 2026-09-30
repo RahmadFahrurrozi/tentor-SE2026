@@ -20,17 +20,30 @@ export function getUserRegionAccess(
   const email = (profile?.email || user?.email || "").toLowerCase().trim();
   const role = (profile?.role || "").toLowerCase().trim();
 
-  // 1. Super Admin Banyuwangi: Akses penuh ke seluruh wilayah
+  // 1. Super Admin: Hanya jika role adalah admin/superadmin DAN email admin
   if (
-    email === "admin@bps-bwi.go.id" ||
-    email.includes("bps-bwi.go.id") ||
-    email.includes("superadmin") ||
-    role === "superadmin"
+    (role === "admin" || role === "superadmin") &&
+    (email === "admin@bps-bwi.go.id" ||
+      email.includes("superadmin") ||
+      role === "superadmin")
   ) {
     return {
       isSuperAdmin: true,
       allowedKabupaten: ["3510", "3515", "3577"],
       lockedKabupaten: null,
+    };
+  }
+
+  // 1b. Khusus akun Pengolahan atau akun Banyuwangi (PPL / PML): Kunci ke Banyuwangi (3510)
+  if (
+    role === "pengolahan" ||
+    email.includes("bps-bwi.go.id") ||
+    email.includes("banyuwangi")
+  ) {
+    return {
+      isSuperAdmin: false,
+      allowedKabupaten: ["3510"],
+      lockedKabupaten: "3510",
     };
   }
 

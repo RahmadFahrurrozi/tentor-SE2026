@@ -28,7 +28,6 @@ import {
   Store,
   Home,
   Laptop,
-  ShieldCheck,
 } from "lucide-react";
 import { useStatisticsModal } from "@/hooks/use-statistics-modal";
 
@@ -75,7 +74,7 @@ export function StatisticsModal({
             </DialogDescription>
           </div>
 
-          {isAdmin ? (
+          {isAdmin && (
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
@@ -92,11 +91,6 @@ export function StatisticsModal({
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" /> Export Excel
               </Button>
-            </div>
-          ) : (
-            <div className="text-xs text-muted-foreground flex items-center gap-1.5 bg-muted/50 px-3 py-1.5 rounded-md border">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-500" /> Export
-              khusus Admin
             </div>
           )}
         </DialogHeader>

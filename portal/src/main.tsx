@@ -10,7 +10,9 @@ import { ThemeProvider } from "./context/theme-provider";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 1, // 1 menit
+      staleTime: 1000 * 60 * 60, // 1 jam
+      gcTime: 1000 * 60 * 60 * 24, // 24 jam
+      refetchOnWindowFocus: false,
       retry: 1,
     },
   },
