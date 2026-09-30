@@ -28,16 +28,16 @@ load_dotenv()
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
-INPUT_DIR  = Path("./data-parquet")   # folder berisi file .parquet asli
+INPUT_DIR  = Path("./data")          # folder berisi file .parquet asli
 OUTPUT_DIR = Path("./data-chunks")    # output JSON chunks
 
 # Nama file parquet input
 FILES = {
-    "usaha":            "data-usaha.parquet",
+    "usaha":            "titik_usaha.parquet",
     "usaha_digital":    "data-usaha-digital.parquet",
-    "usaha_pertanian":  "titik-usaha-pertanian.parquet",
-    "rumah_tangga":     "data-rumah-tangga.parquet",
-    "bangunan":         "data-bangunan.parquet",
+    "usaha_pertanian":  "titik_pertanian.parquet",
+    "rumah_tangga":     "titik_keluarga.parquet",
+    "bangunan":         "titik_bangunan_lainnya.parquet",
 }
 
 # Kolom kecamatan dan desa — sesuaikan jika nama kolom berbeda

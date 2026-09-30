@@ -328,6 +328,9 @@ export default function UsersPage() {
                           Petugas Pendataan Lapangan (PPL)
                         </option>
                         <option value="pml">Pengawas Lapangan (PML)</option>
+                        <option value="pengolahan">
+                          Petugas Pengolahan Peta (Banyuwangi)
+                        </option>
                         <option disabled value="admin">
                           Administrator Sensus
                         </option>
@@ -684,6 +687,9 @@ export default function UsersPage() {
               >
                 <option value="ppl">Petugas Pendataan Lapangan (PPL)</option>
                 <option value="pml">Pengawas Lapangan (PML)</option>
+                <option value="pengolahan">
+                  Petugas Pengolahan Peta (Banyuwangi)
+                </option>
                 <option disabled value="admin">
                   Administrator Sensus
                 </option>

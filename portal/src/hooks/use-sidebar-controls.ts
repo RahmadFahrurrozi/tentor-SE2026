@@ -71,7 +71,7 @@ export function useSidebarControls(spatialData: any) {
    */
   const kecOptions = useMemo(() => {
     return allKecamatans.filter((k: any) => {
-      if (role === "admin") return true;
+      if (role === "admin" || role === "pengolahan") return true;
       return assignedKecs.includes(k.idkec);
     });
   }, [allKecamatans, role, assignedKecs]);
@@ -106,6 +106,14 @@ export function useSidebarControls(spatialData: any) {
 
   // ── 4. React Effects ────────────────────────────────────────────────────────
   
+  useEffect(() => {
+    if (role === "ppl" && assignedKecs.length === 1) {
+      if (store.filterKecamatan !== assignedKecs[0]) {
+        store.setFilter("filterKecamatan", assignedKecs[0]);
+      }
+    }
+  }, [role, assignedKecs, store.filterKecamatan]);
+
   /**
    * Hook useEffect:
    * Otomatis mendaftarkan Desa pertama penugasan untuk user ber-role PPL
@@ -181,7 +189,11 @@ export function useSidebarControls(spatialData: any) {
   // ── 6. User Formatting Helpers ──────────────────────────────────────────────
   
   const userEmail = profile?.email || user?.email || "";
-  const userFullName = profile?.full_name || "PML User";
+  const userFullName =
+    profile?.full_name ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    (userEmail ? userEmail.split("@")[0].replace(/[._-]/g, " ").toUpperCase() : "Pengguna");
   const userInitials =
     userFullName
       .split(" ")
@@ -194,11 +206,13 @@ export function useSidebarControls(spatialData: any) {
   const displayRole =
     role === "admin"
       ? "Admin"
-      : role === "pml"
-        ? "PML"
-        : role === "ppl"
-          ? "PPL"
-          : role?.toUpperCase();
+      : role === "pengolahan"
+        ? "Pengolahan"
+        : role === "pml"
+          ? "PML"
+          : role === "ppl"
+            ? "PPL"
+            : role?.toUpperCase();
 
   return {
     store,

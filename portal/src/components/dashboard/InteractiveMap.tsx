@@ -1126,6 +1126,11 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           "-",
       );
 
+      const noBangHover =
+        properties["no_bang"] ||
+        properties["no_bang__1"] ||
+        properties["no_urut_bangunan"];
+
       html = `
         <div style="font-family: 'Outfit', 'Inter', sans-serif;">
           <p style="font-weight: 700; border-bottom: 1px solid ${theme === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"}; padding-bottom: 4px; margin: 0 0 4px 0; font-size: 13px; color: ${color};">
@@ -1133,6 +1138,11 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           </p>
           <p style="font-weight: 600; font-size: 12px; margin: 0 0 6px 0;">${nama}</p>
           <div style="display: flex; flex-direction: column; gap: 3px; font-size: 10px; color: #94A3B8;">
+            ${
+              noBangHover
+                ? `<p style="margin: 0;"><span style="font-weight: 500; color: ${theme === "dark" ? "#CBD5E1" : "#475569"};">No. Bangunan:</span> <strong style="color: ${theme === "dark" ? "#38BDF8" : "#0284C7"};">#${escapeHtml(String(noBangHover))}</strong></p>`
+                : ""
+            }
             <p style="white-space: normal; word-break: break-word; margin: 0;"><span style="font-weight: 500; color: ${theme === "dark" ? "#CBD5E1" : "#475569"};">Alamat:</span> ${alamat}</p>
           </div>
           ${
@@ -1307,10 +1317,22 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       props["idsls final"] ||
       null;
 
+    const noBangunanRaw =
+      props["no_bang"] ||
+      props["no_bang__1"] ||
+      props["no_urut_bangunan"] ||
+      null;
+
     const nama = escapeHtml(namaRaw);
     const alamat = alamatRaw !== null ? escapeHtml(alamatRaw) : null;
     const extraInfo = extraInfoRaw !== null ? escapeHtml(extraInfoRaw) : null;
     const slsInfo = slsInfoRaw !== null ? escapeHtml(slsInfoRaw) : null;
+    const noBangunan =
+      noBangunanRaw !== null &&
+      noBangunanRaw !== undefined &&
+      noBangunanRaw !== ""
+        ? escapeHtml(String(noBangunanRaw))
+        : null;
 
     triggerRadarAnimation([lngLat.lng, lngLat.lat], type);
 
@@ -1339,20 +1361,29 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
               : "Keluarga (KK)";
 
     const html = `
-      <div style="font-family: 'Outfit', 'Inter', sans-serif; color: ${theme === "dark" ? "#f8fafc" : "#0f172a"}; padding: 14px; border-radius: 16px; max-width: 280px; background: ${theme === "dark" ? "rgba(30, 41, 59, 0.95)" : "rgba(255, 255, 255, 0.95)"}; backdrop-filter: blur(8px); border: 1px solid ${theme === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)"}; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);">
-        <div style="margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;">
-          <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 9999px; display: inline-flex; align-items: center; ${badgeColor}">${escapeHtml(badgeLabel)}</span>
-          ${props.is_anomaly ? `<span style="font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 6px; background-color: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3);">Luar Batas SLS</span>` : ""}
+      <div style="font-family: 'Outfit', 'Inter', sans-serif; color: ${theme === "dark" ? "#f8fafc" : "#0f172a"}; padding: 14px 16px; border-radius: 16px; min-width: 280px; max-width: 320px; background: ${theme === "dark" ? "rgba(30, 41, 59, 0.95)" : "rgba(255, 255, 255, 0.95)"}; backdrop-filter: blur(8px); border: 1px solid ${theme === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)"}; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);">
+        <div style="margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-right: 28px;">
+          <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 3px 8px; border-radius: 9999px; display: inline-flex; align-items: center; ${badgeColor}; line-height: 1.2;">${escapeHtml(badgeLabel)}</span>
+          ${props.is_anomaly ? `<span style="font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 6px; background-color: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3); line-height: 1.2;">Luar Batas SLS</span>` : ""}
         </div>
-        <h3 style="margin: 0 0 6px 0; font-size: 14px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em;">${nama}</h3>
+        <h3 style="margin: 0 0 6px 0; font-size: 14px; font-weight: 700; line-height: 1.35; letter-spacing: -0.01em; word-break: break-word;">${nama}</h3>
         <div style="height: 1px; background: ${theme === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"}; margin: 8px 0;"></div>
         <div style="display: flex; flex-direction: column; gap: 4px; font-size: 10px; color: ${theme === "dark" ? "#94a3b8" : "#64748b"}">
-          <p style="margin: 0; white-space: normal; word-break: break-word;">
+          ${
+            noBangunan
+              ? `
+          <p style="margin: 0; line-height: 1.4;">
+            <span style="font-weight: 500; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};">No. Bangunan:</span>
+            <span style="margin-left: 6px; font-weight: 700; color: ${theme === "dark" ? "#38bdf8" : "#0284c7"};">${noBangunan}</span>
+          </p>`
+              : ""
+          }
+          <p style="margin: 0; line-height: 1.4; white-space: normal; word-break: break-word;">
             <span style="font-weight: 500; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};">Alamat:</span>
-            ${alamat !== null ? `<span style="margin-left: 4px;">${alamat}</span>` : `<span style="margin-left: 4px; opacity: 0.5; font-style: italic;">Tidak tersedia</span>`}
+            ${alamat !== null ? `<span style="margin-left: 6px;">${alamat}</span>` : `<span style="margin-left: 6px; opacity: 0.5; font-style: italic;">Tidak tersedia</span>`}
           </p>
-          ${extraInfo ? `<p style="margin: 0;"><span style="font-weight: 500; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};">Keterangan:</span> <span style="margin-left: 4px;">${extraInfo}</span></p>` : ""}
-          ${slsInfo ? `<p style="margin: 0;"><span style="font-weight: 500; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};">ID SLS Tercatat:</span> <span style="margin-left: 4px; font-family: monospace; font-size: 9px;">${slsInfo}</span></p>` : ""}
+          ${extraInfo ? `<p style="margin: 0; line-height: 1.4;"><span style="font-weight: 500; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};">Keterangan:</span> <span style="margin-left: 6px;">${extraInfo}</span></p>` : ""}
+          ${slsInfo ? `<p style="margin: 0; line-height: 1.4;"><span style="font-weight: 500; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};">ID SLS Tercatat:</span> <span style="margin-left: 6px; font-family: monospace; font-size: 9px;">${slsInfo}</span></p>` : ""}
         </div>
 
         ${
@@ -1784,8 +1815,10 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         }
       }
 
-      // 0c. Batas Desa Terpilih
+      // 0c. Batas Desa Terpilih (Tetap UNGU, tidak ditimpa oranye)
       if (geoJsonDesaSelected && store.filterDesa !== "Semua") {
+        const desaBorderColor =
+          theme === "dark" ? "#A78BFA" : "#7C3AED"; // Ungu cerah elegan
         if (map.getSource("desa-selected-source")) {
           (
             map.getSource("desa-selected-source") as maplibregl.GeoJSONSource
@@ -1794,7 +1827,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             map.setPaintProperty(
               "desa-selected-boundary-layer",
               "line-color",
-              theme === "dark" ? "#FF7300" : "#E25C00",
+              desaBorderColor,
             );
           }
         } else {
@@ -1807,9 +1840,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             type: "line",
             source: "desa-selected-source",
             paint: {
-              "line-color": theme === "dark" ? "#FF7300" : "#E25C00",
-              "line-width": 4.5,
-              "line-opacity": 1.0,
+              "line-color": desaBorderColor,
+              "line-width": 3.5,
+              "line-opacity": 0.9,
             },
           });
         }
@@ -1821,35 +1854,54 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         }
       }
 
-      // 1. SLS Boundaries
+      // 1. SLS Boundaries (Garis batas SLS di dalam desa yang berwarna ORANYE di Google Hybrid)
       if (filteredSls) {
+        const isSatellite =
+          store.selectedBasemap === "google-hybrid" ||
+          store.selectedBasemap === "esri-satellite";
+
+        const slsLineColor = isSatellite
+          ? "#FF7A00" // Oranye cerah menyala khusus batas SLS agar jelas di citra satelit
+          : theme === "dark"
+            ? "rgba(255, 255, 255, 0.4)"
+            : "rgba(30, 41, 59, 0.4)";
+
+        const slsLineWidth = isSatellite ? 2.0 : 1.0;
+        const slsLineOpacity = isSatellite ? 1.0 : 0.8;
+
+        const slsHoverColor = isSatellite
+          ? "#FFE600" // Kuning neon cerah saat di-hover pada satelit
+          : theme === "dark"
+            ? "#ffffff"
+            : "#0f172a";
+
+        const slsFillColor = isSatellite
+          ? "rgba(255, 122, 0, 0.04)"
+          : theme === "dark"
+            ? "rgba(255, 255, 255, 0.02)"
+            : "rgba(79, 70, 229, 0.03)";
+
         if (map.getSource("sls-source")) {
           (map.getSource("sls-source") as maplibregl.GeoJSONSource).setData(
             filteredSls,
           );
           if (map.getLayer("sls-fill-layer")) {
-            map.setPaintProperty(
-              "sls-fill-layer",
-              "fill-color",
-              theme === "dark"
-                ? "rgba(255, 255, 255, 0.02)"
-                : "rgba(79, 70, 229, 0.03)",
-            );
+            map.setPaintProperty("sls-fill-layer", "fill-color", slsFillColor);
           }
           if (map.getLayer("sls-line-layer")) {
+            map.setPaintProperty("sls-line-layer", "line-color", slsLineColor);
+            map.setPaintProperty("sls-line-layer", "line-width", slsLineWidth);
             map.setPaintProperty(
               "sls-line-layer",
-              "line-color",
-              theme === "dark"
-                ? "rgba(255, 255, 255, 0.35)"
-                : "rgba(30, 41, 59, 0.35)",
+              "line-opacity",
+              slsLineOpacity,
             );
           }
           if (map.getLayer("sls-hover-line-layer")) {
             map.setPaintProperty(
               "sls-hover-line-layer",
               "line-color",
-              theme === "dark" ? "#ffffff" : "#0f172a",
+              slsHoverColor,
             );
           }
         } else {
@@ -1862,10 +1914,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             type: "fill",
             source: "sls-source",
             paint: {
-              "fill-color":
-                theme === "dark"
-                  ? "rgba(255, 255, 255, 0.02)"
-                  : "rgba(79, 70, 229, 0.03)",
+              "fill-color": slsFillColor,
               "fill-opacity": 0.7,
             },
           });
@@ -1874,11 +1923,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             type: "line",
             source: "sls-source",
             paint: {
-              "line-color":
-                theme === "dark"
-                  ? "rgba(255, 255, 255, 0.35)"
-                  : "rgba(30, 41, 59, 0.35)",
-              "line-width": 1.0,
+              "line-color": slsLineColor,
+              "line-width": slsLineWidth,
+              "line-opacity": slsLineOpacity,
             },
           });
           map.addLayer({
@@ -1887,7 +1934,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
             source: "sls-source",
             filter: ["==", ["get", "idsls_str"], ""],
             paint: {
-              "line-color": theme === "dark" ? "#ffffff" : "#0f172a",
+              "line-color": slsHoverColor,
               "line-width": 3.5,
               "line-opacity": 0,
             },
@@ -2457,6 +2504,7 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     store.filterDesa,
     store.filterDusun,
     store.filterSls,
+    store.selectedBasemap,
   ]);
 
   // Tutup popup & radar saat filter/reset berubah
@@ -2619,8 +2667,9 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
               >
                 <Layers className="w-4 h-4 text-primary" />
                 <span className="hidden sm:inline">
-                  {AVAILABLE_BASEMAPS.find((b) => b.id === store.selectedBasemap)
-                    ?.name || "Basemap"}
+                  {AVAILABLE_BASEMAPS.find(
+                    (b) => b.id === store.selectedBasemap,
+                  )?.name || "Basemap"}
                 </span>
               </Button>
             </DropdownMenuTrigger>

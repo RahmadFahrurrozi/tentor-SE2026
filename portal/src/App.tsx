@@ -23,7 +23,11 @@ export default function App() {
       </Route>
 
       {/* Protected Dashboard & Documentation Route */}
-      <Route element={<AuthGuard allowedRoles={["admin", "ppl", "pml"]} />}>
+      <Route
+        element={
+          <AuthGuard allowedRoles={["admin", "ppl", "pml", "pengolahan"]} />
+        }
+      >
         <Route path="/dashboard" element={<MapDashboard />} />
         <Route path="/documentation" element={<DocumentationPage />} />
       </Route>
