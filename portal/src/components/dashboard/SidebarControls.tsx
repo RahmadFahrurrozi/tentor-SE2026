@@ -1,5 +1,4 @@
-import { useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMemo, type ComponentProps } from "react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -12,14 +11,188 @@ import {
 } from "@/components/ui/select";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Button } from "@/components/ui/button";
-import { Eraser, LogOut, ArrowLeftRight, Database, Layers } from "lucide-react";
+import {
+  Eraser,
+  LogOut,
+  ArrowLeftRight,
+  Database,
+  Layers,
+  Filter,
+  ShieldAlert,
+  Search,
+  type LucideIcon,
+} from "lucide-react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { useSidebarControls } from "@/hooks/use-sidebar-controls";
 import { AVAILABLE_BASEMAPS, type BasemapId } from "@/config/mapStyles";
 import { REGIONS } from "@/config/regionConfig";
 import type { KabupatenId } from "@/store/mapStore";
 
-export function SidebarControls({ spatialData }: { spatialData: any }) {
+/* ────────────────────────────── Types ────────────────────────────── */
+
+interface SidebarControlsProps {
+  /** Tipe diambil dari hook, jadi tanpa `any` */
+  spatialData: Parameters<typeof useSidebarControls>[0];
+}
+
+interface KecRow {
+  idkec: string;
+  nmkec?: string;
+  nama?: string;
+  name?: string;
+}
+
+interface DesaRow {
+  iddesa: string;
+  nmdesa?: string;
+  nama?: string;
+  name?: string;
+}
+
+type FilterKey =
+  | "filterKecamatan"
+  | "filterDesa"
+  | "filterDusun"
+  | "filterSls";
+
+type ComboOptions = ComponentProps<typeof SearchableCombobox>["options"];
+
+interface FilterLevel {
+  key: FilterKey;
+  label: string;
+  options: ComboOptions;
+  placeholder: string;
+  emptyText: string;
+  disabled: boolean;
+}
+
+type LayerKey =
+  | "showKab"
+  | "showSls"
+  | "enable3d"
+  | "showSyntheticBuildings"
+  | "showUsaha"
+  | "showUsahaDigital"
+  | "showUsahaPertanian"
+  | "showRt"
+  | "showBangunanLainnya";
+
+interface LayerToggle {
+  key: LayerKey;
+  label: string;
+  /** Sub-opsi (menjorok, teks lebih redup) */
+  indent?: boolean;
+  /** Dikunci permanen (sama seperti perilaku lama untuk Batas SLS) */
+  locked?: boolean;
+  /** Hanya aktif bila layer bangunan menyala */
+  needsBuild?: boolean;
+}
+
+interface QcToggle {
+  id: string;
+  label: string;
+  checked: boolean;
+  onChange: () => void;
+  muted?: boolean;
+}
+
+/* ────────────────────────────── Constants ────────────────────────────── */
+
+const LAYER_TOGGLES: LayerToggle[] = [
+  { key: "showKab", label: "Batas kabupaten" },
+  { key: "showSls", label: "Batas SLS", locked: true },
+  { key: "enable3d", label: "Mode 3D extrusion", indent: true, needsBuild: true },
+  { key: "showSyntheticBuildings", label: "Bangunan sintetis" },
+  { key: "showUsaha", label: "Titik usaha biasa" },
+  { key: "showUsahaDigital", label: "Titik usaha digital" },
+  { key: "showUsahaPertanian", label: "Titik usaha pertanian" },
+  { key: "showRt", label: "Titik keluarga (KK)" },
+  { key: "showBangunanLainnya", label: "Titik bangunan lainnya" },
+];
+
+/* ────────────────────────────── Small pieces ────────────────────────────── */
+
+// Kepala seksi sidebar: ikon + judul kecil, dipisah hairline dari seksi berikutnya
+function Section({
+  icon: Icon,
+  title,
+  right,
+  children,
+}: {
+  icon?: LucideIcon;
+  title: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="px-4 py-4 border-b space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-xs font-semibold text-foreground flex items-center gap-2">
+          {Icon && <Icon className="w-3.5 h-3.5 text-primary" />}
+          {title}
+        </h4>
+        {right}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+// Satu baris switch: label kiri, switch kanan
+function ToggleRow({
+  id,
+  label,
+  checked,
+  onChange,
+  disabled,
+  muted,
+  indent,
+}: {
+  id: string;
+  label: string;
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+  muted?: boolean;
+  indent?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 ${
+        indent ? "pl-4" : ""
+      } ${disabled ? "opacity-50" : ""}`}
+    >
+      <Label
+        htmlFor={id}
+        className={`text-[13px] font-normal ${
+          muted ? "text-muted-foreground" : "text-foreground"
+        } ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+      >
+        {indent && <span className="mr-1 text-muted-foreground">↳</span>}
+        {label}
+      </Label>
+      <Switch
+        id={id}
+        checked={checked}
+        onCheckedChange={onChange}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+// Label field filter
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <Label className="text-[11px] font-medium text-muted-foreground">
+      {children}
+    </Label>
+  );
+}
+
+/* ────────────────────────────── Component ────────────────────────────── */
+
+export function SidebarControls({ spatialData }: SidebarControlsProps) {
   const {
     store,
     role,
@@ -42,7 +215,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
       ...(role === "admin"
         ? [{ value: "Semua", label: "Semua Kecamatan" }]
         : []),
-      ...kecOptions.map((k: any) => ({
+      ...kecOptions.map((k: KecRow) => ({
         value: k.idkec,
         label: k.nmkec || k.nama || k.name || k.idkec,
       })),
@@ -53,7 +226,7 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
   const desaListOptions = useMemo(
     () => [
       { value: "Semua", label: "Semua Desa" },
-      ...desaOptions.map((d: any) => ({
+      ...desaOptions.map((d: DesaRow) => ({
         value: d.iddesa,
         label: d.nmdesa || d.nama || d.name || d.iddesa,
       })),
@@ -61,96 +234,195 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
     [desaOptions],
   );
 
+  const isSe2026 = store.activeDatasetVersion === "se2026";
+  const hasPrelist = !!REGIONS[store.selectedKabupaten]?.hasPrelist;
+
+  // Empat level filter wilayah (urutan = hirarki)
+  const levels: FilterLevel[] = [
+    {
+      key: "filterKecamatan",
+      label: "Kecamatan",
+      options: kecamatanOptions,
+      placeholder: "Pilih Kecamatan...",
+      emptyText: "Kecamatan tidak ditemukan.",
+      disabled: false,
+    },
+    {
+      key: "filterDesa",
+      label: "Desa / Kelurahan",
+      options: desaListOptions,
+      placeholder: "Pilih Desa...",
+      emptyText: "Desa tidak ditemukan.",
+      disabled:
+        !store.filterKecamatan ||
+        store.filterKecamatan === "Semua" ||
+        desaOptions.length === 0,
+    },
+    {
+      key: "filterDusun",
+      label: "Dusun / Lingkungan",
+      options: dusunOptions,
+      placeholder: "Pilih Dusun...",
+      emptyText: "Dusun tidak ditemukan.",
+      disabled:
+        !store.filterDesa ||
+        store.filterDesa === "Semua" ||
+        dusunOptions.length <= 1,
+    },
+    {
+      key: "filterSls",
+      label: "RT / RW (SLS)",
+      options: slsOptions,
+      placeholder: "Pilih RT / RW...",
+      emptyText: "RT / RW tidak ditemukan.",
+      disabled:
+        !store.filterDesa ||
+        store.filterDesa === "Semua" ||
+        slsOptions.length <= 1,
+    },
+  ];
+
+  // Ubah satu level, reset semua level di bawahnya ke "Semua"
+  const handleLevelChange = (index: number, val: string): void => {
+    store.setFilter(levels[index].key, val);
+    levels.slice(index + 1).forEach((l) => store.setFilter(l.key, "Semua"));
+  };
+
+  // Toggle QC (handler-nya beda-beda per item, jadi didefinisikan di sini)
+  const qcAnomaly: QcToggle[] = [
+    {
+      id: "highlightAnomalies",
+      label: "Sorot titik luar batas",
+      checked: store.highlightAnomalies,
+      onChange: () => store.toggleHighlightAnomalies(),
+    },
+    {
+      id: "filterOnlyAnomalies",
+      label: "Hanya titik luar batas",
+      checked: store.filterOnlyAnomalies,
+      onChange: () => store.toggleFilterOnlyAnomalies(),
+      muted: true,
+    },
+  ];
+
+  const qcCluster: QcToggle[] = [
+    {
+      id: "highlightClusters",
+      label: "Sorot titik bergerombol",
+      checked: store.highlightClusters,
+      onChange: () => store.toggleHighlightClusters(),
+    },
+    {
+      id: "filterOnlyClusters",
+      label: "Hanya titik bergerombol",
+      checked: store.filterOnlyClusters,
+      onChange: () => store.toggleFilterOnlyClusters(),
+      muted: true,
+    },
+  ];
+
+  // Chip role: dibedakan lewat dot (admin = primary penuh, pml = sedang, ppl = redup)
+  const roleDot =
+    role === "admin"
+      ? "bg-primary"
+      : role === "pml"
+        ? "bg-primary/55"
+        : "bg-muted-foreground/50";
+
   return (
-    <Card className="h-full w-full max-w-75 flex flex-col rounded-none border-y-0 border-l-0">
-      <CardHeader className="pb-4 shrink-0 flex flex-row items-center justify-between space-y-0">
-        <div className="flex items-center gap-3">
+    <div className="h-full w-full max-w-75 flex flex-col border-r bg-background">
+      {/* ── Header: logo + judul + toggle tema ── */}
+      <div className="h-14 shrink-0 px-4 flex items-center justify-between border-b">
+        <div className="flex items-center gap-2.5 min-w-0">
           <img
             src="/logo.svg"
             alt="BPS Logo"
-            className="w-8 h-8 object-contain"
+            className="w-7 h-7 object-contain"
           />
-          <CardTitle className="text-xl font-bold">TENTORING</CardTitle>
+          <span className="text-base font-semibold tracking-tight">
+            TENTORING
+          </span>
         </div>
         <ModeToggle />
-      </CardHeader>
+      </div>
 
-      <CardContent className="flex-1 overflow-y-auto space-y-6">
-        {/* Dataset Switcher & Quick Tools */}
-        <div className="space-y-3 p-3 bg-muted/40 rounded-lg border">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold flex items-center gap-1.5">
-              <Database className="w-3.5 h-3.5 text-primary" /> Versi Dataset
-            </span>
+      {/* ── Body scrollable ── */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Versi dataset */}
+        <Section
+          icon={Database}
+          title="Versi dataset"
+          right={
+            // Warna badge versi sengaja dipertahankan: SE 2026 = hijau, Prelist = oranye
             <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                store.activeDatasetVersion === "se2026"
-                  ? "bg-emerald-500/15 text-emerald-500"
-                  : "bg-amber-500/15 text-amber-500"
+              className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${
+                isSe2026
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
               }`}
             >
-              {store.activeDatasetVersion === "se2026" ? "SE 2026" : "Prelist"}
+              {isSe2026 ? "SE 2026" : "Prelist"}
             </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-1 bg-background p-1 rounded-md border">
-            <Button
-              size="sm"
-              variant={
-                store.activeDatasetVersion === "prelist" ? "default" : "ghost"
-              }
-              className="text-[11px] h-7 px-1"
+          }
+        >
+          {/* Segmented control: aktif = putih terangkat, dot sesuai warna versi */}
+          <div className="grid grid-cols-2 gap-1 rounded-md border bg-muted/50 p-1">
+            <button
+              type="button"
               onClick={() => store.setDatasetVersion("prelist")}
-              disabled={!REGIONS[store.selectedKabupaten]?.hasPrelist}
+              disabled={!hasPrelist}
+              aria-pressed={!isSe2026}
+              className={`inline-flex items-center justify-center gap-1.5 rounded px-2 py-1.5 text-[11px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50 ${
+                !isSe2026
+                  ? "bg-background text-foreground shadow-sm border"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
-              Baseline Prelist
-            </Button>
-            <Button
-              size="sm"
-              variant={
-                store.activeDatasetVersion === "se2026" ? "default" : "ghost"
-              }
-              className="text-[11px] h-7 px-1"
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              Baseline prelist
+            </button>
+            <button
+              type="button"
               onClick={() => store.setDatasetVersion("se2026")}
+              aria-pressed={isSe2026}
+              className={`inline-flex items-center justify-center gap-1.5 rounded px-2 py-1.5 text-[11px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                isSe2026
+                  ? "bg-background text-foreground shadow-sm border"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
-              SE 2026 Baru
-            </Button>
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              SE 2026 baru
+            </button>
           </div>
 
-          {!REGIONS[store.selectedKabupaten]?.hasPrelist && (
-            <p className="text-[10px] text-amber-500 font-medium italic">
-              * {REGIONS[store.selectedKabupaten]?.name || "Wilayah ini"} hanya
+          {!hasPrelist && (
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-snug">
+              {REGIONS[store.selectedKabupaten]?.name || "Wilayah ini"} hanya
               menyediakan data SE 2026 terbaru (tanpa Prelist).
             </p>
           )}
 
-          <div className="pt-1">
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full text-xs h-8 gap-1.5 border-primary/40 text-primary"
-              onClick={() => store.setCompareMode(!store.isCompareMode)}
-              disabled={!REGIONS[store.selectedKabupaten]?.hasPrelist}
-            >
-              <ArrowLeftRight className="w-3.5 h-3.5" />
-              {store.isCompareMode ? "Tutup Komparasi" : "Mode Komparasi"}
-            </Button>
-          </div>
-        </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full text-xs h-8 gap-1.5"
+            onClick={() => store.setCompareMode(!store.isCompareMode)}
+            disabled={!hasPrelist}
+          >
+            <ArrowLeftRight className="w-3.5 h-3.5 text-primary" />
+            {store.isCompareMode ? "Tutup komparasi" : "Mode komparasi"}
+          </Button>
+        </Section>
 
-        {/* Pilihan Basemap / Tema Peta */}
-        <div className="space-y-2.5 p-3 bg-muted/40 rounded-lg border">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-primary" /> Basemap
-            </span>
-          </div>
+        {/* Basemap */}
+        <Section icon={Layers} title="Basemap">
           <Select
             value={store.selectedBasemap}
             onValueChange={(val) => store.setBasemap(val as BasemapId)}
           >
             <SelectTrigger className="w-full h-8 text-xs bg-background">
-              <SelectValue placeholder="Pilih Basemap" />
+              <SelectValue placeholder="Pilih basemap" />
             </SelectTrigger>
             <SelectContent>
               {AVAILABLE_BASEMAPS.map((bm) => (
@@ -165,370 +437,160 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </Section>
 
-        {/* Layer Visibility */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="showKab" className="text-sm">
-              Batas Kabupaten
-            </Label>
-            <Switch
-              id="showKab"
-              checked={store.showKab}
-              onCheckedChange={() => store.toggleLayer("showKab")}
-            />
+        {/* Visibilitas layer */}
+        <Section icon={Layers} title="Layer peta">
+          <div className="space-y-3">
+            {LAYER_TOGGLES.map((t) => (
+              <ToggleRow
+                key={t.key}
+                id={t.key}
+                label={t.label}
+                checked={store[t.key]}
+                onChange={() => store.toggleLayer(t.key)}
+                disabled={t.locked || (t.needsBuild && !store.showBuild)}
+                muted={t.indent}
+                indent={t.indent}
+              />
+            ))}
           </div>
+        </Section>
 
-          <div
-            className="flex items-center justify-between"
-            style={{
-              cursor: "not-allowed",
-              opacity: 0.5,
-              pointerEvents: "none",
-            }}
-          >
-            <Label htmlFor="showSls" className="text-sm">
-              Batas SLS
-            </Label>
-            <Switch
-              id="showSls"
-              checked={store.showSls}
-              onCheckedChange={() => store.toggleLayer("showSls")}
-            />
+        {/* QC: dua kelompok, dipisah garis tipis */}
+        <Section icon={ShieldAlert} title="Kualitas spasial (QC)">
+          <div className="space-y-3">
+            {qcAnomaly.map((t) => (
+              <ToggleRow
+                key={t.id}
+                id={t.id}
+                label={t.label}
+                checked={t.checked}
+                onChange={t.onChange}
+                muted={t.muted}
+              />
+            ))}
           </div>
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="enable3d" className="text-sm text-muted-foreground">
-              ↳ Mode 3D Extrusion
-            </Label>
-            <Switch
-              id="enable3d"
-              checked={store.enable3d}
-              onCheckedChange={() => store.toggleLayer("enable3d")}
-              disabled={!store.showBuild}
-            />
+          <div className="space-y-3 pt-3 border-t">
+            {qcCluster.map((t) => (
+              <ToggleRow
+                key={t.id}
+                id={t.id}
+                label={t.label}
+                checked={t.checked}
+                onChange={t.onChange}
+                muted={t.muted}
+              />
+            ))}
           </div>
+        </Section>
 
-          <div className="flex items-center justify-between">
-            <Label
-              htmlFor="showSyntheticBuildings"
-              className="text-sm font-medium cursor-pointer"
-            >
-              Bangunan Sintetis
-            </Label>
-            <Switch
-              id="showSyntheticBuildings"
-              checked={store.showSyntheticBuildings}
-              onCheckedChange={() =>
-                store.toggleLayer("showSyntheticBuildings")
-              }
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="showUsaha" className="text-sm">
-              Titik Usaha Biasa
-            </Label>
-            <Switch
-              id="showUsaha"
-              checked={store.showUsaha}
-              onCheckedChange={() => store.toggleLayer("showUsaha")}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="showUsahaDigital" className="text-sm">
-              Titik Usaha Digital
-            </Label>
-            <Switch
-              id="showUsahaDigital"
-              checked={store.showUsahaDigital}
-              onCheckedChange={() => store.toggleLayer("showUsahaDigital")}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="showUsahaPertanian" className="text-sm">
-                Titik Usaha Pertanian
-              </Label>
-            </div>
-            <Switch
-              id="showUsahaPertanian"
-              checked={store.showUsahaPertanian}
-              onCheckedChange={() => store.toggleLayer("showUsahaPertanian")}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="showRt" className="text-sm">
-              Titik Keluarga (KK)
-            </Label>
-            <Switch
-              id="showRt"
-              checked={store.showRt}
-              onCheckedChange={() => store.toggleLayer("showRt")}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="showBangunanLainnya" className="text-sm">
-                Titik Bangunan Lainnya
-              </Label>
-            </div>
-            <Switch
-              id="showBangunanLainnya"
-              checked={store.showBangunanLainnya}
-              onCheckedChange={() => store.toggleLayer("showBangunanLainnya")}
-            />
-          </div>
-        </div>
-
-        <hr />
-
-        {/* Kontrol Kualitas Spasial (QC) */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="font-semibold text-xs tracking-wider uppercase text-muted-foreground">
-              Kualitas Spasial (QC)
-            </h4>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label
-              htmlFor="highlightAnomalies"
-              className="text-sm cursor-pointer"
-            >
-              Sorot Titik Luar Batas
-            </Label>
-            <Switch
-              id="highlightAnomalies"
-              checked={store.highlightAnomalies}
-              onCheckedChange={() => store.toggleHighlightAnomalies()}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label
-              htmlFor="filterOnlyAnomalies"
-              className="text-sm text-muted-foreground cursor-pointer"
-            >
-              Hanya Titik Luar Batas
-            </Label>
-            <Switch
-              id="filterOnlyAnomalies"
-              checked={store.filterOnlyAnomalies}
-              onCheckedChange={() => store.toggleFilterOnlyAnomalies()}
-            />
-          </div>
-
-          <div className="flex items-center justify-between pt-1 border-t border-border/50">
-            <Label
-              htmlFor="highlightClusters"
-              className="text-sm cursor-pointer"
-            >
-              Sorot Titik Bergerombol
-            </Label>
-            <Switch
-              id="highlightClusters"
-              checked={store.highlightClusters}
-              onCheckedChange={() => store.toggleHighlightClusters()}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label
-              htmlFor="filterOnlyClusters"
-              className="text-sm text-muted-foreground cursor-pointer"
-            >
-              Hanya Titik Bergerombol
-            </Label>
-            <Switch
-              id="filterOnlyClusters"
-              checked={store.filterOnlyClusters}
-              onCheckedChange={() => store.toggleFilterOnlyClusters()}
-            />
-          </div>
-        </div>
-
-        <hr />
-
-        {/* Filter Wilayah */}
-        <div className="space-y-4">
-          <h4 className="font-semibold text-sm">Filter Wilayah</h4>
-
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold flex items-center gap-1">
-              Kabupaten / Kota
-            </Label>
+        {/* Filter wilayah */}
+        <Section icon={Filter} title="Filter wilayah">
+          <div className="space-y-1.5">
+            <FieldLabel>Kabupaten / kota</FieldLabel>
             <Select
               value={store.selectedKabupaten}
               onValueChange={(val) => store.setKabupaten(val as KabupatenId)}
               disabled={!!regionAccess.lockedKabupaten}
             >
-              <SelectTrigger className="w-full font-medium">
-                <SelectValue placeholder="Pilih Kabupaten / Kota" />
+              <SelectTrigger className="w-full h-8 text-xs font-medium">
+                <SelectValue placeholder="Pilih kabupaten / kota" />
               </SelectTrigger>
               <SelectContent>
                 {regionAccess.allowedKabupaten.map((kabId) => (
-                  <SelectItem key={kabId} value={kabId}>
+                  <SelectItem key={kabId} value={kabId} className="text-xs">
                     {REGIONS[kabId]?.name || kabId} ({kabId})
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {regionAccess.lockedKabupaten && (
-              <p className="text-[10px] text-green-600 italic">
-                * Hak akses wilayah{" "}
-                {REGIONS[regionAccess.lockedKabupaten]?.name}.
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Hak akses wilayah{" "}
+                <span className="font-medium text-foreground">
+                  {REGIONS[regionAccess.lockedKabupaten]?.name}
+                </span>
+                .
               </p>
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs">Kecamatan</Label>
-            <SearchableCombobox
-              options={kecamatanOptions}
-              value={store.filterKecamatan || undefined}
-              placeholder="Pilih Kecamatan..."
-              emptyText="Kecamatan tidak ditemukan."
-              onValueChange={(val) => {
-                store.setFilter("filterKecamatan", val);
-                store.setFilter("filterDesa", "Semua");
-                store.setFilter("filterDusun", "Semua");
-                store.setFilter("filterSls", "Semua");
-              }}
+          {/* Empat combobox dari array levels */}
+          {levels.map((level, i) => (
+            <div key={level.key} className="space-y-1.5">
+              <FieldLabel>{level.label}</FieldLabel>
+              <SearchableCombobox
+                options={level.options}
+                value={store[level.key] || undefined}
+                placeholder={level.placeholder}
+                emptyText={level.emptyText}
+                disabled={level.disabled}
+                onValueChange={(val) => handleLevelChange(i, val)}
+              />
+            </div>
+          ))}
+        </Section>
+
+        {/* Pencarian + reset */}
+        <Section icon={Search} title="Pencarian">
+          <div className="space-y-1.5">
+            <FieldLabel>Cari nama usaha</FieldLabel>
+            <Input
+              placeholder="contoh: BAKSO"
+              value={store.filterNama}
+              onChange={(e) => store.setFilter("filterNama", e.target.value)}
+              className="h-8 text-xs bg-background"
             />
           </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs">Desa / Kelurahan</Label>
-            <SearchableCombobox
-              options={desaListOptions}
-              value={store.filterDesa || undefined}
-              placeholder="Pilih Desa..."
-              emptyText="Desa tidak ditemukan."
-              disabled={
-                !store.filterKecamatan ||
-                store.filterKecamatan === "Semua" ||
-                desaOptions.length === 0
-              }
-              onValueChange={(val) => {
-                store.setFilter("filterDesa", val);
-                store.setFilter("filterDusun", "Semua");
-                store.setFilter("filterSls", "Semua");
-              }}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs">Dusun / Lingkungan</Label>
-            <SearchableCombobox
-              options={dusunOptions}
-              value={store.filterDusun || undefined}
-              placeholder="Pilih Dusun..."
-              emptyText="Dusun tidak ditemukan."
-              disabled={
-                !store.filterDesa ||
-                store.filterDesa === "Semua" ||
-                dusunOptions.length <= 1
-              }
-              onValueChange={(val) => {
-                store.setFilter("filterDusun", val);
-                store.setFilter("filterSls", "Semua");
-              }}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs">RT / RW (SLS)</Label>
-            <SearchableCombobox
-              options={slsOptions}
-              value={store.filterSls || undefined}
-              placeholder="Pilih RT / RW..."
-              emptyText="RT / RW tidak ditemukan."
-              disabled={
-                !store.filterDesa ||
-                store.filterDesa === "Semua" ||
-                slsOptions.length <= 1
-              }
-              onValueChange={(val) => store.setFilter("filterSls", val)}
-            />
-          </div>
-        </div>
-
-        <hr />
-
-        {/* Pencarian */}
-        <div className="space-y-2">
-          <Label className="text-xs">Cari Nama Usaha</Label>
-          <Input
-            placeholder="contoh: BAKSO"
-            value={store.filterNama}
-            onChange={(e) => store.setFilter("filterNama", e.target.value)}
-          />
-        </div>
-
-        <div className="pt-2 space-y-2">
           <Button
             variant="outline"
             size="sm"
-            className="w-full text-xs"
+            className="w-full text-xs h-8 gap-1.5"
             onClick={handleResetFilter}
           >
-            <Eraser className="mr-2 h-3.5 w-3.5" />
-            Reset Filter
+            <Eraser className="h-3.5 w-3.5 text-primary" />
+            Reset filter
           </Button>
-        </div>
-      </CardContent>
+        </Section>
+      </div>
 
-      {/* Footer Profil & Logout */}
-      <div className="shrink-0 p-6 border-t bg-card space-y-4">
+      {/* ── Footer: profil + logout ── */}
+      <div className="shrink-0 border-t bg-muted/20 p-4 space-y-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm border border-primary/20 shrink-0">
+          <div className="h-9 w-9 rounded-md border bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
             {userInitials}
           </div>
           <div className="flex-1 min-w-0">
             <p
-              className="text-sm font-semibold text-foreground truncate"
+              className="text-[13px] font-medium text-foreground truncate"
               title={userFullName}
             >
               {userFullName}
             </p>
             <p
-              className="text-xs text-muted-foreground truncate"
+              className="text-[11px] text-muted-foreground truncate"
               title={userEmail}
             >
               {userEmail}
             </p>
-            <div className="mt-1">
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                  role === "admin"
-                    ? "bg-red-500/10 text-red-500 border-red-500/20"
-                    : role === "pml"
-                      ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
-                      : "bg-green-500/10 text-green-500 border-green-500/20"
-                }`}
-              >
-                {displayRole}
-              </span>
-            </div>
           </div>
+          <span className="inline-flex items-center gap-1.5 rounded-md border bg-background px-1.5 py-0.5 text-[10px] font-medium text-foreground shrink-0">
+            <span className={`h-1.5 w-1.5 rounded-full ${roleDot}`} />
+            {displayRole}
+          </span>
         </div>
 
         <Button
-          variant="destructive"
-          className="w-full text-xs h-9"
+          variant="outline"
+          className="w-full text-xs h-8 gap-1.5 border-red-500/30 text-red-600 hover:bg-red-500/10 hover:text-red-600 dark:text-red-400 dark:hover:text-red-400"
           onClick={() => logout()}
           disabled={isLoggingOut}
         >
-          <LogOut className="mr-2 h-3.5 w-3.5" />
+          <LogOut className="h-3.5 w-3.5" />
           {isLoggingOut ? "Keluar..." : "Logout"}
         </Button>
       </div>
-    </Card>
+    </div>
   );
 }

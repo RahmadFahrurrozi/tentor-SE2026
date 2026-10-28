@@ -10,8 +10,9 @@ export interface BasemapConfig {
   style: string | StyleSpecification;
 }
 
-// 1. CARTO Dark Matter (Vektor Gelap)
-export const CARTO_DARK_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+// 1. MapLibre Dark (OpenFreeMap Dark - Vektor Gelap 100% Gratis & Bebas Token)
+export const MAPLIBRE_DARK_STYLE = "https://tiles.openfreemap.org/styles/dark";
+export const CARTO_DARK_STYLE = MAPLIBRE_DARK_STYLE; // alias backwards compatibility
 
 // 2. OpenFreeMap Liberty (Vektor Terang)
 export const OPENFREEMAP_LIGHT_STYLE = "https://tiles.openfreemap.org/styles/liberty";
@@ -84,7 +85,7 @@ export const ESRI_SATELLITE_STYLE: StyleSpecification = {
 
 // Default styles mapping untuk dark & light
 export const DEFAULT_MAP_STYLES = {
-  dark: CARTO_DARK_STYLE,
+  dark: MAPLIBRE_DARK_STYLE,
   light: OPENFREEMAP_LIGHT_STYLE,
 };
 
@@ -98,25 +99,11 @@ export const AVAILABLE_BASEMAPS: BasemapConfig[] = [
     style: DEFAULT_MAP_STYLES.dark,
   },
   {
-    id: "google-hybrid",
-    name: "Google Maps",
-    category: "satellite",
-    description: "Google Satellite Imagery + Road Labels & POI",
-    style: GOOGLE_HYBRID_STYLE,
-  },
-  // {
-  //   id: "esri-satellite",
-  //   name: "ESRI Satellite",
-  //   category: "satellite",
-  //   description: "ESRI Satellite Imagery + Official Boundaries",
-  //   style: ESRI_SATELLITE_STYLE,
-  // },
-  {
     id: "dark",
-    name: "Carto Dark",
+    name: "MapLibre Dark",
     category: "vector",
-    description: "Dark minimal display with focus on points",
-    style: CARTO_DARK_STYLE,
+    description: "MapLibre OpenFreeMap vector dark mode 100% gratis",
+    style: MAPLIBRE_DARK_STYLE,
   },
   {
     id: "light",
@@ -124,6 +111,13 @@ export const AVAILABLE_BASEMAPS: BasemapConfig[] = [
     category: "vector",
     description: "OpenFreeMap Liberty roads & open spaces",
     style: OPENFREEMAP_LIGHT_STYLE,
+  },
+  {
+    id: "google-hybrid",
+    name: "Google Maps",
+    category: "satellite",
+    description: "Google Satellite Imagery + Road Labels & POI",
+    style: GOOGLE_HYBRID_STYLE,
   },
 ];
 
@@ -140,11 +134,11 @@ export function resolveMapStyle(
     case "esri-satellite":
       return ESRI_SATELLITE_STYLE;
     case "dark":
-      return CARTO_DARK_STYLE;
+      return MAPLIBRE_DARK_STYLE;
     case "light":
       return OPENFREEMAP_LIGHT_STYLE;
     case "auto":
     default:
-      return currentTheme === "dark" ? CARTO_DARK_STYLE : OPENFREEMAP_LIGHT_STYLE;
+      return currentTheme === "dark" ? MAPLIBRE_DARK_STYLE : OPENFREEMAP_LIGHT_STYLE;
   }
 }

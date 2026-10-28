@@ -173,6 +173,10 @@ export function normalizeSlsKey(rawId: any): string {
   return str;
 }
 
+export type SlsIndexWithMap = SlsPolygonIndex[] & {
+  _map?: Map<string, SlsPolygonIndex>;
+};
+
 /**
  * Membangun index spasial ringan untuk seluruh poligon SLS di kecamatan.
  */
@@ -180,6 +184,7 @@ export function buildSlsSpatialIndex(slsGeoJson: any): SlsPolygonIndex[] {
   if (!slsGeoJson || !slsGeoJson.features) return [];
 
   const indexList: SlsPolygonIndex[] = [];
+  const mapLookup = new Map<string, SlsPolygonIndex>();
 
   for (const feat of slsGeoJson.features) {
     if (!feat.geometry) continue;
@@ -191,7 +196,7 @@ export function buildSlsSpatialIndex(slsGeoJson: any): SlsPolygonIndex[] {
 
     const { bbox, centroid } = extractBBoxAndCentroid(feat.geometry);
 
-    indexList.push({
+    const item: SlsPolygonIndex = {
       idsls,
       nmsls: props.nmsls || props.nama_sls || props.sls_name || `SLS ${idsls}`,
       iddesa: normalizeSlsKey(props.iddesa || props.id_desa || idsls.substring(0, 10)),
@@ -199,9 +204,17 @@ export function buildSlsSpatialIndex(slsGeoJson: any): SlsPolygonIndex[] {
       bbox,
       centroid,
       geometry: feat.geometry,
-    });
+    };
+
+    indexList.push(item);
+    mapLookup.set(idsls, item);
+    if (idsls.length >= 14) {
+      const id14 = idsls.substring(0, 14);
+      if (!mapLookup.has(id14)) mapLookup.set(id14, item);
+    }
   }
 
+  (indexList as SlsIndexWithMap)._map = mapLookup;
   return indexList;
 }
 
@@ -216,12 +229,21 @@ export function checkPointAnomaly(
   const recordedSlsId = normalizeSlsKey(rawRecordedSls);
   const [lng, lat] = pt;
 
-  // 1. Cari poligon SLS yang tercatat di kuesioner
-  const recordedSlsObj = slsIndex.find(
-    (s) =>
-      s.idsls === recordedSlsId ||
-      (recordedSlsId.length >= 14 && s.idsls.substring(0, 14) === recordedSlsId.substring(0, 14))
-  );
+  // 1. Cari poligon SLS yang tercatat di kuesioner via O(1) Map Lookup
+  const lookup = (slsIndex as SlsIndexWithMap)._map;
+  let recordedSlsObj: SlsPolygonIndex | undefined;
+  if (lookup) {
+    recordedSlsObj = lookup.get(recordedSlsId);
+    if (!recordedSlsObj && recordedSlsId.length >= 14) {
+      recordedSlsObj = lookup.get(recordedSlsId.substring(0, 14));
+    }
+  } else {
+    recordedSlsObj = slsIndex.find(
+      (s) =>
+        s.idsls === recordedSlsId ||
+        (recordedSlsId.length >= 14 && s.idsls.substring(0, 14) === recordedSlsId.substring(0, 14))
+    );
+  }
 
   // 2. Cek apakah titik berada di dalam SLS yang tercatat
   if (recordedSlsObj) {

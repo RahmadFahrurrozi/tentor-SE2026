@@ -64,33 +64,30 @@ const getPointsNearBuilding = (
   if (!buildingCoords) return { usaha: [], rt: [], isMixed: false };
 
   const [bx, by] = buildingCoords;
+  const maxDistSq = maxDistance * maxDistance;
 
-  const nearUsaha = dataUsaha.filter((u) => {
-    const ux = parseFloat(u["long final"] || u["long"] || u.lon);
-    const uy = parseFloat(u["lat final"] || u.lat);
-    if (isNaN(ux) || isNaN(uy)) return false;
-    const dx = ux - bx,
-      dy = uy - by;
-    return dx * dx + dy * dy < maxDistance * maxDistance;
-  });
+  const filterNear = (list: any[]) => {
+    if (!list || list.length === 0) return [];
+    const res: any[] = [];
+    for (let i = 0; i < list.length; i++) {
+      const item = list[i];
+      const ux = parseFloat(item["long final"] || item["long"] || item.lon);
+      const uy = parseFloat(item["lat final"] || item.lat);
+      if (isNaN(ux) || isNaN(uy)) continue;
+      const dx = Math.abs(ux - bx);
+      if (dx >= maxDistance) continue;
+      const dy = Math.abs(uy - by);
+      if (dy >= maxDistance) continue;
+      if (dx * dx + dy * dy < maxDistSq) {
+        res.push(item);
+      }
+    }
+    return res;
+  };
 
-  const nearUsahaDigital = dataUsahaDigital.filter((u) => {
-    const ux = parseFloat(u["long final"] || u["long"] || u.lon);
-    const uy = parseFloat(u["lat final"] || u.lat);
-    if (isNaN(ux) || isNaN(uy)) return false;
-    const dx = ux - bx,
-      dy = uy - by;
-    return dx * dx + dy * dy < maxDistance * maxDistance;
-  });
-
-  const nearRt = dataRumahTangga.filter((r) => {
-    const rx = parseFloat(r["long final"] || r["long"] || r.lon);
-    const ry = parseFloat(r["lat final"] || r.lat);
-    if (isNaN(rx) || isNaN(ry)) return false;
-    const dx = rx - bx,
-      dy = ry - by;
-    return dx * dx + dy * dy < maxDistance * maxDistance;
-  });
+  const nearUsaha = filterNear(dataUsaha);
+  const nearUsahaDigital = filterNear(dataUsahaDigital);
+  const nearRt = filterNear(dataRumahTangga);
 
   const totalUsaha = nearUsaha.length + nearUsahaDigital.length;
   const totalRt = nearRt.length;
@@ -147,20 +144,16 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
   } = spatialData;
 
   const currentRegion = REGIONS[store.selectedKabupaten] || REGIONS["3510"];
-  const [viewState, setViewState] = useState({
-    center: currentRegion.center,
-    zoom: currentRegion.zoom,
-    pitch: 45,
-    bearing: 0,
-  });
 
   useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
     const reg = REGIONS[store.selectedKabupaten] || REGIONS["3510"];
-    setViewState((prev) => ({
-      ...prev,
+    map.flyTo({
       center: reg.center,
       zoom: reg.zoom,
-    }));
+      essential: true,
+    });
   }, [store.selectedKabupaten]);
 
   const processedSls = useMemo(() => {
@@ -2744,8 +2737,10 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
 
       <Map
         ref={mapRef}
-        viewport={viewState}
-        onViewportChange={setViewState}
+        center={currentRegion.center}
+        zoom={currentRegion.zoom}
+        pitch={45}
+        bearing={0}
         theme={theme === "dark" ? "dark" : "light"}
         mapStyle={activeMapStyle}
         projection={{ type: "globe" }}

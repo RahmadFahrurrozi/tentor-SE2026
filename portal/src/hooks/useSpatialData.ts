@@ -6,6 +6,7 @@ import { REGIONS } from "@/config/regionConfig";
 import { getUserRegionAccess } from "@/utils/regionAccess";
 import { useQuery } from "@tanstack/react-query";
 import { spatialService } from "@/services/spatial.service";
+import { processSlsData } from "@/utils/dataProcessing";
 
 export function useSpatialData(versionOverride?: DatasetVersion) {
   const [dataUsaha, setDataUsaha] = useState<any[]>([]);
@@ -268,17 +269,28 @@ export function useSpatialData(versionOverride?: DatasetVersion) {
     }
 
     if (spatialChunksData) {
-      setDataUsaha(spatialChunksData.usaha);
-      setDataUsahaDigital(spatialChunksData.usahaDigital);
-      setDataUsahaPertanian(spatialChunksData.usahaPertanian);
-      setDataRumahTangga(spatialChunksData.rumahTangga);
-      setDataBangunan(
-        spatialChunksData.bangunan && spatialChunksData.bangunan.length > 0
+      const activeBangunan =
+        (spatialChunksData.bangunan && spatialChunksData.bangunan.length > 0
           ? spatialChunksData.bangunan
-          : spatialChunksData.bangunanLainnya,
+          : spatialChunksData.bangunanLainnya) || [];
+
+      setDataUsaha(spatialChunksData.usaha || []);
+      setDataUsahaDigital(spatialChunksData.usahaDigital || []);
+      setDataUsahaPertanian(spatialChunksData.usahaPertanian || []);
+      setDataRumahTangga(spatialChunksData.rumahTangga || []);
+      setDataBangunan(activeBangunan);
+      setDataBangunanLainnya(spatialChunksData.bangunanLainnya || []);
+
+      const processed = processSlsData(
+        spatialChunksData.sls,
+        spatialChunksData.usaha || [],
+        spatialChunksData.usahaDigital || [],
+        spatialChunksData.rumahTangga || [],
+        activeBangunan,
+        spatialChunksData.usahaPertanian || [],
+        spatialChunksData.bangunanLainnya || [],
       );
-      setDataBangunanLainnya(spatialChunksData.bangunanLainnya);
-      setDataSls(spatialChunksData.sls);
+      setDataSls(processed || spatialChunksData.sls);
     }
   }, [spatialChunksData, isKecamatanValid]);
 

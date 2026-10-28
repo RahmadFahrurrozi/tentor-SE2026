@@ -32,49 +32,71 @@ export function processSlsData(
 
   // 1. Hitung jumlah usaha biasa per SLS
   const usahaCount: Record<string, number> = {};
-  dataUsaha.forEach((curr) => {
+  (dataUsaha || []).forEach((curr) => {
     registerCount(usahaCount, curr['idsls_str'] || curr['idsls final'] || curr['idsls']);
   });
 
   // 2. Hitung jumlah usaha digital per SLS
   const usahaDigitalCount: Record<string, number> = {};
-  dataUsahaDigital.forEach((curr) => {
+  (dataUsahaDigital || []).forEach((curr) => {
     registerCount(usahaDigitalCount, curr['idsls_str'] || curr['idsls final'] || curr['idsls']);
   });
 
   // 3. Hitung jumlah usaha pertanian per SLS
   const usahaPertanianCount: Record<string, number> = {};
   if (dataUsahaPertanian) {
-    dataUsahaPertanian.forEach((curr) => {
+    (dataUsahaPertanian || []).forEach((curr) => {
       registerCount(usahaPertanianCount, curr['idsls_str'] || curr['idsls final'] || curr['idsls']);
     });
   }
 
   // 4. Hitung jumlah keluarga per SLS
   const keluargaCount: Record<string, number> = {};
-  dataRumahTangga.forEach((curr) => {
+  (dataRumahTangga || []).forEach((curr) => {
     registerCount(keluargaCount, curr['idsls_str'] || curr['idsls final'] || curr['idsls']);
   });
 
   // 5. Hitung statistik bangunan fisik per SLS
-  const bangunanStats: Record<string, { usaha: number; rt: number; belum: number; total: number }> = {};
-  dataBangunan.forEach((curr) => {
+  const bangunanStats: Record<string, { usaha: number; rt: number; belum: number; total: number; sudahLainnya: number }> = {};
+  (dataBangunan || []).forEach((curr) => {
     const rawId = curr['idsls_str'] || curr['idsls final'] || curr['idsls'];
-    const status = curr['status_bangunan'] || curr['status'] || '';
+    const status = String(curr['status_bangunan'] || curr['status'] || '').trim();
+    const statusLower = status.toLowerCase();
     const key = getSlsKey(rawId);
     if (!key) return;
 
+    const isBelum =
+      !status ||
+      statusLower === 'belum terdata' ||
+      statusLower === 'belum' ||
+      statusLower === 'tidak' ||
+      statusLower === '-';
+
+    const isUsaha =
+      statusLower.includes('usaha') ||
+      statusLower.includes('toko') ||
+      statusLower.includes('warung') ||
+      statusLower.includes('kios');
+
+    const isRt =
+      statusLower.includes('rumah') ||
+      statusLower.includes('keluarga') ||
+      statusLower.includes('tinggal');
+
     const addStat = (k: string) => {
       if (!bangunanStats[k]) {
-        bangunanStats[k] = { usaha: 0, rt: 0, belum: 0, total: 0 };
+        bangunanStats[k] = { usaha: 0, rt: 0, belum: 0, total: 0, sudahLainnya: 0 };
       }
       bangunanStats[k].total++;
-      if (status === 'Bangunan Usaha') {
+      if (isBelum) {
+        bangunanStats[k].belum++;
+      } else if (isUsaha) {
         bangunanStats[k].usaha++;
-      } else if (status === 'Rumah Tangga') {
+      } else if (isRt) {
         bangunanStats[k].rt++;
       } else {
-        bangunanStats[k].belum++;
+        // Campuran, Usaha Pertanian, Usaha Digital, Tempat Ibadah/Fasum terdata
+        bangunanStats[k].sudahLainnya++;
       }
     };
 
@@ -94,13 +116,14 @@ export function processSlsData(
   }
 
   const features = slsGeoJson.features.map((feature: any) => {
-    const idslsRaw = feature.properties.idsls || feature.properties.id_sls || feature.properties.IDSLS || feature.properties.kode_sls;
+    const props = feature?.properties || {};
+    const idslsRaw = props.idsls || props.id_sls || props.IDSLS || props.kode_sls;
     
     const idslsStr = getSlsKey(idslsRaw);
     const idsls14 = idslsStr.length >= 14 ? idslsStr.substring(0, 14) : idslsStr;
     const iddesa = idslsStr.substring(0, 10);
 
-    const bStats = bangunanStats[idslsStr] || bangunanStats[idsls14] || { usaha: 0, rt: 0, belum: 0, total: 0 };
+    const bStats = bangunanStats[idslsStr] || bangunanStats[idsls14] || { usaha: 0, rt: 0, belum: 0, total: 0, sudahLainnya: 0 };
     const bLainnya = (bangunanLainnyaCount[idslsStr] !== undefined ? bangunanLainnyaCount[idslsStr] : bangunanLainnyaCount[idsls14]) || 0;
 
     const uCount = (usahaCount[idslsStr] !== undefined ? usahaCount[idslsStr] : usahaCount[idsls14]) || 0;
@@ -108,16 +131,29 @@ export function processSlsData(
     const upCount = (usahaPertanianCount[idslsStr] !== undefined ? usahaPertanianCount[idslsStr] : usahaPertanianCount[idsls14]) || 0;
     const kCount = (keluargaCount[idslsStr] !== undefined ? keluargaCount[idslsStr] : keluargaCount[idsls14]) || 0;
 
-    const totalBangunan = bStats.total;
-    let sudahTerdata = bStats.usaha + bStats.rt;
-    let belumTerdata = bStats.belum;
+    // Realisasi entitas yang berhasil disurvei petugas di SLS ini
+    const totalEntitasLapangan = uCount + udCount + upCount + kCount + bLainnya;
+    const fisikTerdata = bStats.usaha + bStats.rt + (bStats.sudahLainnya || 0);
 
-    // Titik bangunan lainnya (rumah kosong / tempat ibadah yang disensus) diakui sebagai sudah dikunjungi
+    // Rumus Standar BPS:
+    // Bangunan terdata adalah bangunan fisik yang teridentifikasi, atau minimal sejumlah entitas sensus riil yang dikunjungi di lapangan
+    const sudahTerdata = Math.max(fisikTerdata, totalEntitasLapangan);
+    let totalBangunan = Math.max(bStats.total, sudahTerdata);
+
+    // Sisa bangunan yang benar-benar belum terdata (mengeliminasi bangunan non-target/gudang kosong)
+    let belumTerdata = Math.max(0, bStats.belum - Math.max(0, sudahTerdata - fisikTerdata));
+    if (bStats.total === 0) {
+      belumTerdata = 0;
+      totalBangunan = sudahTerdata;
+    }
+
     if (bLainnya > 0 && belumTerdata > 0) {
       const tambahan = Math.min(belumTerdata, bLainnya);
-      sudahTerdata += tambahan;
       belumTerdata -= tambahan;
     }
+
+    // Pastikan total bangunan sinkron: total = sudah + belum
+    totalBangunan = sudahTerdata + belumTerdata;
 
     return {
       ...feature,
@@ -151,7 +187,7 @@ export function convertBangunanToGeoJson(dataBangunan: any[]) {
     let geometry = null;
     try {
       geometry = parse(geomStr);
-    } catch (e) {
+    } catch {
       console.warn("Gagal parse WKT:", geomStr);
     }
 
@@ -334,18 +370,40 @@ export function getPolygonRings(geometry: any): number[][][] {
 export function assignSlsToPoints(points: any[], slsGeoJson: any): any[] {
   if (!slsGeoJson || !slsGeoJson.features || !points.length) return points;
 
-  // Build lookup: per feature simpan idsls_str + rings-nya
+  // Build lookup: per feature simpan idsls_str + rings + BBox
   const slsFeatures = slsGeoJson.features.map((f: any) => {
     const idslsRaw =
-      f.properties.idsls ||
-      f.properties.id_sls ||
-      f.properties.IDSLS ||
-      f.properties.kode_sls;
-    let idslsStr = String(idslsRaw).trim();
+      f.properties?.idsls ||
+      f.properties?.id_sls ||
+      f.properties?.IDSLS ||
+      f.properties?.kode_sls;
+    let idslsStr = String(idslsRaw || '').trim();
     if (idslsStr.endsWith('.0')) idslsStr = idslsStr.slice(0, -2);
+
+    const rings = getPolygonRings(f.geometry);
+    let minLng = Infinity;
+    let minLat = Infinity;
+    let maxLng = -Infinity;
+    let maxLat = -Infinity;
+
+    for (let i = 0; i < rings.length; i++) {
+      const ring = rings[i];
+      for (let j = 0; j < ring.length; j++) {
+        const pt = ring[j];
+        if (pt[0] < minLng) minLng = pt[0];
+        if (pt[0] > maxLng) maxLng = pt[0];
+        if (pt[1] < minLat) minLat = pt[1];
+        if (pt[1] > maxLat) maxLat = pt[1];
+      }
+    }
+
     return {
       idsls_str: idslsStr,
-      rings: getPolygonRings(f.geometry),
+      rings,
+      minLng,
+      minLat,
+      maxLng,
+      maxLat,
     };
   });
 
@@ -355,11 +413,17 @@ export function assignSlsToPoints(points: any[], slsGeoJson: any): any[] {
 
     if (isNaN(lat) || isNaN(lng)) return point;
 
-    // Cari SLS yang contain titik ini
+    // Cari SLS yang contain titik ini dengan BBox pre-check
     let foundSls: string | null = null;
-    for (const sls of slsFeatures) {
-      for (const ring of sls.rings) {
-        if (isPointInPolygon([lng, lat], ring)) {
+    for (let i = 0; i < slsFeatures.length; i++) {
+      const sls = slsFeatures[i];
+      // Lewati poligon jika titik berada di luar kotak pembatas BBox (skip 99% poligon seketika)
+      if (lng < sls.minLng || lng > sls.maxLng || lat < sls.minLat || lat > sls.maxLat) {
+        continue;
+      }
+
+      for (let j = 0; j < sls.rings.length; j++) {
+        if (isPointInPolygon([lng, lat], sls.rings[j])) {
           foundSls = sls.idsls_str;
           break;
         }
