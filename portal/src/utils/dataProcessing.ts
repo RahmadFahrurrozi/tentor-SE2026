@@ -12,18 +12,28 @@ export function processSlsData(
 
   // 1. Hitung jumlah usaha biasa per SLS
   const usahaCount = dataUsaha.reduce((acc, curr) => {
-    const idsls = curr['idsls_str'] || curr['idsls final'];
+    const idslsRaw = curr['idsls_str'] || curr['idsls final'] || '';
+    const idsls = String(idslsRaw).replace('.0', '').trim();
     if (idsls) {
       acc[idsls] = (acc[idsls] || 0) + 1;
+      if (idsls.length >= 14) {
+        const idsls14 = idsls.substring(0, 14);
+        acc[idsls14] = (acc[idsls14] || 0) + 1;
+      }
     }
     return acc;
   }, {} as Record<string, number>);
 
   // 2. Hitung jumlah usaha digital per SLS
   const usahaDigitalCount = dataUsahaDigital.reduce((acc, curr) => {
-    const idsls = curr['idsls_str'] || curr['idsls final'];
+    const idslsRaw = curr['idsls_str'] || curr['idsls final'] || '';
+    const idsls = String(idslsRaw).replace('.0', '').trim();
     if (idsls) {
       acc[idsls] = (acc[idsls] || 0) + 1;
+      if (idsls.length >= 14) {
+        const idsls14 = idsls.substring(0, 14);
+        acc[idsls14] = (acc[idsls14] || 0) + 1;
+      }
     }
     return acc;
   }, {} as Record<string, number>);
@@ -42,45 +52,61 @@ export function processSlsData(
 
   // 4. Hitung jumlah keluarga per SLS
   const keluargaCount = dataRumahTangga.reduce((acc, curr) => {
-    const idsls = curr['idsls_str'] || curr['idsls final'];
+    const idslsRaw = curr['idsls_str'] || curr['idsls final'] || '';
+    const idsls = String(idslsRaw).replace('.0', '').trim();
     if (idsls) {
       acc[idsls] = (acc[idsls] || 0) + 1;
+      if (idsls.length >= 14) {
+        const idsls14 = idsls.substring(0, 14);
+        acc[idsls14] = (acc[idsls14] || 0) + 1;
+      }
     }
     return acc;
   }, {} as Record<string, number>);
 
   // 5. Hitung statistik bangunan per SLS
   const bangunanStats = dataBangunan.reduce((acc, curr) => {
-    const idsls = curr['idsls_str'] || curr['idsls final'];
+    const idslsRaw = curr['idsls_str'] || curr['idsls final'] || '';
+    const idsls = String(idslsRaw).replace('.0', '').trim();
     const status = curr['status_bangunan'];
     
     if (idsls) {
-      if (!acc[idsls]) {
-        acc[idsls] = { 
-          'Bangunan Usaha': 0, 
-          'Rumah Tangga': 0, 
-          'Belum Terdata': 0 
-        };
-      }
-      if (status === 'Bangunan Usaha' || status === 'Rumah Tangga' || status === 'Belum Terdata') {
-        acc[idsls][status]++;
-      }
+      const keys = [idsls];
+      if (idsls.length >= 14) keys.push(idsls.substring(0, 14));
+
+      keys.forEach((k) => {
+        if (!acc[k]) {
+          acc[k] = { 
+            'Bangunan Usaha': 0, 
+            'Rumah Tangga': 0, 
+            'Belum Terdata': 0 
+          };
+        }
+        if (status === 'Bangunan Usaha' || status === 'Rumah Tangga' || status === 'Belum Terdata') {
+          acc[k][status]++;
+        }
+      });
     }
     return acc;
   }, {} as Record<string, Record<string, number>>);
 
   const features = slsGeoJson.features.map((feature: any) => {
-    const idslsRaw = feature.properties.idsls || feature.properties.id_sls || feature.properties.IDSLS || feature.properties.kode_sls;
+    const idslsRaw =
+      feature.properties.idsls_str ||
+      feature.properties.idsls ||
+      feature.properties.id_sls ||
+      feature.properties.IDSLS ||
+      feature.properties.kode_sls;
     
-    let idslsStr = String(idslsRaw).trim();
+    let idslsStr = String(idslsRaw || '').trim();
     if (idslsStr.endsWith('.0')) {
       idslsStr = idslsStr.slice(0, -2);
     }
 
-    // FIX: ekstrak iddesa (10 digit) dari idsls_str untuk lookup pertanian
-    const iddesa = idslsStr.substring(0, 10);
+    const idsls14 = idslsStr.length >= 14 ? idslsStr.substring(0, 14) : idslsStr;
+    const iddesa = idslsStr.length >= 10 ? idslsStr.substring(0, 10) : '';
 
-    const bStats = bangunanStats[idslsStr] || { 'Bangunan Usaha': 0, 'Rumah Tangga': 0, 'Belum Terdata': 0 };
+    const bStats = bangunanStats[idsls14] || bangunanStats[idslsStr] || { 'Bangunan Usaha': 0, 'Rumah Tangga': 0, 'Belum Terdata': 0 };
     const sudahTerdata = bStats['Bangunan Usaha'] + bStats['Rumah Tangga'];
     const belumTerdata = bStats['Belum Terdata'];
     const totalBangunan = sudahTerdata + belumTerdata;
@@ -91,11 +117,11 @@ export function processSlsData(
         ...feature.properties,
         idsls_str: idslsStr,
         iddesa: iddesa,
-        jumlah_usaha: usahaCount[idslsStr] || 0,
-        jumlah_usaha_digital: usahaDigitalCount[idslsStr] || 0,
+        jumlah_usaha: usahaCount[idsls14] ?? usahaCount[idslsStr] ?? 0,
+        jumlah_usaha_digital: usahaDigitalCount[idsls14] ?? usahaDigitalCount[idslsStr] ?? 0,
         // FIX: lookup pakai iddesa (10 digit), bukan idslsStr (12 digit)
         jumlah_usaha_pertanian: usahaPertanianCount[iddesa] || 0,
-        jumlah_keluarga: keluargaCount[idslsStr] || 0,
+        jumlah_keluarga: keluargaCount[idsls14] ?? keluargaCount[idslsStr] ?? 0,
         sudah_terdata: sudahTerdata,
         belum_terdata: belumTerdata,
         total_bangunan: totalBangunan
@@ -223,11 +249,12 @@ export function assignSlsToPoints(points: any[], slsGeoJson: any): any[] {
   // Build lookup: per feature simpan idsls_str + rings-nya
   const slsFeatures = slsGeoJson.features.map((f: any) => {
     const idslsRaw =
+      f.properties.idsls_str ||
       f.properties.idsls ||
       f.properties.id_sls ||
       f.properties.IDSLS ||
       f.properties.kode_sls;
-    let idslsStr = String(idslsRaw).trim();
+    let idslsStr = String(idslsRaw || '').trim();
     if (idslsStr.endsWith('.0')) idslsStr = idslsStr.slice(0, -2);
     return {
       idsls_str: idslsStr,
