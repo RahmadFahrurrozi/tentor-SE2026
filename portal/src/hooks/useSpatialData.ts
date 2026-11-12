@@ -170,7 +170,7 @@ export function useSpatialData() {
         const fetchChunkSafe = async (dataset: string) => {
           try {
             const url = getChunksPublicUrl(`${dataset}/kec_${kecId}.json`);
-            const res = await fetch(url);
+            const res = await fetch(url, { cache: 'no-cache' });
             if (!res.ok) return [];
             const json = await res.json();
             return json.data || json || [];
@@ -183,7 +183,7 @@ export function useSpatialData() {
         const fetchSlsChunkSafe = async () => {
           try {
             const url = getChunksPublicUrl(`sls/kec_${kecId}.json`);
-            const res = await fetch(url);
+            const res = await fetch(url, { cache: 'no-cache' });
             if (!res.ok) return null;
             return await res.json();
           } catch (e) {
@@ -192,16 +192,16 @@ export function useSpatialData() {
           }
         };
 
-        // Fetch semua dataset paralel
-        const [usaha, usahaDigital, usahaPertanianRaw, rumahTangga, bangunan, sls] =
+        // Fetch dataset aktif paralel (tanpa fetch bangunan 3D / usaha_digital yang tidak ada di prelist)
+        const [usaha, usahaPertanianRaw, rumahTangga, sls] =
           await Promise.all([
             fetchChunkSafe('usaha'),
-            fetchChunkSafe('usaha_digital'),
             fetchChunkSafe('usaha_pertanian'),
             fetchChunkSafe('rumah_tangga'),
-            fetchChunkSafe('bangunan'),
             fetchSlsChunkSafe(),
           ]);
+        const usahaDigital: any[] = [];
+        const bangunan: any[] = [];
 
         // FIX: Spatial join — assign idsls_str ke setiap titik pertanian
         // berdasarkan koordinatnya jatuh di SLS mana

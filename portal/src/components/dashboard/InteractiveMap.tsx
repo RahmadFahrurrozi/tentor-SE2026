@@ -4,81 +4,11 @@ import maplibregl from "maplibre-gl";
 
 import {
   processSlsData,
-  convertBangunanToGeoJson,
   convertTitikToGeoJson,
   calculateBbox,
 } from "@/utils/dataProcessing";
 import { useMapStore } from "@/store/mapStore";
 import { useTheme } from "@/context/theme-provider";
-
-const getGeometryCentroid = (geometry: any): [number, number] | null => {
-  if (!geometry || !geometry.coordinates) return null;
-  let sumX = 0,
-    sumY = 0,
-    count = 0;
-
-  const processCoords = (coords: any[]) => {
-    if (typeof coords[0] === "number") {
-      sumX += coords[0];
-      sumY += coords[1];
-      count++;
-    } else {
-      coords.forEach(processCoords);
-    }
-  };
-
-  processCoords(geometry.coordinates);
-  if (count === 0) return null;
-  return [sumX / count, sumY / count];
-};
-
-const getPointsNearBuilding = (
-  buildingCoords: [number, number] | null,
-  dataUsaha: any[],
-  dataUsahaDigital: any[],
-  dataRumahTangga: any[],
-  maxDistance = 0.00015,
-) => {
-  if (!buildingCoords) return { usaha: [], rt: [], isMixed: false };
-
-  const [bx, by] = buildingCoords;
-
-  const nearUsaha = dataUsaha.filter((u) => {
-    const ux = parseFloat(u["long final"] || u["long"] || u.lon);
-    const uy = parseFloat(u["lat final"] || u.lat);
-    if (isNaN(ux) || isNaN(uy)) return false;
-    const dx = ux - bx,
-      dy = uy - by;
-    return dx * dx + dy * dy < maxDistance * maxDistance;
-  });
-
-  const nearUsahaDigital = dataUsahaDigital.filter((u) => {
-    const ux = parseFloat(u["long final"] || u["long"] || u.lon);
-    const uy = parseFloat(u["lat final"] || u.lat);
-    if (isNaN(ux) || isNaN(uy)) return false;
-    const dx = ux - bx,
-      dy = uy - by;
-    return dx * dx + dy * dy < maxDistance * maxDistance;
-  });
-
-  const nearRt = dataRumahTangga.filter((r) => {
-    const rx = parseFloat(r["long final"] || r["long"] || r.lon);
-    const ry = parseFloat(r["lat final"] || r.lat);
-    if (isNaN(rx) || isNaN(ry)) return false;
-    const dx = rx - bx,
-      dy = ry - by;
-    return dx * dx + dy * dy < maxDistance * maxDistance;
-  });
-
-  const totalUsaha = nearUsaha.length + nearUsahaDigital.length;
-  const totalRt = nearRt.length;
-
-  return {
-    usaha: [...nearUsaha, ...nearUsahaDigital],
-    rt: nearRt,
-    isMixed: totalUsaha > 0 && totalRt > 0,
-  };
-};
 
 export function InteractiveMap({ spatialData }: { spatialData: any }) {
   // const escapeHtml = (str: string) => {
@@ -240,82 +170,6 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     return filtered;
   };
 
-  const geoJsonBangunan = useMemo(() => {
-    if (!dataBangunan.length || isLoading) return null;
-
-    const filteredBuildings =
-      store.filterDesa === "Semua"
-        ? dataBangunan
-        : dataBangunan.filter((row: any) => {
-            const idslsStr = String(
-              row["idsls_str"] || row["idsls final"] || "",
-            );
-            return idslsStr.substring(0, 10) === store.filterDesa;
-          });
-
-    const geo = convertBangunanToGeoJson(filteredBuildings);
-
-    const activeUsaha = filterDataByDesaAndSearch(dataUsaha);
-    const activeUsahaDigital = filterDataByDesaAndSearch(dataUsahaDigital);
-    const activeRt = filterDataByDesaAndSearch(dataRumahTangga);
-
-    const usahaBySls: Record<string, any[]> = {};
-    const rtBySls: Record<string, any[]> = {};
-
-    activeUsaha.forEach((u) => {
-      const sls = String(u["idsls_str"] || u["idsls final"] || "");
-      if (!usahaBySls[sls]) usahaBySls[sls] = [];
-      usahaBySls[sls].push(u);
-    });
-
-    activeUsahaDigital.forEach((u) => {
-      const sls = String(u["idsls_str"] || u["idsls final"] || "");
-      if (!usahaBySls[sls]) usahaBySls[sls] = [];
-      usahaBySls[sls].push(u);
-    });
-
-    activeRt.forEach((r) => {
-      const sls = String(r["idsls_str"] || r["idsls final"] || "");
-      if (!rtBySls[sls]) rtBySls[sls] = [];
-      rtBySls[sls].push(r);
-    });
-
-    geo.features = geo.features.map((feature: any) => {
-      const sls = String(feature.properties?.idsls_str || "");
-      const slsUsaha = usahaBySls[sls] || [];
-      const slsRt = rtBySls[sls] || [];
-
-      if (slsUsaha.length > 0 && slsRt.length > 0) {
-        const centroid = getGeometryCentroid(feature.geometry);
-        const nearInfo = getPointsNearBuilding(centroid, slsUsaha, [], slsRt);
-
-        if (nearInfo.isMixed) {
-          return {
-            ...feature,
-            properties: {
-              ...feature.properties,
-              is_mixed: true,
-              status_bangunan: "Campuran",
-              near_usaha: JSON.stringify(nearInfo.usaha),
-              near_rt: JSON.stringify(nearInfo.rt),
-            },
-          };
-        }
-      }
-      return feature;
-    });
-
-    return geo;
-  }, [
-    dataBangunan,
-    dataUsaha,
-    dataUsahaDigital,
-    dataRumahTangga,
-    isLoading,
-    store.filterDesa,
-    store.filterNama,
-  ]);
-
   const geoJsonUsaha = useMemo(() => {
     if (!dataUsaha.length || isLoading) return null;
     return convertTitikToGeoJson(filterDataByDesaAndSearch(dataUsaha));
@@ -350,75 +204,127 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     const tooltip = tooltipRef.current;
     if (!tooltip) return;
 
-    const x = e.point.x + 15;
-    const y = e.point.y + 15;
+    const mapCanvas = mapRef.current?.getCanvas();
+    const maxWidth = mapCanvas?.clientWidth || window.innerWidth;
+    const maxHeight = mapCanvas?.clientHeight || window.innerHeight;
+    const tooltipW = layerId === "sls-fill-layer" ? 315 : 280;
+    const tooltipH = layerId === "sls-fill-layer" ? 290 : 140;
+
+    const x =
+      e.point.x + tooltipW + 24 > maxWidth
+        ? Math.max(12, e.point.x - tooltipW - 15)
+        : e.point.x + 15;
+    const y =
+      e.point.y + tooltipH + 24 > maxHeight
+        ? Math.max(12, maxHeight - tooltipH - 16)
+        : e.point.y + 15;
+
     tooltip.style.transform = `translate3d(${x}px, ${y}px, 0)`;
     tooltip.style.display = "block";
 
     let html = "";
     if (layerId === "sls-fill-layer") {
-      const sudah = properties.sudah_terdata || 0;
-      const belum = properties.belum_terdata || 0;
-      const total = properties.total_bangunan || 0;
-      const usaha = properties.jumlah_usaha || 0;
-      const rt = properties.jumlah_keluarga || 0;
-      const usahaDigital = properties.jumlah_usaha_digital || 0;
-      // const usahaPertanian = properties.jumlah_usaha_pertanian || 0;
+      const sudah = Number(properties.sudah_terdata || 0);
+      const belum = Number(properties.belum_terdata || 0);
+      const total = Number(properties.total_bangunan || 0);
+      const usaha = Number(properties.jumlah_usaha || 0);
+      const rt = Number(properties.jumlah_keluarga || 0);
+      const usahaDigital = Number(properties.jumlah_usaha_digital || 0);
+      const usahaPertanian = Number(properties.jumlah_usaha_pertanian || 0);
+
+      const pct = total > 0 ? Math.min(100, Math.round((sudah / total) * 100)) : 0;
+      const isDark = theme === "dark";
+      const pctColor =
+        pct >= 80 ? "#10B981" : pct >= 40 ? "#F59E0B" : "#EF4444";
+      const pctBg =
+        pct >= 80
+          ? "rgba(16, 185, 129, 0.14)"
+          : pct >= 40
+            ? "rgba(245, 158, 11, 0.14)"
+            : "rgba(239, 68, 68, 0.14)";
+
+      const slsName = properties.nmsls || `SLS ${properties.idsls_str || "-"}`;
+      const wilayahSub = [properties.nmdesa, properties.nmkec]
+        .filter(Boolean)
+        .join(" • ");
+
+      const cardBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(15,23,42,0.03)";
+      const cardBorder = isDark
+        ? "rgba(255,255,255,0.08)"
+        : "rgba(15,23,42,0.07)";
+      const mutedText = isDark ? "#94A3B8" : "#64748B";
+      const mainText = isDark ? "#F8FAFC" : "#0F172A";
+      const trackBg = isDark ? "rgba(255,255,255,0.1)" : "rgba(15,23,42,0.08)";
 
       html = `
-        <div style="font-family: 'Outfit', 'Inter', sans-serif;">
-          <p style="font-weight: 700; border-bottom: 1px solid ${theme === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"}; padding-bottom: 6px; margin-bottom: 8px; font-size: 13px;">
-            SLS: ${properties.idsls_str}
-          </p>
-          <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
-            <p style="display: flex; justify-content: space-between; margin: 0;">
-              <span>Total Bangunan:</span><span style="font-weight: 600;">${total}</span>
-            </p>
-            <p style="display: flex; justify-content: space-between; color: #10B981; margin: 0;">
-              <span>Sudah Terdata:</span><span style="font-weight: 600;">${sudah}</span>
-            </p>
-            <p style="display: flex; justify-content: space-between; color: #EF4444; margin: 0;">
-              <span>Belum Terdata:</span><span style="font-weight: 600;">${belum}</span>
-            </p>
-            <div style="height: 1px; background: ${theme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}; margin: 6px 0;"></div>
-            <p style="display: flex; justify-content: space-between; color: #F59E0B; margin: 0;">
-              <span>Titik Usaha:</span><span style="font-weight: 600;">${usaha}</span>
-            </p>
-            <p style="display: flex; justify-content: space-between; color: #3B82F6; margin: 0;">
-              <span>Titik Keluarga:</span><span style="font-weight: 600;">${rt}</span>
-            </p>
-            <p style="display: flex; justify-content: space-between; color: #FF32DC; margin: 0;">
-              <span>Titik Usaha Digital:</span><span style="font-weight: 600;">${usahaDigital}</span>
-            </p>
+        <div style="font-family: 'Outfit', 'Inter', sans-serif; color: ${mainText};">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+            <span style="font-family: ui-monospace, monospace; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 6px; background: ${cardBg}; border: 1px solid ${cardBorder}; color: ${mutedText};">
+              ${properties.idsls_str || "-"}
+            </span>
+            <span style="font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 9999px; background: ${pctBg}; color: ${pctColor};">
+              ${pct}% Terdata
+            </span>
           </div>
-        </div>
-      `;
-    } else if (layerId === "bangunan-3d-layer") {
-      const status = properties.status_bangunan || "-";
-      const isMixed = properties.is_mixed || false;
-      const statusColor = isMixed
-        ? "#A855F7"
-        : status === "Bangunan Usaha"
-          ? "#F59E0B"
-          : status === "Rumah Tangga"
-            ? "#3B82F6"
-            : "#94A3B8";
 
-      html = `
-        <div style="font-family: 'Outfit', 'Inter', sans-serif;">
-          <p style="font-weight: 700; border-bottom: 1px solid ${theme === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"}; padding-bottom: 6px; margin-bottom: 8px; font-size: 13px;">
-            Bangunan Fisik
+          <p style="margin: 0; font-weight: 700; font-size: 13px; line-height: 1.3; letter-spacing: -0.01em;">
+            ${slsName}
           </p>
-          <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
-            <p style="display: flex; justify-content: space-between; margin: 0;">
-              <span>Status:</span>
-              <span style="font-weight: 700; color: ${statusColor};">${status}</span>
-            </p>
-            ${
-              isMixed
-                ? `<p style="color: #A855F7; font-weight: 600; font-size: 10px; margin: 4px 0 0 0; text-align: center;">Klik untuk detail Campuran!</p>`
-                : `<p style="display: flex; justify-content: space-between; margin: 0;"><span>Jml Usaha:</span><span style="font-weight: 600;">${properties.jml_usaha || 0}</span></p>`
-            }
+          ${
+            wilayahSub
+              ? `<p style="margin: 2px 0 0 0; font-size: 11px; color: ${mutedText};">${wilayahSub}</p>`
+              : ""
+          }
+
+          <div style="margin-top: 10px; padding: 10px; border-radius: 10px; background: ${cardBg}; border: 1px solid ${cardBorder};">
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: ${mutedText}; margin-bottom: 6px;">
+              <span style="font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">Cakupan Bangunan</span>
+              <span style="font-weight: 700; color: ${mainText};">${total.toLocaleString("id-ID")} Total</span>
+            </div>
+            <div style="width: 100%; height: 6px; border-radius: 9999px; background: ${trackBg}; overflow: hidden; margin-bottom: 8px;">
+              <div style="width: ${pct}%; height: 100%; border-radius: 9999px; background: linear-gradient(90deg, #10B981, #34D399);"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 11px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: ${mutedText};">Sudah</span>
+                <span style="font-weight: 700; color: #10B981;">${sudah.toLocaleString("id-ID")}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: ${mutedText};">Belum</span>
+                <span style="font-weight: 700; color: #EF4444;">${belum.toLocaleString("id-ID")}</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px;">
+            <div style="padding: 8px; border-radius: 10px; background: ${cardBg}; border: 1px solid ${cardBorder};">
+              <div style="display: flex; align-items: center; gap: 5px; font-size: 10px; color: ${mutedText}; margin-bottom: 2px;">
+                <span style="width: 6px; height: 6px; border-radius: 9999px; background: #F59E0B;"></span>
+                <span>Usaha Biasa</span>
+              </div>
+              <p style="margin: 0; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums;">${usaha.toLocaleString("id-ID")}</p>
+            </div>
+            <div style="padding: 8px; border-radius: 10px; background: ${cardBg}; border: 1px solid ${cardBorder};">
+              <div style="display: flex; align-items: center; gap: 5px; font-size: 10px; color: ${mutedText}; margin-bottom: 2px;">
+                <span style="width: 6px; height: 6px; border-radius: 9999px; background: #3B82F6;"></span>
+                <span>Keluarga / RT</span>
+              </div>
+              <p style="margin: 0; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums;">${rt.toLocaleString("id-ID")}</p>
+            </div>
+            <div style="padding: 8px; border-radius: 10px; background: ${cardBg}; border: 1px solid ${cardBorder};">
+              <div style="display: flex; align-items: center; gap: 5px; font-size: 10px; color: ${mutedText}; margin-bottom: 2px;">
+                <span style="width: 6px; height: 6px; border-radius: 9999px; background: #10B981;"></span>
+                <span>Pertanian</span>
+              </div>
+              <p style="margin: 0; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums;">${usahaPertanian.toLocaleString("id-ID")}</p>
+            </div>
+            <div style="padding: 8px; border-radius: 10px; background: ${cardBg}; border: 1px solid ${cardBorder};">
+              <div style="display: flex; align-items: center; gap: 5px; font-size: 10px; color: ${mutedText}; margin-bottom: 2px;">
+                <span style="width: 6px; height: 6px; border-radius: 9999px; background: #EC4899;"></span>
+                <span>Usaha Digital</span>
+              </div>
+              <p style="margin: 0; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums;">${usahaDigital.toLocaleString("id-ID")}</p>
+            </div>
           </div>
         </div>
       `;
@@ -529,115 +435,6 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       .setLngLat(coords)
       .addTo(map);
     radarMarkerRef.current = marker;
-  };
-
-  const showMixedBuildingPopup = (
-    lngLat: any,
-    usahaList: any[],
-    rtList: any[],
-  ) => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    if (activePopupRef.current) activePopupRef.current.remove();
-
-    const totalUsaha = usahaList.length;
-    const totalRt = rtList.length;
-    const badgeColorCampuran =
-      "background-color: rgba(168, 85, 247, 0.15); color: #A855F7; border: 1px solid rgba(168, 85, 247, 0.3);";
-
-    let usahaListHtml = "";
-    if (totalUsaha === 0) {
-      usahaListHtml = `<p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 20px 0;">Tidak ada titik usaha di bangunan ini.</p>`;
-    } else {
-      usahaListHtml = usahaList
-        .map((u) => {
-          const name = u["nama final"] || u["nama"] || "Titik Usaha";
-          const cat = u["kategori"] || "-";
-          const addr = u["alamat final"] || u["alamat"] || "-";
-          return `
-          <div style="padding: 8px; border-radius: 8px; background: ${theme === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"}; margin-bottom: 6px; border: 1px solid ${theme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"};">
-            <p style="margin: 0; font-weight: 700; font-size: 12px;">${name}</p>
-            <p style="margin: 2px 0 0 0; font-size: 10px; color: ${theme === "dark" ? "#94a3b8" : "#64748b"};"><span style="font-weight: 500;">Kat:</span> ${cat}</p>
-            <p style="margin: 2px 0 0 0; font-size: 10px; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};"><span style="font-weight: 500;">Alamat:</span> ${addr}</p>
-          </div>`;
-        })
-        .join("");
-    }
-
-    let rtListHtml = "";
-    if (totalRt === 0) {
-      rtListHtml = `<p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 20px 0;">Tidak ada titik rumah tangga di bangunan ini.</p>`;
-    } else {
-      rtListHtml = rtList
-        .map((r) => {
-          const name = r["nama_krt"] || r["nama_kpl"] || "Rumah Tangga";
-          const cat = r["jenis_rt"] || "-";
-          const addr = r["alamat final"] || r["alamat"] || "-";
-          return `
-          <div style="padding: 8px; border-radius: 8px; background: ${theme === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"}; margin-bottom: 6px; border: 1px solid ${theme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"};">
-            <p style="margin: 0; font-weight: 700; font-size: 12px;">${name}</p>
-            <p style="margin: 2px 0 0 0; font-size: 10px; color: ${theme === "dark" ? "#94a3b8" : "#64748b"};"><span style="font-weight: 500;">Status:</span> ${cat}</p>
-            <p style="margin: 2px 0 0 0; font-size: 10px; color: ${theme === "dark" ? "#cbd5e1" : "#475569"};"><span style="font-weight: 500;">Alamat:</span> ${addr}</p>
-          </div>`;
-        })
-        .join("");
-    }
-
-    const html = `
-      <div style="font-family: 'Outfit', 'Inter', sans-serif; color: ${theme === "dark" ? "#f8fafc" : "#0f172a"}; padding: 14px; border-radius: 16px; width: 270px; background: ${theme === "dark" ? "rgba(30, 41, 59, 0.95)" : "rgba(255, 255, 255, 0.95)"}; backdrop-filter: blur(8px); border: 1px solid ${theme === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.08)"}; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);">
-        <div style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
-          <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 9999px; display: inline-flex; align-items: center; ${badgeColorCampuran}">Bangunan Campuran</span>
-        </div>
-        <div style="display: flex; gap: 4px; margin-bottom: 12px; background: ${theme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}; padding: 2px; border-radius: 8px;">
-          <button id="mixed-popup-tab-usaha" class="active-tab" onclick="window.switchMixedPopupTab('usaha')" style="flex: 1; padding: 6px; font-size: 11px; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; color: ${theme === "dark" ? "#cbd5e1" : "#475569"}; background: transparent; transition: all 0.2s;">Usaha (${totalUsaha})</button>
-          <button id="mixed-popup-tab-rt" onclick="window.switchMixedPopupTab('rt')" style="flex: 1; padding: 6px; font-size: 11px; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; color: ${theme === "dark" ? "#cbd5e1" : "#475569"}; background: transparent; transition: all 0.2s;">Keluarga (${totalRt})</button>
-        </div>
-        <div id="mixed-popup-content-usaha" style="max-height: 180px; overflow-y: auto; display: block;">${usahaListHtml}</div>
-        <div id="mixed-popup-content-rt" style="max-height: 180px; overflow-y: auto; display: none;">${rtListHtml}</div>
-        <style>
-          #mixed-popup-tab-usaha.active-tab { background: #F59E0B !important; color: white !important; }
-          #mixed-popup-tab-rt.active-tab { background: #2563EB !important; color: white !important; }
-        </style>
-      </div>
-    `;
-
-    if (!(window as any).switchMixedPopupTab) {
-      (window as any).switchMixedPopupTab = (tabName: "usaha" | "rt") => {
-        const usahaTab = document.getElementById("mixed-popup-tab-usaha");
-        const rtTab = document.getElementById("mixed-popup-tab-rt");
-        const usahaContent = document.getElementById(
-          "mixed-popup-content-usaha",
-        );
-        const rtContent = document.getElementById("mixed-popup-content-rt");
-        if (tabName === "usaha") {
-          usahaTab?.classList.add("active-tab");
-          rtTab?.classList.remove("active-tab");
-          if (usahaContent) usahaContent.style.display = "block";
-          if (rtContent) rtContent.style.display = "none";
-        } else {
-          rtTab?.classList.add("active-tab");
-          usahaTab?.classList.remove("active-tab");
-          if (usahaContent) usahaContent.style.display = "none";
-          if (rtContent) rtContent.style.display = "block";
-        }
-      };
-    }
-
-    const popup = new maplibregl.Popup({
-      closeButton: true,
-      closeOnClick: true,
-      maxWidth: "290px",
-      className: "premium-maplibre-popup",
-    })
-      .setLngLat(lngLat)
-      .setHTML(html)
-      .addTo(map);
-
-    activePopupRef.current = popup;
-    popup.on("close", () => {
-      if (activePopupRef.current === popup) activePopupRef.current = null;
-    });
   };
 
   useEffect(() => {
@@ -821,41 +618,6 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
         }
       }
 
-      // 3. Bangunan 3D
-      if (geoJsonBangunan) {
-        if (map.getSource("bangunan-source")) {
-          (
-            map.getSource("bangunan-source") as maplibregl.GeoJSONSource
-          ).setData(geoJsonBangunan as any);
-        } else {
-          map.addSource("bangunan-source", {
-            type: "geojson",
-            data: geoJsonBangunan as any,
-          });
-          map.addLayer({
-            id: "bangunan-3d-layer",
-            type: "fill-extrusion",
-            source: "bangunan-source",
-            paint: {
-              "fill-extrusion-color": [
-                "match",
-                ["get", "status_bangunan"],
-                "Bangunan Usaha",
-                "#F59E0B",
-                "Rumah Tangga",
-                "#2563EB",
-                "Campuran",
-                "#A855F7",
-                "#808080",
-              ],
-              "fill-extrusion-height": 20,
-              "fill-extrusion-base": 0,
-              "fill-extrusion-opacity": 0.8,
-            },
-          });
-        }
-      }
-
       // 4. Titik Usaha
       if (geoJsonUsaha) {
         if (map.getSource("usaha-source")) {
@@ -967,7 +729,6 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       const layersToSync = {
         "sls-fill-layer": store.showSls,
         "sls-line-layer": store.showSls,
-        "bangunan-3d-layer": store.showBuild,
         "usaha-circle-layer": store.showUsaha,
         "usaha-digital-circle-layer": store.showUsahaDigital,
         "usaha-pertanian-circle-layer": store.showUsahaPertanian,
@@ -991,7 +752,6 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
       // Event listeners
       const interactiveLayers = [
         "sls-fill-layer",
-        "bangunan-3d-layer",
         "usaha-circle-layer",
         "usaha-digital-circle-layer",
         "usaha-pertanian-circle-layer",
@@ -1034,18 +794,6 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
           if (activePopupRef.current) {
             activePopupRef.current.remove();
             activePopupRef.current = null;
-          }
-
-          if (
-            layerId === "bangunan-3d-layer" &&
-            (props.status_bangunan === "Campuran" || props.is_mixed)
-          ) {
-            const usahaList = props.near_usaha
-              ? JSON.parse(props.near_usaha)
-              : [];
-            const rtList = props.near_rt ? JSON.parse(props.near_rt) : [];
-            showMixedBuildingPopup(e.lngLat, usahaList, rtList);
-            return;
           }
 
           if (
@@ -1162,7 +910,6 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     };
   }, [
     filteredSls,
-    geoJsonBangunan,
     geoJsonUsaha,
     geoJsonUsahaDigital,
     geoJsonUsahaPertanian,
@@ -1172,7 +919,6 @@ export function InteractiveMap({ spatialData }: { spatialData: any }) {
     dataKab,
     theme,
     store.showSls,
-    store.showBuild,
     store.showUsaha,
     store.showUsahaDigital,
     store.showUsahaPertanian,
@@ -1308,7 +1054,7 @@ useEffect(() => {
 
       <div
         ref={tooltipRef}
-        className="absolute z-50 bg-popover/95 backdrop-blur-md text-popover-foreground border shadow-xl rounded-xl p-4 text-xs pointer-events-none w-[280px] hidden transition-all duration-75"
+        className="absolute z-50 bg-popover/95 backdrop-blur-xl text-popover-foreground border border-border/80 shadow-2xl rounded-2xl p-4 text-xs pointer-events-none w-[315px] hidden transition-transform duration-75"
         style={{ left: 0, top: 0, transform: "translate3d(0, 0, 0)" }}
       />
     </div>

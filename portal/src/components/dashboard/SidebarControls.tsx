@@ -176,14 +176,13 @@ export function SidebarControls({ spatialData }: { spatialData: any }) {
           </div>
 
           <div className="flex items-center justify-between">
-            <Label htmlFor="enable3d" className="text-sm text-muted-foreground">
-              ↳ Mode 3D Extrusion
+            <Label htmlFor="enable3d" className="text-sm">
+              Mode 3D Peta
             </Label>
             <Switch
               id="enable3d"
               checked={store.enable3d}
               onCheckedChange={() => store.toggleLayer("enable3d")}
-              disabled={!store.showBuild}
             />
           </div>
 
